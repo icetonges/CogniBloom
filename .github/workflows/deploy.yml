@@ -37,13 +37,12 @@ jobs:
         run: pnpm -C apps/web run type-check
 
       - name: Deploy to Vercel
-        uses: vercel/action@v7
+        uses: vercel/action@master
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          prod: true
-          working-directory: ./apps/web
+          production: true
 
       - name: Run smoke tests
         run: |
