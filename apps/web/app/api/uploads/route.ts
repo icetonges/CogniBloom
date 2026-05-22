@@ -40,7 +40,9 @@ export async function POST(request: NextRequest) {
     let extractedText = ''
 
     if (file.type === 'application/pdf') {
-      const pdfParse = (await import('pdf-parse')).default
+      // pdf-parse is CommonJS — require() avoids the .default call-signature issue
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
       const parsed = await pdfParse(buffer)
       extractedText = parsed.text
     } else {
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Chunk and embed asynchronously
-    embedUpload(upload.id, extractedText, userId).catch(() => {})
+    embedUpload(upload.id, extractedText).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function embedUpload(uploadId: string, text: string, userId: string) {
+async function embedUpload(uploadId: string, text: string) {
   try {
     const chunks = chunkText(text)
     for (let i = 0; i < chunks.length; i++) {
