@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, DynamicRetrievalMode } from '@google/generative-ai'
 import { AIProvider } from './base'
 import type {
   ChatRequest,
@@ -10,6 +10,7 @@ import type {
   ModelInfo,
   ProviderConfig,
   ProviderError,
+  GroundingSource,
 } from './types'
 import { AuthenticationError, RateLimitError, ContextLengthError } from './types'
 
@@ -103,7 +104,11 @@ export class GoogleProvider extends AIProvider {
 
   async *stream(request: ChatRequest): AsyncGenerator<StreamChunk> {
     try {
-      const genModel = this.client.getGenerativeModel({ model: this.model })
+      const tools = request.useGrounding
+        ? [{ googleSearchRetrieval: { dynamicRetrievalConfig: { mode: DynamicRetrievalMode.MODE_DYNAMIC, dynamicThreshold: 0.3 } } }]
+        : undefined
+
+      const genModel = this.client.getGenerativeModel({ model: this.model, tools })
 
       const contents = request.messages.map((msg) => ({
         role: msg.role === 'system' ? 'user' : (msg.role as any),
@@ -127,17 +132,15 @@ export class GoogleProvider extends AIProvider {
       let totalInputTokens = 0
       let totalOutputTokens = 0
       let contentBlockIndex = 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let lastChunk: any = null
 
       for await (const chunk of stream.stream) {
         const text = chunk.text() || chunk.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        lastChunk = chunk
 
         if (text) {
-          const metadata = chunk.usageMetadata || {
-            promptTokens: 0,
-            candidatesTokens: 0,
-            totalTokens: 0,
-          }
-
+          const metadata = chunk.usageMetadata || { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 }
           totalInputTokens = (metadata as any).promptTokens || totalInputTokens
           totalOutputTokens = (metadata as any).candidatesTokens || totalOutputTokens
 
@@ -145,13 +148,27 @@ export class GoogleProvider extends AIProvider {
             id: Math.random().toString(36).substring(7),
             content: text,
             contentBlockIndex,
-            tokensUsed: {
-              input: totalInputTokens,
-              output: totalOutputTokens,
-            },
+            tokensUsed: { input: totalInputTokens, output: totalOutputTokens },
           }
-
           contentBlockIndex++
+        }
+      }
+
+      // After streaming completes, emit grounding sources if available
+      if (request.useGrounding && lastChunk) {
+        const gm = (lastChunk as any)?.candidates?.[0]?.groundingMetadata
+        if (gm) {
+          const sources: GroundingSource[] = (gm.groundingChuncks ?? [])
+            .filter((c: any) => c?.web?.uri)
+            .map((c: any) => ({ uri: c.web.uri as string, title: (c.web.title as string) || c.web.uri }))
+          if (sources.length > 0) {
+            yield {
+              id: Math.random().toString(36).substring(7),
+              content: '',
+              contentBlockIndex: contentBlockIndex,
+              groundingSources: sources,
+            }
+          }
         }
       }
     } catch (error) {

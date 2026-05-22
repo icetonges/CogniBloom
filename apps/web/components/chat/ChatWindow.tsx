@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Loader2, Send, AlertCircle, Brain, Trash2, ChevronDown } from 'lucide-react'
+import { Loader2, Send, AlertCircle, Brain, Trash2, ChevronDown, ExternalLink } from 'lucide-react'
 import { useChat } from '@/hooks/useChat'
 import { ChatMessage } from './ChatMessage'
 import type { UseChatOptions } from '@/hooks/useChat'
@@ -64,6 +64,12 @@ export function ChatWindow({ options, initialMode }: ChatWindowProps) {
               Using your notes
             </span>
           )}
+          {chat.groundingSources.length > 0 && (
+            <span className="flex items-center gap-1 text-xs bg-blue-500/15 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+              <ExternalLink className="w-3 h-3" />
+              Web grounded
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Model selector */}
@@ -117,6 +123,27 @@ export function ChatWindow({ options, initialMode }: ChatWindowProps) {
             {chat.messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
+            {!chat.isLoading && chat.groundingSources.length > 0 && (
+              <div className="pl-1">
+                <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+                  <Brain className="w-3 h-3" /> Sources from Google Search
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {chat.groundingSources.map((src, i) => (
+                    <a
+                      key={i}
+                      href={src.uri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full hover:bg-blue-500/20 transition-colors max-w-[220px]"
+                    >
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{src.title}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
             {chat.isLoading && (
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -173,6 +200,7 @@ export function ChatWindow({ options, initialMode }: ChatWindowProps) {
           <p className="text-xs text-muted-foreground mt-1.5 ml-1">
             {chat.tokensUsed.total.toLocaleString()} tokens used
             {chat.ragUsed && ' · grounded with your notes'}
+            {chat.groundingSources.length > 0 && ` · ${chat.groundingSources.length} web source${chat.groundingSources.length !== 1 ? 's' : ''}`}
           </p>
         )}
         <p className="text-xs text-muted-foreground mt-0.5 ml-1">

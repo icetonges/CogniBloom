@@ -15,6 +15,12 @@ export interface ChatRequest {
   frequencyPenalty?: number
   presencePenalty?: number
   stopSequences?: string[]
+  useGrounding?: boolean // enable Google Search Grounding (Gemini only)
+}
+
+export interface GroundingSource {
+  uri: string
+  title: string
 }
 
 export interface ChatResponse {
@@ -38,6 +44,7 @@ export interface StreamChunk {
     output: number
   }
   stopReason?: 'end_turn' | 'max_tokens' | 'stop_sequence'
+  groundingSources?: GroundingSource[] // populated on final chunk when grounding is enabled
 }
 
 export interface EmbeddingResponse {

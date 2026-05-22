@@ -3,6 +3,11 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 
+export interface GroundingSource {
+  uri: string
+  title: string
+}
+
 export interface ChatState {
   messages: Array<ChatMessage & { id: string }>
   isLoading: boolean
@@ -10,6 +15,7 @@ export interface ChatState {
   sessionId: string | null
   ragUsed: boolean
   tokensUsed: { input: number; output: number; total: number }
+  groundingSources: GroundingSource[]
 }
 
 export interface UseChatOptions {
@@ -26,6 +32,7 @@ interface StreamChunkData {
   sessionId?: string
   ragUsed?: boolean
   tokensUsed?: { input: number; output: number; total: number }
+  groundingSources?: GroundingSource[]
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -36,6 +43,7 @@ export function useChat(options: UseChatOptions = {}) {
     sessionId: options.sessionId || null,
     ragUsed: false,
     tokensUsed: { input: 0, output: 0, total: 0 },
+    groundingSources: [],
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -56,6 +64,7 @@ export function useChat(options: UseChatOptions = {}) {
         isLoading: true,
         error: null,
         ragUsed: false,
+        groundingSources: [],
       }))
 
       abortControllerRef.current = new AbortController()
@@ -117,6 +126,7 @@ export function useChat(options: UseChatOptions = {}) {
                   sessionId: newSessionId,
                   ragUsed: data.ragUsed ?? false,
                   tokensUsed: data.tokensUsed ?? prev.tokensUsed,
+                  groundingSources: data.groundingSources ?? [],
                   isLoading: false,
                 }))
               }
@@ -144,7 +154,7 @@ export function useChat(options: UseChatOptions = {}) {
   }, [])
 
   const clearMessages = useCallback(() => {
-    setState((prev) => ({ ...prev, messages: [], error: null, ragUsed: false }))
+    setState((prev) => ({ ...prev, messages: [], error: null, ragUsed: false, groundingSources: [] }))
   }, [])
 
   const loadSession = useCallback(async (sessionId: string) => {

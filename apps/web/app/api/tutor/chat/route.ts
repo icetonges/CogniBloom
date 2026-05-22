@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
     const model = body.model || 'gemini-2.0-flash'
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 2048
+    const isGemini = model.startsWith('gemini')
 
     // Get or create session
     let sessionId = body.sessionId
@@ -65,14 +66,18 @@ export async function POST(request: NextRequest) {
     let totalInputTokens = 0
     let totalOutputTokens = 0
     const assistantChunks: string[] = []
+    let groundingSources: { uri: string; title: string }[] = []
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of aiManager.stream(model, { messages, temperature, maxTokens })) {
+          for await (const chunk of aiManager.stream(model, { messages, temperature, maxTokens, useGrounding: isGemini })) {
             if (chunk.tokensUsed) {
               totalInputTokens = chunk.tokensUsed.input
               totalOutputTokens = chunk.tokensUsed.output
+            }
+            if (chunk.groundingSources) {
+              groundingSources = chunk.groundingSources
             }
             if (chunk.content) {
               assistantChunks.push(chunk.content)
@@ -111,6 +116,7 @@ export async function POST(request: NextRequest) {
                 type: 'done',
                 sessionId,
                 ragUsed: ragContext.length > 0,
+                groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
                 tokensUsed: { input: totalInputTokens, output: totalOutputTokens, total: totalInputTokens + totalOutputTokens },
               })}\n\n`
             )
@@ -129,8 +135,7 @@ export async function POST(request: NextRequest) {
         Connection: 'keep-alive',
       },
     })
-  } catch (error) {
-    console.error('[tutor/chat]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
