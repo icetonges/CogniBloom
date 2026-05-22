@@ -2,21 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
+import { chunkText } from '@/lib/content'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
-
-// Chunk text into ~500-token segments with 50-token overlap
-function chunkText(text: string, chunkSize = 1500, overlap = 200): string[] {
-  const chunks: string[] = []
-  let start = 0
-  while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length)
-    chunks.push(text.slice(start, end).trim())
-    start += chunkSize - overlap
-  }
-  return chunks.filter((c) => c.length > 50)
-}
 
 // POST /api/uploads — accepts multipart form with a file
 export async function POST(request: NextRequest) {

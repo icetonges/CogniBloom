@@ -16,64 +16,82 @@ jobs:
     timeout-minutes: 45
 
     env:
-      VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+      APP_URL: https://cognibloom.vercel.app
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9.0.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24.x
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Ingest Khan Academy content
+      - name: Ingest Khan Academy content (math + science)
         run: |
-          curl -X POST https://cognibleom.vercel.app/api/admin/content/ingest \
+          echo "Ingesting math and science topics..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "$APP_URL/api/admin/content/ingest" \
             -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"sources": ["khan-academy"], "gradeRange": [3, 12]}' \
-            --fail-with-body
+            -d '{"sources": ["khan-academy"], "limit": 20}')
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
         continue-on-error: true
 
-      - name: Ingest educational websites
+      - name: Ingest educational websites (history + English + computing)
         run: |
-          curl -X POST https://cognibleom.vercel.app/api/admin/content/ingest \
+          echo "Ingesting history, English, and computing topics..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "$APP_URL/api/admin/content/ingest" \
             -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"sources": ["edu-domains"], "limit": 50}' \
-            --fail-with-body
+            -d '{"sources": ["edu-domains"], "limit": 20}')
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
         continue-on-error: true
 
-      - name: Ingest academic research
+      - name: Ingest arXiv research papers (math + CS)
         run: |
-          curl -X POST https://cognibleom.vercel.app/api/admin/content/ingest \
+          echo "Ingesting arXiv papers..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "$APP_URL/api/admin/content/ingest" \
             -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"sources": ["arxiv"], "categories": ["math", "cs"], "limit": 20}' \
-            --fail-with-body
+            -d '{"sources": ["arxiv"], "categories": ["math", "cs"], "limit": 10}')
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
         continue-on-error: true
 
-      - name: Generate embeddings
+      - name: Re-embed any pending uploads
         run: |
-          curl -X POST https://cognibleom.vercel.app/api/admin/content/embed \
+          echo "Batching embeddings for pending uploads..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "$APP_URL/api/admin/content/embed" \
             -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"batch": true}' \
-            --fail-with-body
+            -d '{}')
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Embed step failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          echo "✅ Content ingestion complete"
+
+      - name: Check knowledge base status
+        run: |
+          echo "Checking knowledge base..."
+          curl -s \
+            "$APP_URL/api/admin/content/embed" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" | \
+            python3 -c "import sys, json; d=json.load(sys.stdin)['data']; print(f\"Ready: {d['ready']} | Processing: {d['processing']} | Failed: {d['failed']} | Total: {d['total']}\")"
+        continue-on-error: true
 
       - name: Notify on failure
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            core.warning('Content ingestion workflow had failures. Check logs.')
+            core.warning('Content ingestion workflow had failures. Check logs for details.')
