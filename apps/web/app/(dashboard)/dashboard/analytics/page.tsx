@@ -1,9 +1,32 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Loader2, BookOpen, MessageSquare, Zap, Flame, TrendingUp } from 'lucide-react'
+import { Loader2, BookOpen, MessageSquare, Zap, Flame, TrendingUp, Brain, Trophy, Target } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatDistanceToNow } from 'date-fns'
+
+interface MasteryData {
+  scores: Record<string, number>
+  weakAreas: string[]
+  strongAreas: string[]
+  currentStreak: number
+  totalPracticeAnswered: number
+  averageAccuracy: number
+}
+
+interface RecentQuiz {
+  id: string
+  title: string
+  subject: string
+  score: number
+  totalQuestions: number
+  correctAnswers: number
+  completedAt: string | null
+  difficulty: string
+}
 
 interface Analytics {
   totals: { notes: number; sessions: number; tokensThisMonth: number; messagesThisMonth: number }
@@ -12,6 +35,8 @@ interface Analytics {
   activityChart: { date: string; sessions: number; messages: number }[]
   subjectBreakdown: { subject: string; count: number }[]
   modeCounts: Record<string, number>
+  mastery: MasteryData
+  recentQuizzes: RecentQuiz[]
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -24,6 +49,24 @@ const SUBJECT_COLORS = [
   'bg-blue-500', 'bg-purple-500', 'bg-green-500',
   'bg-amber-500', 'bg-pink-500', 'bg-cyan-500',
 ]
+
+const MASTERY_COLORS = [
+  'from-blue-500 to-blue-400',
+  'from-purple-500 to-purple-400',
+  'from-green-500 to-green-400',
+  'from-amber-500 to-amber-400',
+  'from-pink-500 to-pink-400',
+  'from-cyan-500 to-cyan-400',
+  'from-indigo-500 to-indigo-400',
+  'from-rose-500 to-rose-400',
+]
+
+function masteryLabel(score: number) {
+  if (score >= 0.85) return { text: 'Mastered', color: 'text-green-500' }
+  if (score >= 0.65) return { text: 'Proficient', color: 'text-blue-500' }
+  if (score >= 0.45) return { text: 'Developing', color: 'text-amber-500' }
+  return { text: 'Learning', color: 'text-red-400' }
+}
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null)
@@ -52,8 +95,9 @@ export default function AnalyticsPage() {
 
   const maxMessages = Math.max(...data.activityChart.map((d) => d.messages), 1)
   const maxSubjectCount = Math.max(...data.subjectBreakdown.map((s) => s.count), 1)
-
   const topMode = Object.entries(data.modeCounts).sort(([, a], [, b]) => b - a)[0]?.[0]
+
+  const masteryEntries = Object.entries(data.mastery.scores).sort(([, a], [, b]) => b - a)
 
   return (
     <div className="space-y-6">
@@ -70,6 +114,78 @@ export default function AnalyticsPage() {
         <StatCard icon={<Flame className="w-5 h-5 text-orange-500" />} title="Streak" value={`🔥 ${data.streak}`} sub="days active" color="amber" />
         <StatCard icon={<Zap className="w-5 h-5 text-green-500" />} title="This Week" value={data.thisWeek.sessions} sub="sessions" color="green" />
       </div>
+
+      {/* Mastery Dashboard */}
+      <Card className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold flex items-center gap-2">
+            <Brain className="w-4 h-4 text-primary" /> Subject Mastery
+          </h2>
+          {data.mastery.totalPracticeAnswered > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {data.mastery.totalPracticeAnswered} questions answered · {Math.round(data.mastery.averageAccuracy * 100)}% avg accuracy
+            </span>
+          )}
+        </div>
+
+        {masteryEntries.length === 0 ? (
+          <div className="py-6 text-center space-y-2">
+            <p className="text-sm text-muted-foreground">No mastery data yet.</p>
+            <p className="text-xs text-muted-foreground">Complete quizzes to track your progress per subject!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {masteryEntries.map(([subject, score], i) => {
+              const pct = Math.round(score * 100)
+              const { text: lvlText, color: lvlColor } = masteryLabel(score)
+              const gradient = MASTERY_COLORS[i % MASTERY_COLORS.length]
+              return (
+                <div key={subject} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium capitalize">{subject}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={cn('text-xs font-medium', lvlColor)}>{lvlText}</span>
+                      <span className="font-bold text-foreground w-8 text-right">{pct}%</span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                    <div
+                      className={cn('h-3 rounded-full bg-gradient-to-r transition-all duration-700', gradient)}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Strong / Weak areas */}
+        {(data.mastery.strongAreas.length > 0 || data.mastery.weakAreas.length > 0) && (
+          <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-border">
+            {data.mastery.strongAreas.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-green-500 mb-1.5">💪 Strengths</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {data.mastery.strongAreas.map((a) => (
+                    <span key={a} className="text-xs bg-green-500/10 text-green-600 px-2.5 py-1 rounded-full capitalize">{a}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {data.mastery.weakAreas.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-amber-500 mb-1.5">⚡ Areas to improve</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {data.mastery.weakAreas.map((a) => (
+                    <span key={a} className="text-xs bg-amber-500/10 text-amber-600 px-2.5 py-1 rounded-full capitalize">{a}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
 
       {/* Activity chart + Subject breakdown */}
       <div className="grid md:grid-cols-2 gap-6">
@@ -127,9 +243,44 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
+      {/* Recent Quiz History */}
+      {data.recentQuizzes.length > 0 && (
+        <Card className="p-5 space-y-4">
+          <h2 className="font-semibold flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-500" /> Recent Quizzes
+          </h2>
+          <div className="space-y-2">
+            {data.recentQuizzes.map((q) => {
+              const pct = Math.round(q.score * 100)
+              const scoreColor = pct >= 80 ? 'text-green-500' : pct >= 60 ? 'text-amber-500' : 'text-red-400'
+              const bgBar = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-400'
+              return (
+                <div key={q.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{q.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {q.subject} · {q.difficulty} · {q.correctAnswers}/{q.totalQuestions} correct
+                      {q.completedAt ? ` · ${formatDistanceToNow(new Date(q.completedAt), { addSuffix: true })}` : ''}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={cn('text-lg font-bold', scoreColor)}>{pct}%</p>
+                    <div className="w-16 bg-muted rounded-full h-1.5 mt-1">
+                      <div className={cn('h-1.5 rounded-full', bgBar)} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* AI tutor usage */}
       <Card className="p-5 space-y-4">
-        <h2 className="font-semibold">AI Tutor Usage</h2>
+        <h2 className="font-semibold flex items-center gap-2">
+          <Target className="w-4 h-4 text-primary" /> AI Tutor Usage
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
           <div>
             <p className="text-2xl font-bold text-primary">{data.totals.tokensThisMonth.toLocaleString()}</p>

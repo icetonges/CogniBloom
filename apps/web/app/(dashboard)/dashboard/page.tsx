@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock } from 'lucide-react'
+import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock, Brain } from 'lucide-react'
 import Link from 'next/link'
 import { db } from '@/lib/db'
 import { formatDistanceToNow } from 'date-fns'
@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   const userId = DANIEL_USER_ID
 
   // Fetch real stats
-  const [noteCount, sessionCount, recentNotes] = await Promise.all([
+  const [noteCount, sessionCount, recentNotes, learningProfile] = await Promise.all([
     db.note.count({ where: { userId } }),
     db.tutorSession.count({ where: { userId } }),
     db.note.findMany({
@@ -20,6 +20,10 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: 'desc' },
       take: 4,
       select: { id: true, title: true, subject: true, updatedAt: true, tags: true },
+    }),
+    db.learningProfile.findUnique({
+      where: { userId },
+      select: { masteryScores: true, weakAreas: true, strongAreas: true },
     }),
   ])
 
@@ -37,6 +41,10 @@ export default async function DashboardPage() {
     if (new Date(allActivity[i].day).toDateString() === expected.toDateString()) streak++
     else break
   }
+
+  const masteryEntries = Object.entries(
+    (learningProfile?.masteryScores as Record<string, number>) ?? {}
+  ).sort(([, a], [, b]) => b - a).slice(0, 4)
 
   const greetingHour = new Date().getHours()
   const greeting =
@@ -85,6 +93,37 @@ export default async function DashboardPage() {
           color="amber"
         />
       </div>
+
+      {/* Mastery Summary */}
+      {masteryEntries.length > 0 && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Brain className="w-4 h-4 text-primary" /> Subject Mastery
+            </h2>
+            <Link href="/dashboard/analytics">
+              <Button variant="ghost" size="sm" className="text-xs">View all →</Button>
+            </Link>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {masteryEntries.map(([subject, score]) => {
+              const pct = Math.round(score * 100)
+              const barColor = pct >= 85 ? 'bg-green-500' : pct >= 65 ? 'bg-blue-500' : pct >= 45 ? 'bg-amber-500' : 'bg-red-400'
+              return (
+                <div key={subject} className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium capitalize">{subject}</span>
+                    <span className="text-muted-foreground font-bold">{pct}%</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div className={`h-2 rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Main grid */}
       <div className="grid md:grid-cols-3 gap-6">

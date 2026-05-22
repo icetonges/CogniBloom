@@ -20,6 +20,8 @@ export async function GET() {
       recentSessions,
       subjectBreakdown,
       tokenStats,
+      learningProfile,
+      recentQuizzes,
     ] = await Promise.all([
       db.note.count({ where: { userId } }),
       db.tutorSession.count({ where: { userId } }),
@@ -43,6 +45,18 @@ export async function GET() {
       db.tutorSession.aggregate({
         where: { userId, createdAt: { gte: startOfMonth } },
         _sum: { totalTokensUsed: true, messageCount: true },
+      }),
+      // Mastery profile
+      db.learningProfile.findUnique({
+        where: { userId },
+        select: { masteryScores: true, weakAreas: true, strongAreas: true, currentStreak: true, totalPracticeAnswered: true, averageAccuracy: true },
+      }),
+      // Recent quizzes for history
+      db.quiz.findMany({
+        where: { userId, status: 'completed' },
+        orderBy: { completedAt: 'desc' },
+        take: 5,
+        select: { id: true, title: true, subject: true, score: true, totalQuestions: true, correctAnswers: true, completedAt: true, difficulty: true },
       }),
     ])
 
@@ -113,10 +127,27 @@ export async function GET() {
           count: s._count.id,
         })),
         modeCounts,
+        mastery: {
+          scores: (learningProfile?.masteryScores as Record<string, number>) ?? {},
+          weakAreas: learningProfile?.weakAreas ?? [],
+          strongAreas: learningProfile?.strongAreas ?? [],
+          currentStreak: learningProfile?.currentStreak ?? streak,
+          totalPracticeAnswered: learningProfile?.totalPracticeAnswered ?? 0,
+          averageAccuracy: learningProfile?.averageAccuracy ?? 0,
+        },
+        recentQuizzes: recentQuizzes.map((q) => ({
+          id: q.id,
+          title: q.title,
+          subject: q.subject,
+          score: q.score ?? 0,
+          totalQuestions: q.totalQuestions,
+          correctAnswers: q.correctAnswers,
+          completedAt: q.completedAt?.toISOString() ?? null,
+          difficulty: q.difficulty,
+        })),
       },
     })
-  } catch (error) {
-    console.error('[analytics GET]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
