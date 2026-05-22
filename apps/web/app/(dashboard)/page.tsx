@@ -18,7 +18,7 @@ export default async function DashboardPage() {
       <div className="space-y-2">
         <h1 className="text-4xl font-bold">Welcome back!</h1>
         <p className="text-muted-foreground text-lg">
-          Let's continue your learning journey with CogniBloom.
+          Let&apos;s continue your learning journey with CogniBloom.
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
             <Link href="/dashboard/learning">
               <Button variant="outline" className="w-full justify-start">
                 <Sparkles className="w-4 h-4 mr-2" />
-                Today's Feed
+                Today&apos;s Feed
               </Button>
             </Link>
           </div>

@@ -77,7 +77,7 @@ export function useChat(options: UseChatOptions = {}) {
         const messagesForApi = state.messages
           .filter((m) => m.role !== 'system')
           .concat(userMessage)
-          .map(({ id, ...m }) => m)
+          .map(({ id: _id, ...m }) => m)
 
         const requestBody = {
           sessionId: state.sessionId,
