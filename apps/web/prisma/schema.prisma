@@ -197,6 +197,7 @@ model Chunk {
 
   chunkIndex          Int
   content             String      @db.Text
+  embedding           Unsupported("vector(768)")?
 
   startPage           Int?
   endPage             Int?

@@ -9,6 +9,13 @@ export interface RagNote {
   similarity: number
 }
 
+export interface RagChunk {
+  id: string
+  content: string
+  filename: string
+  similarity: number
+}
+
 export async function searchSimilarNotes(
   userId: string,
   query: string,
@@ -52,12 +59,46 @@ export function buildRagContext(notes: RagNote[]): string {
   ].join('\n\n')
 }
 
+export async function searchSimilarChunks(
+  userId: string,
+  query: string,
+  limit = 3,
+  minSimilarity = 0.60
+): Promise<RagChunk[]> {
+  const embedding = await generateEmbedding(query)
+  const vectorStr = embeddingToSql(embedding)
+
+  const results = await db.$queryRaw<Array<{ id: string; content: string; filename: string; similarity: number }>>`
+    SELECT c.id, c.content, u.filename,
+           1 - (c.embedding <=> ${vectorStr}::vector) AS similarity
+    FROM "Chunk" c
+    JOIN "Upload" u ON u.id = c."uploadId"
+    WHERE u."userId" = ${userId}
+      AND c.embedding IS NOT NULL
+      AND 1 - (c.embedding <=> ${vectorStr}::vector) > ${minSimilarity}
+    ORDER BY c.embedding <=> ${vectorStr}::vector
+    LIMIT ${limit}
+  `
+  return results
+}
+
 export async function getRagContext(userId: string, query: string): Promise<string> {
   try {
-    const notes = await searchSimilarNotes(userId, query)
-    return buildRagContext(notes)
+    const [notes, chunks] = await Promise.all([
+      searchSimilarNotes(userId, query),
+      searchSimilarChunks(userId, query),
+    ])
+
+    const parts: string[] = []
+    if (notes.length > 0) parts.push(buildRagContext(notes))
+    if (chunks.length > 0) {
+      const chunkSection = chunks.map((c, i) =>
+        `[Document ${i + 1} — ${c.filename}]: ${c.content.slice(0, 500)}`
+      )
+      parts.push(['--- Relevant passages from uploaded documents ---', ...chunkSection, '--- End of documents ---'].join('\n\n'))
+    }
+    return parts.join('\n\n')
   } catch {
-    // Fail silently — RAG is an enhancement, not a requirement
     return ''
   }
 }
