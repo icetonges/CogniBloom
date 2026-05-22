@@ -159,8 +159,8 @@ export class AnthropicProvider extends AIProvider {
             content: '',
             contentBlockIndex: contentBlockIndex++,
             tokensUsed: {
-              input: chunk.usage.input_tokens || 0,
-              output: chunk.usage.output_tokens || 0,
+              input: (chunk.usage as any).input_tokens || 0,
+              output: (chunk.usage as any).output_tokens || 0,
             },
           }
         }
@@ -184,7 +184,7 @@ export class AnthropicProvider extends AIProvider {
       let total = 0
 
       for (const text of request.texts) {
-        const count = await this.client.messages.countTokens({
+        const count = await (this.client.messages as any).countTokens({
           model: this.model,
           messages: [
             {
@@ -194,8 +194,8 @@ export class AnthropicProvider extends AIProvider {
           ],
         })
 
-        tokens.push(count.input_tokens)
-        total += count.input_tokens
+        tokens.push((count as any).input_tokens)
+        total += (count as any).input_tokens
       }
 
       return {
@@ -213,11 +213,10 @@ export class AnthropicProvider extends AIProvider {
     }
 
     if (error instanceof Anthropic.RateLimitError) {
+      const retryAfterHeader = (error.headers as any)?.['get']?.('retry-after')
       return new RateLimitError(
         'Anthropic API rate limit exceeded',
-        error.headers?.get('retry-after')
-          ? parseInt(error.headers.get('retry-after')!)
-          : undefined
+        retryAfterHeader ? parseInt(retryAfterHeader) : undefined
       )
     }
 

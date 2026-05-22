@@ -107,7 +107,7 @@ export class GroqProvider extends AIProvider {
         .map((m) => m.content)
         .join('\n')
 
-      const response = await this.client.chat.completions.create({
+      const response = await (this.client.chat.completions.create as any)({
         model: this.model,
         max_tokens: request.maxTokens ?? 2048,
         system: systemMessage || undefined,
@@ -153,7 +153,7 @@ export class GroqProvider extends AIProvider {
       let inputTokens = 0
       let outputTokens = 0
 
-      const stream = await this.client.chat.completions.create({
+      const stream = await (this.client.chat.completions.create as any)({
         model: this.model,
         max_tokens: request.maxTokens ?? 2048,
         system: systemMessage || undefined,
@@ -176,9 +176,9 @@ export class GroqProvider extends AIProvider {
           }
         }
 
-        if (chunk.usage) {
-          inputTokens = chunk.usage.prompt_tokens || 0
-          outputTokens = chunk.usage.completion_tokens || 0
+        if ((chunk as any).usage) {
+          inputTokens = (chunk as any).usage.prompt_tokens || 0
+          outputTokens = (chunk as any).usage.completion_tokens || 0
         }
       }
 
@@ -232,7 +232,8 @@ export class GroqProvider extends AIProvider {
     }
 
     if (error instanceof Groq.RateLimitError) {
-      const retryAfterHeader = error.headers?.['get']?.('retry-after')
+      const headersGet = (error.headers as any)?.get
+      const retryAfterHeader = typeof headersGet === 'function' ? headersGet('retry-after') : undefined
       return new RateLimitError(
         'Groq API rate limit exceeded',
         retryAfterHeader ? parseInt(retryAfterHeader) : undefined

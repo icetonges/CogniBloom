@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, ContentRole } from '@google/generative-ai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { AIProvider } from './base'
 import type {
   ChatRequest,
@@ -58,7 +58,7 @@ export class GoogleProvider extends AIProvider {
       const genModel = this.client.getGenerativeModel({ model: this.model })
 
       const contents = request.messages.map((msg) => ({
-        role: msg.role === 'system' ? 'user' : (msg.role as ContentRole),
+        role: msg.role === 'system' ? 'user' : (msg.role as any),
         parts: [{ text: msg.content }],
       }))
 
@@ -90,9 +90,9 @@ export class GoogleProvider extends AIProvider {
         content: text,
         role: 'assistant',
         tokensUsed: {
-          input: usageMetadata.promptTokens || 0,
-          output: usageMetadata.candidatesTokens || 0,
-          total: usageMetadata.totalTokens || 0,
+          input: (usageMetadata as any).promptTokens || 0,
+          output: (usageMetadata as any).candidatesTokens || 0,
+          total: (usageMetadata as any).totalTokens || 0,
         },
         stopReason: 'end_turn',
       }
@@ -106,7 +106,7 @@ export class GoogleProvider extends AIProvider {
       const genModel = this.client.getGenerativeModel({ model: this.model })
 
       const contents = request.messages.map((msg) => ({
-        role: msg.role === 'system' ? 'user' : (msg.role as ContentRole),
+        role: msg.role === 'system' ? 'user' : (msg.role as any),
         parts: [{ text: msg.content }],
       }))
 
@@ -138,8 +138,8 @@ export class GoogleProvider extends AIProvider {
             totalTokens: 0,
           }
 
-          totalInputTokens = metadata.promptTokens || totalInputTokens
-          totalOutputTokens = metadata.candidatesTokens || totalOutputTokens
+          totalInputTokens = (metadata as any).promptTokens || totalInputTokens
+          totalOutputTokens = (metadata as any).candidatesTokens || totalOutputTokens
 
           yield {
             id: Math.random().toString(36).substring(7),

@@ -240,5 +240,3 @@ export function getAIManager(): AIManager {
 
   return aiManager
 }
-
-export type { AIUsageMetrics }

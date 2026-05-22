@@ -15,7 +15,7 @@ export function successResponse<T>(data: T, message?: string, meta?: unknown): A
     message,
     meta: {
       timestamp: new Date().toISOString(),
-      ...meta,
+      ...(typeof meta === 'object' && meta !== null ? meta : {}),
     },
   }
 }
@@ -191,7 +191,7 @@ export function pick<T, K extends keyof T>(obj: T, ...keys: K[]): Pick<T, K> {
 }
 
 export function omit<T extends Record<string, unknown>, K extends keyof T>(obj: T, ...keys: K[]): Omit<T, K> {
-  const result = { ...obj }
+  const result = Object.assign({}, obj)
   keys.forEach((key) => {
     delete result[key]
   })
