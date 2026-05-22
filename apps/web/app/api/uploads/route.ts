@@ -40,9 +40,11 @@ export async function POST(request: NextRequest) {
     let extractedText = ''
 
     if (file.type === 'application/pdf') {
-      // pdf-parse is CommonJS — require() avoids the .default call-signature issue
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
+      // pdf-parse is CJS — dynamic import returns the module object; the actual
+      // callable may sit on .default or directly on the module export.
+      type PdfParseFn = (buf: Buffer) => Promise<{ text: string }>
+      const pdfMod = await import('pdf-parse')
+      const pdfParse = ((pdfMod as unknown as { default?: PdfParseFn }).default ?? pdfMod) as PdfParseFn
       const parsed = await pdfParse(buffer)
       extractedText = parsed.text
     } else {
