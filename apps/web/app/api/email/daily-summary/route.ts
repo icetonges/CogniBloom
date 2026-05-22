@@ -18,7 +18,17 @@ export async function POST(request: NextRequest) {
     const startOfDay = new Date(today); startOfDay.setHours(0, 0, 0, 0)
     const startOfWeek = new Date(today); startOfWeek.setDate(today.getDate() - 6); startOfWeek.setHours(0, 0, 0, 0)
 
-    const [notesCreated, sessionsCompleted, recentNotes, tokenStats, subjects] = await Promise.all([
+    const [
+      notesCreated,
+      sessionsCompleted,
+      recentNotes,
+      tokenStats,
+      subjects,
+      flashcardsDue,
+      flashcardsReviewed,
+      quizzesToday,
+      learningProfile,
+    ] = await Promise.all([
       db.note.count({ where: { userId, createdAt: { gte: startOfDay } } }),
       db.tutorSession.count({ where: { userId, createdAt: { gte: startOfDay } } }),
       db.note.findMany({
@@ -37,6 +47,24 @@ export async function POST(request: NextRequest) {
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: 5,
+      }),
+      // Flashcards due for review right now
+      db.flashcard.count({
+        where: { userId, nextReviewAt: { lte: today } },
+      }),
+      // Flashcard reviews completed today
+      db.flashcardReview.count({
+        where: { flashcard: { userId }, reviewedAt: { gte: startOfDay } },
+      }),
+      // Quizzes completed today (with scores)
+      db.quiz.findMany({
+        where: { userId, status: 'completed', completedAt: { gte: startOfDay } },
+        select: { score: true },
+      }),
+      // Learning profile for mastery highlight
+      db.learningProfile.findUnique({
+        where: { userId },
+        select: { masteryScores: true },
       }),
     ])
 
@@ -63,6 +91,24 @@ export async function POST(request: NextRequest) {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     })
 
+    // Derive quiz stats from today's completed quizzes
+    const quizzesTaken = quizzesToday.length
+    const scoresWithValues = quizzesToday.map((q) => q.score).filter((s): s is number => s !== null)
+    const avgQuizScore = scoresWithValues.length > 0
+      ? scoresWithValues.reduce((a, b) => a + b, 0) / scoresWithValues.length
+      : null
+
+    // Find the highest-mastery subject from the learning profile
+    let masteryHighlight: { subject: string; score: number } | null = null
+    if (learningProfile?.masteryScores && typeof learningProfile.masteryScores === 'object') {
+      const scores = learningProfile.masteryScores as Record<string, number>
+      const entries = Object.entries(scores).filter(([, v]) => typeof v === 'number')
+      if (entries.length > 0) {
+        const [subject, score] = entries.reduce((best, cur) => cur[1] > best[1] ? cur : best)
+        masteryHighlight = { subject, score }
+      }
+    }
+
     await sendDailySummary(ALL_SUMMARY_RECIPIENTS, {
       studentName: APP_USER.name,
       date: dateStr,
@@ -72,6 +118,11 @@ export async function POST(request: NextRequest) {
       topSubjects: subjects.map((s) => s.subject ?? 'General'),
       tokensUsed: tokenStats._sum.totalTokensUsed ?? 0,
       recentNotes: recentNotes.map((n) => ({ title: n.title, subject: n.subject ?? undefined })),
+      flashcardsDue,
+      flashcardsReviewed,
+      quizzesTaken,
+      avgQuizScore,
+      masteryHighlight,
     })
 
     return NextResponse.json({
