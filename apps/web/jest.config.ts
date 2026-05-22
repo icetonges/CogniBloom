@@ -20,9 +20,10 @@ const config: Config = {
     'lib/utils.ts',
     'lib/flashcards.ts',
     'lib/ai/router.ts',
-    'lib/ai/providers/types.ts',
     // Hooks — testable via @testing-library/react
     'hooks/**/*.{ts,tsx}',
+    // Exclude hooks that require streaming/AI integration testing
+    '!hooks/useChat.ts',
     // Exclude generated/config/DB/AI network code that needs integration setup
     '!lib/db.ts',
     '!lib/email.ts',
