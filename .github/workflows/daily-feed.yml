@@ -1,0 +1,57 @@
+name: Daily Feed Generation
+
+on:
+  schedule:
+    # 6 AM UTC every day
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-feed:
+    name: Generate Daily Knowledge Feed
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Trigger feed generation API
+        run: |
+          curl -X POST https://cognibleom.vercel.app/api/feed/generate \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"regenerate": true}' \
+            --fail-with-body
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: '⚠️ Daily feed generation failed. Check the workflow logs.'
+            })

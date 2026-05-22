@@ -1,0 +1,28 @@
+{
+  "name": "cognibleom",
+  "version": "0.1.0",
+  "description": "AI-native K12 learning companion platform",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "start": "pnpm -r --parallel run start",
+    "lint": "pnpm -r run lint",
+    "type-check": "pnpm -r run type-check",
+    "test": "pnpm -r run test",
+    "test:e2e": "pnpm -r run test:e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "db:migrate": "pnpm -C apps/web exec prisma migrate dev",
+    "db:seed": "pnpm -C apps/web exec prisma db seed",
+    "db:studio": "pnpm -C apps/web exec prisma studio"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  }
+}

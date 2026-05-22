@@ -1,0 +1,505 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============ AUTHENTICATION & USERS ============
+
+model User {
+  id                    String      @id @default(cuid())
+  email                 String      @unique
+  name                  String
+  role                  UserRole    @default(STUDENT)
+
+  // Profile
+  grade                 Int?
+  age                   Int?
+  learningStyle         String?
+  interests             String[]    @default([])
+
+  // Auth
+  clerkId              String      @unique
+  emailVerified        Boolean     @default(false)
+
+  // Relationships
+  parentId             String?
+  parent               User?       @relation("ParentChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children             User[]      @relation("ParentChildren")
+
+  sessions             TutorSession[]
+  notes                Note[]
+  uploads              Upload[]
+  quizzes              Quiz[]
+  subscriptions        Subscription[]
+  preferences          UserPreferences?
+  learningProfile      LearningProfile?
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  lastActiveAt         DateTime    @default(now())
+
+  @@index([email])
+  @@index([clerkId])
+  @@index([parentId])
+}
+
+enum UserRole {
+  STUDENT
+  PARENT
+  ADMIN
+}
+
+model UserPreferences {
+  id                    String      @id @default(cuid())
+  userId                String      @unique
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  preferredTutorMode    TutorMode   @default(GENERAL)
+  responseLength        String      @default("medium")
+  includeExamples       Boolean     @default(true)
+  includeVisuals        Boolean     @default(true)
+
+  emailFrequency        String      @default("daily")
+  pushNotifications     Boolean     @default(true)
+
+  darkMode              Boolean     @default(false)
+  fontSize              String      @default("medium")
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+}
+
+enum TutorMode {
+  GENERAL
+  MATH
+  CODING
+  LANGUAGE
+  SCIENCE
+  HOMEWORK_HELPER
+  SOCRATIC_COACH
+  QUIZ
+}
+
+// ============ LEARNING PROFILE & ANALYTICS ============
+
+model LearningProfile {
+  id                    String      @id @default(cuid())
+  userId                String      @unique
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  masteryScores        Json        @default("{}")
+  weakAreas            String[]    @default([])
+  strongAreas          String[]    @default([])
+
+  totalLessonsCompleted Int       @default(0)
+  totalPracticeAnswered Int       @default(0)
+  averageAccuracy      Float      @default(0.0)
+  currentStreak        Int        @default(0)
+  longestStreak        Int        @default(0)
+
+  recentTopics         String[]    @default([])
+  recommendedTopics    String[]    @default([])
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+}
+
+// ============ NOTES & JOURNALING ============
+
+model Note {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title                 String
+  content               String      @db.Text
+
+  hasMath              Boolean     @default(false)
+  hasCode              Boolean     @default(false)
+  hasImages            Boolean     @default(false)
+
+  tags                 String[]    @default([])
+  subject              String?
+
+  isPublic             Boolean     @default(false)
+  isBookmarked         Boolean     @default(false)
+
+  uploads              Upload[]
+  reviews              NoteReview[]
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model NoteReview {
+  id                    String      @id @default(cuid())
+  noteId                String
+  note                  Note        @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  summary              String      @db.Text
+  keyPoints            String[]
+  weakAreas            String[]
+  masteryEstimate      Float
+  recommendations      String[]    @db.Text
+
+  createdAt            DateTime    @default(now())
+}
+
+// ============ FILE UPLOADS & STORAGE ============
+
+model Upload {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  filename              String
+  mimeType              String
+  fileSize              Int
+  fileType              String
+
+  r2Url                String      @unique
+  signedUrl            String?
+  signedUrlExpiry      DateTime?
+
+  status               String      @default("pending")
+  processingError      String?
+
+  extractedText        String?     @db.Text
+  extractedMetadata    Json?
+  chunks              Chunk[]
+
+  noteId              String?
+  note                Note?       @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Chunk {
+  id                   String      @id @default(cuid())
+  uploadId            String
+  upload              Upload      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  chunkIndex          Int
+  content             String      @db.Text
+
+  startPage           Int?
+  endPage             Int?
+
+  @@unique([uploadId, chunkIndex])
+  @@index([uploadId])
+}
+
+// ============ TUTOR SESSIONS & CONVERSATIONS ============
+
+model TutorSession {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  mode                  TutorMode   @default(GENERAL)
+  topic                 String?
+  difficulty            String      @default("adaptive")
+
+  messages              TutorMessage[]
+
+  aiProvider            String
+  aiModel              String
+
+  messageCount         Int         @default(0)
+  totalTokensUsed      Int         @default(0)
+  averageResponseTime  Float       @default(0.0)
+
+  studentRating        Int?
+  feedback             String?
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  endedAt              DateTime?
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model TutorMessage {
+  id                    String      @id @default(cuid())
+  sessionId             String
+  session               TutorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role                  String      @default("user")
+  content              String      @db.Text
+
+  fileUrl              String?
+  imageUrl             String?
+  codeLanguage         String?
+
+  citations            Citation[]
+  sources              String[]    @default([])
+
+  tokensUsed           Int         @default(0)
+  processingTime       Int         @default(0)
+
+  createdAt            DateTime    @default(now())
+
+  @@index([sessionId])
+}
+
+model Citation {
+  id                    String      @id @default(cuid())
+  messageId             String
+  message               TutorMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  title                String
+  url                  String
+  source               String
+  trustScore           Float       @default(0.8)
+
+  @@index([messageId])
+}
+
+// ============ QUIZZES & PRACTICE ============
+
+model Quiz {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title                String
+  description          String?
+  subject              String
+  difficulty           String
+
+  questions            Question[]
+
+  isAiGenerated        Boolean     @default(false)
+  generatedFromTopic   String?
+
+  score                Float?
+  totalQuestions      Int
+  correctAnswers      Int         @default(0)
+  timeSpent           Int?
+
+  status              String      @default("draft")
+
+  createdAt           DateTime    @default(now())
+  completedAt         DateTime?
+
+  @@index([userId])
+}
+
+model Question {
+  id                   String      @id @default(cuid())
+  quizId              String
+  quiz                Quiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  questionIndex       Int
+  type                String      @default("multiple_choice")
+
+  question            String      @db.Text
+  questionRichContent String?     @db.Text
+
+  options             Option[]
+
+  studentAnswer       String?     @db.Text
+  correctAnswer       String      @db.Text
+  explanation         String?     @db.Text
+
+  isCorrect           Boolean?
+  score               Float?
+  aiGradingRubric    String?     @db.Text
+
+  @@unique([quizId, questionIndex])
+}
+
+model Option {
+  id                   String      @id @default(cuid())
+  questionId          String
+  question            Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  optionIndex         Int
+  text                String      @db.Text
+  isCorrect           Boolean
+
+  @@unique([questionId, optionIndex])
+}
+
+// ============ KNOWLEDGE & MASTERY ============
+
+model KnowledgePoint {
+  id                    String      @id @default(cuid())
+
+  title                String
+  description          String?
+  subject              String
+  gradeLevel           Int[]
+
+  prerequisites        String[]    @default([])
+  relatedTopics        String[]    @default([])
+
+  explanation          String      @db.Text
+  examples             String[]
+  practiceQuestions    String[]
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([subject])
+  @@index([gradeLevel])
+}
+
+// ============ DAILY FEED & CONTENT ============
+
+model DailyFeedItem {
+  id                    String      @id @default(cuid())
+
+  type                  String
+  title                String
+  description          String      @db.Text
+  content              String      @db.Text
+
+  subject              String
+  difficulty           String
+  gradeLevel           Int[]
+  estimatedTime        Int
+
+  isAiGenerated        Boolean     @default(false)
+  sourceUrl            String?
+  credibility          Float       @default(0.8)
+
+  createdAt            DateTime    @default(now())
+  expiresAt            DateTime    @default(now() + interval '24 hours')
+
+  @@index([gradeLevel])
+  @@index([expiresAt])
+}
+
+model FeedEngagement {
+  id                    String      @id @default(cuid())
+  userId                String
+  itemId                String
+
+  isRead                Boolean     @default(false)
+  isBookmarked          Boolean     @default(false)
+  timeSpent             Int?
+  completed             Boolean     @default(false)
+
+  createdAt             DateTime    @default(now())
+
+  @@unique([userId, itemId])
+}
+
+// ============ REPORTING & ANALYTICS ============
+
+model DailyReport {
+  id                    String      @id @default(cuid())
+  userId                String
+
+  reportDate            DateTime
+
+  notesCreated         Int
+  sessionsCompleted    Int
+  quizzesTaken         Int
+  practiceTime         Int
+
+  topicsFocused        String[]
+  masteryGains         Json
+  averageSessionScore  Float
+
+  recommendedTopics    String[]
+  focusAreas           String[]
+
+  emailSentAt          DateTime?
+
+  createdAt            DateTime    @default(now())
+
+  @@unique([userId, reportDate])
+}
+
+// ============ SUBSCRIPTIONS & BILLING ============
+
+model Subscription {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeCustomerId      String      @unique
+  stripeSubscriptionId  String?     @unique
+
+  plan                  SubscriptionPlan  @default(FREE)
+
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean     @default(false)
+  cancelledAt           DateTime?
+
+  monthlyQuota          Int
+  usedThisMonth         Int         @default(0)
+
+  status                String      @default("active")
+
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+enum SubscriptionPlan {
+  FREE
+  PLUS
+  PREMIUM
+}
+
+// ============ AUDIT & LOGGING ============
+
+model AuditLog {
+  id                    String      @id @default(cuid())
+  userId                String
+
+  action                String
+  resource              String
+  resourceId            String?
+
+  changes               Json
+  ipAddress             String?
+  userAgent             String?
+
+  createdAt             DateTime    @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AiUsageLog {
+  id                    String      @id @default(cuid())
+  userId                String
+
+  provider              String
+  model                 String
+
+  inputTokens           Int
+  outputTokens          Int
+  totalTokens           Int
+
+  estimatedCost         Float
+
+  useCase               String
+
+  createdAt             DateTime    @default(now())
+
+  @@index([userId])
+  @@index([provider])
+}

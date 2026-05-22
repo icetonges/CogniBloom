@@ -1,0 +1,78 @@
+name: Educational Content Ingestion
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ingest-content:
+    name: Ingest & Index Educational Content
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Ingest Khan Academy content
+        run: |
+          curl -X POST https://cognibleom.vercel.app/api/admin/content/ingest \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"sources": ["khan-academy"], "gradeRange": [3, 12]}' \
+            --fail-with-body
+        continue-on-error: true
+
+      - name: Ingest educational websites
+        run: |
+          curl -X POST https://cognibleom.vercel.app/api/admin/content/ingest \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"sources": ["edu-domains"], "limit": 50}' \
+            --fail-with-body
+        continue-on-error: true
+
+      - name: Ingest academic research
+        run: |
+          curl -X POST https://cognibleom.vercel.app/api/admin/content/ingest \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"sources": ["arxiv"], "categories": ["math", "cs"], "limit": 20}' \
+            --fail-with-body
+        continue-on-error: true
+
+      - name: Generate embeddings
+        run: |
+          curl -X POST https://cognibleom.vercel.app/api/admin/content/embed \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"batch": true}' \
+            --fail-with-body
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.warning('Content ingestion workflow had failures. Check logs.')
