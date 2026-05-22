@@ -4,16 +4,18 @@ import { useState } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Sparkles, BookOpen, MessageSquare, BarChart3, Settings, Menu, X } from 'lucide-react'
+import { Sparkles, BookOpen, MessageSquare, BarChart3, Settings, Menu, X, Brain, Rss, Trophy } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { href: '/dashboard', icon: BarChart3, label: 'Dashboard' },
+  { href: '/dashboard/chat', icon: MessageSquare, label: 'AI Tutor' },
   { href: '/dashboard/notes', icon: BookOpen, label: 'Notes' },
-  { href: '/dashboard/chat', icon: MessageSquare, label: 'Chat' },
-  { href: '/dashboard/learning', icon: Sparkles, label: 'Learning' },
+  { href: '/dashboard/quiz', icon: Trophy, label: 'Quiz' },
+  { href: '/dashboard/feed', icon: Rss, label: 'Daily Feed' },
+  { href: '/dashboard/analytics', icon: Brain, label: 'Analytics' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ]
 

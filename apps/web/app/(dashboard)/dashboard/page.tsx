@@ -112,10 +112,10 @@ export default async function DashboardPage() {
         <Card className="p-6 space-y-3">
           <h2 className="text-lg font-bold">Quick Start</h2>
           {[
-            { href: '/dashboard/chat', label: 'Math Tutor', emoji: '📐' },
-            { href: '/dashboard/chat', label: 'Coding Help', emoji: '💻' },
-            { href: '/dashboard/notes', label: 'New Note', emoji: '✏️' },
-            { href: '/dashboard/chat', label: 'Homework Help', emoji: '📚' },
+            { href: '/dashboard/chat', label: 'AI Tutor', emoji: '🤖' },
+            { href: '/dashboard/quiz', label: 'Take a Quiz', emoji: '🏆' },
+            { href: '/dashboard/feed', label: 'Daily Feed', emoji: '📰' },
+            { href: '/dashboard/analytics', label: 'My Progress', emoji: '📊' },
           ].map(({ href, label, emoji }) => (
             <Link key={label} href={href}>
               <Button variant="outline" className="w-full justify-start gap-3 text-base h-11">
