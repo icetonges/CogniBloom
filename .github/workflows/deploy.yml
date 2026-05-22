@@ -13,6 +13,8 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v4
@@ -25,47 +27,35 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 24.x
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm run type-check
-
-      - name: Build
-        run: pnpm run build
+        run: pnpm -C apps/web run type-check
 
       - name: Deploy to Vercel
-        uses: vercel/action@v5
+        uses: vercel-actions/github-action@v1
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           prod: true
+          working-directory: apps/web
 
       - name: Run smoke tests
         run: |
           # Simple health check
           curl -f https://cognibleom.vercel.app/api/health || exit 1
 
-  notify:
-    name: Notify Deployment
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: always()
+      - name: Deployment Status
+        if: success()
+        run: echo "✅ Successfully deployed to production"
 
-    steps:
-      - name: Create deployment status
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: ${{ needs.deploy.outputs.deployment_id }},
-              state: '${{ needs.deploy.result }}',
-              description: 'CogniBloom deployment to production',
-              environment_url: 'https://cognibleom.vercel.app'
-            })
+      - name: Deployment Failed
+        if: failure()
+        run: |
+          echo "❌ Deployment failed"
+          exit 1
