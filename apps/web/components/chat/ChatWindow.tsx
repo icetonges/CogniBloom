@@ -52,8 +52,6 @@ export function ChatWindow({ options, initialMode }: ChatWindowProps) {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`
   }
 
-  const currentModel = MODELS.find((m) => m.id === selectedModel)
-
   return (
     <div className="flex flex-col h-full bg-background rounded-xl border border-border overflow-hidden">
       {/* Header */}
