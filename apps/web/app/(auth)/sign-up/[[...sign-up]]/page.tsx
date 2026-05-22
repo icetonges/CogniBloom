@@ -1,5 +1,5 @@
-import { SignUp } from '@clerk/nextjs'
+import { ClerkSignUp } from '@/components/auth/ClerkSignUp'
 
 export default function SignUpPage() {
-  return <SignUp appearance={{ baseTheme: undefined }} />
+  return <ClerkSignUp />
 }
