@@ -381,7 +381,7 @@ model DailyFeedItem {
   credibility          Float       @default(0.8)
 
   createdAt            DateTime    @default(now())
-  expiresAt            DateTime    @default(now() + interval '24 hours')
+  expiresAt            DateTime    @default(now())
 
   @@index([gradeLevel])
   @@index([expiresAt])
