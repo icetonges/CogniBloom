@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
-import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
+import { embedNote } from '@/lib/notes'
 
 const createNoteSchema = z.object({
   title: z.string().min(1).max(200),
@@ -10,20 +10,6 @@ const createNoteSchema = z.object({
   tags: z.array(z.string()).optional(),
   subject: z.string().optional(),
 })
-
-// Fire-and-forget: generate and store embedding after note is created
-async function embedNote(noteId: string, title: string, content: string) {
-  try {
-    const text = `${title}\n\n${content}`
-    const embedding = await generateEmbedding(text)
-    const vectorStr = embeddingToSql(embedding)
-    await db.$executeRaw`
-      UPDATE "Note" SET embedding = ${vectorStr}::vector WHERE id = ${noteId}
-    `
-  } catch {
-    // Non-fatal — note is still usable without embedding
-  }
-}
 
 // GET /api/notes
 export async function GET(request: NextRequest) {
@@ -96,8 +82,10 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Generate embedding asynchronously — don't block the response
-    embedNote(note.id, note.title, note.content)
+    // Schedule embedding to run after the response is delivered.
+    // next/server `after()` keeps the function alive until the promise resolves,
+    // which prevents Vercel from killing it mid-write.
+    after(() => embedNote(note.id, note.title, note.content))
 
     return NextResponse.json({ success: true, data: note }, { status: 201 })
   } catch (error) {

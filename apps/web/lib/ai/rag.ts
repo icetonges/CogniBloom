@@ -31,12 +31,12 @@ export async function searchSimilarNotes(
       title,
       content,
       subject,
-      1 - (embedding <=> ${vectorStr}::vector) AS similarity
+      1 - (embedding <=> ${vectorStr}::vector(768)) AS similarity
     FROM "Note"
     WHERE "userId" = ${userId}
       AND embedding IS NOT NULL
-      AND 1 - (embedding <=> ${vectorStr}::vector) > ${minSimilarity}
-    ORDER BY embedding <=> ${vectorStr}::vector
+      AND 1 - (embedding <=> ${vectorStr}::vector(768)) > ${minSimilarity}
+    ORDER BY embedding <=> ${vectorStr}::vector(768)
     LIMIT ${limit}
   `
 
@@ -70,13 +70,13 @@ export async function searchSimilarChunks(
 
   const results = await db.$queryRaw<Array<{ id: string; content: string; filename: string; similarity: number }>>`
     SELECT c.id, c.content, u.filename,
-           1 - (c.embedding <=> ${vectorStr}::vector) AS similarity
+           1 - (c.embedding <=> ${vectorStr}::vector(768)) AS similarity
     FROM "Chunk" c
     JOIN "Upload" u ON u.id = c."uploadId"
     WHERE u."userId" = ${userId}
       AND c.embedding IS NOT NULL
-      AND 1 - (c.embedding <=> ${vectorStr}::vector) > ${minSimilarity}
-    ORDER BY c.embedding <=> ${vectorStr}::vector
+      AND 1 - (c.embedding <=> ${vectorStr}::vector(768)) > ${minSimilarity}
+    ORDER BY c.embedding <=> ${vectorStr}::vector(768)
     LIMIT ${limit}
   `
   return results

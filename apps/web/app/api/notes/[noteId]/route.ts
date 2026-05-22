@@ -1,18 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
-import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
-
-async function reEmbedNote(noteId: string, title: string, content: string) {
-  try {
-    const embedding = await generateEmbedding(`${title}\n\n${content}`)
-    const vectorStr = embeddingToSql(embedding)
-    await db.$executeRaw`UPDATE "Note" SET embedding = ${vectorStr}::vector WHERE id = ${noteId}`
-  } catch {
-    // Non-fatal
-  }
-}
+import { embedNote } from '@/lib/notes'
 
 const updateNoteSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -64,9 +54,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const updated = await db.note.update({ where: { id: noteId }, data: updateData })
 
-    // Re-embed if title or content changed
+    // Re-embed if title or content changed — runs after the response is delivered
     if (validated.title || validated.content) {
-      reEmbedNote(noteId, updated.title, updated.content)
+      after(() => embedNote(noteId, updated.title, updated.content))
     }
 
     return NextResponse.json({ success: true, data: updated })
