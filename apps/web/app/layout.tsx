@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
+import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -45,30 +46,24 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   minimumScale: 1,
-  colorScheme: 'light dark',
+  colorScheme: 'dark light',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#000000' },
+    { media: '(prefers-color-scheme: light)', color: '#f5f6fa' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f1623' },
   ],
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <head>
           <meta charSet="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <meta httpEquiv="x-ua-compatible" content="ie=edge" />
         </head>
         <body className="min-h-screen bg-background antialiased">
-          <div className="flex flex-col min-h-screen">
-            {children}
-          </div>
+          <ThemeProvider>
+            <div className="flex flex-col min-h-screen">{children}</div>
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>
