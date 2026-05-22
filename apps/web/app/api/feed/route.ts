@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
 import { getAIManager } from '@/lib/ai'
 import { db } from '@/lib/db'
 
@@ -29,8 +28,6 @@ const FEED_TOPICS = [
 // GET /api/feed — return today's personalised feed
 export async function GET(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
-
     const { searchParams } = new URL(request.url)
     const refresh = searchParams.get('refresh') === 'true'
 

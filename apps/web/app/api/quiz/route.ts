@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
 import { z } from 'zod'
 import { getAIManager } from '@/lib/ai'
 
@@ -22,8 +21,6 @@ export interface QuizQuestion {
 // POST /api/quiz — generate a quiz via AI
 export async function POST(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
-
     const body = await request.json()
     const { topic, subject, difficulty, count, model } = generateSchema.parse(body)
 
