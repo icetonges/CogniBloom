@@ -111,9 +111,19 @@ html {
 }
 
 .fade-in {
-  @apply animate-in fade-in duration-300;
+  animation: fadeIn 300ms ease-in-out;
 }
 
 .fade-out {
-  @apply animate-out fade-out duration-300;
+  animation: fadeOut 300ms ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
