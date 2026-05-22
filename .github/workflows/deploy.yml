@@ -15,6 +15,8 @@ jobs:
     timeout-minutes: 30
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -33,14 +35,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm -C apps/web exec prisma generate
+
       - name: Type check
         run: pnpm -C apps/web run type-check
-
-      - name: Generate Prisma client
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: pnpm -C apps/web exec prisma generate
 
       - name: Deploy to Vercel
         env:
@@ -48,17 +47,11 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "❌ VERCEL_TOKEN secret is not set in GitHub repository secrets"
-            echo "Go to: Settings → Secrets and variables → Actions → New repository secret"
-            exit 1
-          fi
           npm install -g vercel
           vercel --prod --token "$VERCEL_TOKEN"
 
       - name: Run smoke tests
         run: |
-          # Simple health check
           curl -f https://cognibleom.vercel.app/api/health || exit 1
 
       - name: Deployment Status
