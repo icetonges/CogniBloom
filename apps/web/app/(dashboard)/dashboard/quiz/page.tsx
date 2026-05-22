@@ -97,6 +97,7 @@ export default function QuizPage() {
       }, 100)
       return () => clearTimeout(t)
     }
+    return undefined
   }, [searchParams])
 
   const generateQuiz = async () => {
