@@ -51,6 +51,50 @@ export default async function DashboardPage() {
   const greeting =
     greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening'
 
+  // Today's focus tasks
+  const focusTasks: { emoji: string; text: string; href: string; urgent?: boolean }[] = []
+
+  if (flashcardsDue > 0) {
+    focusTasks.push({
+      emoji: '🃏',
+      text: `Review ${flashcardsDue} flashcard${flashcardsDue > 1 ? 's' : ''} due today`,
+      href: '/dashboard/flashcards',
+      urgent: true,
+    })
+  }
+
+  // Weakest subject: lowest mastery score
+  const masteryScores = (learningProfile?.masteryScores as Record<string, number>) ?? {}
+  const weakestEntry = Object.entries(masteryScores).sort(([, a], [, b]) => a - b)[0]
+  if (weakestEntry) {
+    focusTasks.push({
+      emoji: '🧠',
+      text: `Boost ${weakestEntry[0]} — currently ${Math.round(weakestEntry[1] * 100)}%`,
+      href: `/dashboard/quiz?topic=${encodeURIComponent(weakestEntry[0])}&subject=${encodeURIComponent(weakestEntry[0])}`,
+    })
+  }
+
+  // Streak at risk (no activity today)
+  const activityToday = allActivity.length > 0 &&
+    new Date(allActivity[0].day).toDateString() === todayDate.toDateString()
+  if (streak > 0 && !activityToday) {
+    focusTasks.push({
+      emoji: '🔥',
+      text: `Keep your ${streak}-day streak alive — chat or take notes!`,
+      href: '/dashboard/chat',
+      urgent: true,
+    })
+  }
+
+  // Suggest reading the daily feed if no focus tasks yet
+  if (focusTasks.length === 0) {
+    focusTasks.push({
+      emoji: '📚',
+      text: 'Check today\'s personalised learning feed',
+      href: '/dashboard/feed',
+    })
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -60,6 +104,30 @@ export default async function DashboardPage() {
           Ready to learn something amazing today?
         </p>
       </div>
+
+      {/* Today's Focus */}
+      {focusTasks.length > 0 && (
+        <Card className="p-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            📋 Today&apos;s Focus
+          </p>
+          <div className="flex flex-col gap-2">
+            {focusTasks.map((task, i) => (
+              <Link key={i} href={task.href}>
+                <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  task.urgent
+                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
+                    : 'bg-muted/50 hover:bg-muted text-foreground'
+                }`}>
+                  <span className="text-lg shrink-0">{task.emoji}</span>
+                  <span className="flex-1">{task.text}</span>
+                  <span className="text-xs opacity-60">→</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
