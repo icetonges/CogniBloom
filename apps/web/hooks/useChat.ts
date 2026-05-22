@@ -8,11 +8,8 @@ export interface ChatState {
   isLoading: boolean
   error: string | null
   sessionId: string | null
-  tokensUsed: {
-    input: number
-    output: number
-    total: number
-  }
+  ragUsed: boolean
+  tokensUsed: { input: number; output: number; total: number }
 }
 
 export interface UseChatOptions {
@@ -27,11 +24,8 @@ interface StreamChunkData {
   type: 'content' | 'done'
   content?: string
   sessionId?: string
-  tokensUsed?: {
-    input: number
-    output: number
-    total: number
-  }
+  ragUsed?: boolean
+  tokensUsed?: { input: number; output: number; total: number }
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -40,23 +34,16 @@ export function useChat(options: UseChatOptions = {}) {
     isLoading: false,
     error: null,
     sessionId: options.sessionId || null,
-    tokensUsed: {
-      input: 0,
-      output: 0,
-      total: 0,
-    },
+    ragUsed: false,
+    tokensUsed: { input: 0, output: 0, total: 0 },
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Send a message and stream the response
   const sendMessage = useCallback(
     async (message: string) => {
-      if (!message.trim()) {
-        return
-      }
+      if (!message.trim()) return
 
-      // Add user message to state
       const userMessage: ChatMessage & { id: string } = {
         id: `msg-${Date.now()}`,
         role: 'user',
@@ -68,45 +55,34 @@ export function useChat(options: UseChatOptions = {}) {
         messages: [...prev.messages, userMessage],
         isLoading: true,
         error: null,
+        ragUsed: false,
       }))
 
       abortControllerRef.current = new AbortController()
 
       try {
-        // Prepare request
         const messagesForApi = state.messages
           .filter((m) => m.role !== 'system')
           .concat(userMessage)
           .map(({ id: _id, ...m }) => m)
 
-        const requestBody = {
-          sessionId: state.sessionId,
-          messages: messagesForApi,
-          model: options.model,
-          mode: options.mode,
-          temperature: options.temperature,
-          maxTokens: options.maxTokens,
-        }
-
-        // Make streaming request
         const response = await fetch('/api/tutor/chat', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: state.sessionId,
+            messages: messagesForApi,
+            model: options.model,
+            mode: options.mode,
+            temperature: options.temperature,
+            maxTokens: options.maxTokens,
+          }),
           signal: abortControllerRef.current.signal,
         })
 
-        if (!response.ok) {
-          throw new Error(`API error: ${response.statusText}`)
-        }
+        if (!response.ok) throw new Error(`API error: ${response.statusText}`)
+        if (!response.body) throw new Error('No response body')
 
-        if (!response.body) {
-          throw new Error('No response body')
-        }
-
-        // Stream response
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let assistantContent = ''
@@ -118,51 +94,31 @@ export function useChat(options: UseChatOptions = {}) {
             if (done) break
 
             const chunk = decoder.decode(value, { stream: true })
-            const lines = chunk.split('\n')
+            for (const line of chunk.split('\n')) {
+              if (!line.startsWith('data: ')) continue
+              const data: StreamChunkData = JSON.parse(line.slice(6))
 
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data: StreamChunkData = JSON.parse(line.slice(6))
-
-                if (data.type === 'content' && data.content) {
-                  assistantContent += data.content
-
-                  setState((prev) => {
-                    const messages = [...prev.messages]
-                    const lastMessage = messages[messages.length - 1]
-
-                    if (
-                      lastMessage &&
-                      lastMessage.role === 'assistant'
-                    ) {
-                      lastMessage.content = assistantContent
-                    } else {
-                      messages.push({
-                        id: `msg-${Date.now()}`,
-                        role: 'assistant',
-                        content: assistantContent,
-                      })
-                    }
-
-                    return {
-                      ...prev,
-                      messages,
-                    }
-                  })
-                } else if (data.type === 'done') {
-                  if (data.sessionId) {
-                    newSessionId = data.sessionId
+              if (data.type === 'content' && data.content) {
+                assistantContent += data.content
+                setState((prev) => {
+                  const messages = [...prev.messages]
+                  const last = messages[messages.length - 1]
+                  if (last?.role === 'assistant') {
+                    last.content = assistantContent
+                  } else {
+                    messages.push({ id: `msg-${Date.now()}`, role: 'assistant', content: assistantContent })
                   }
-
-                  if (data.tokensUsed) {
-                    setState((prev) => ({
-                      ...prev,
-                      sessionId: newSessionId,
-                      tokensUsed: data.tokensUsed!,
-                      isLoading: false,
-                    }))
-                  }
-                }
+                  return { ...prev, messages }
+                })
+              } else if (data.type === 'done') {
+                if (data.sessionId) newSessionId = data.sessionId
+                setState((prev) => ({
+                  ...prev,
+                  sessionId: newSessionId,
+                  ragUsed: data.ragUsed ?? false,
+                  tokensUsed: data.tokensUsed ?? prev.tokensUsed,
+                  isLoading: false,
+                }))
               }
             }
           }
@@ -170,73 +126,40 @@ export function useChat(options: UseChatOptions = {}) {
           reader.releaseLock()
         }
       } catch (error) {
-        if (error instanceof Error) {
-          if (error.name === 'AbortError') {
-            setState((prev) => ({
-              ...prev,
-              error: 'Message cancelled',
-              isLoading: false,
-            }))
-          } else {
-            setState((prev) => ({
-              ...prev,
-              error: error.message,
-              isLoading: false,
-            }))
-          }
-        } else {
-          setState((prev) => ({
-            ...prev,
-            error: 'An unknown error occurred',
-            isLoading: false,
-          }))
-        }
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error
+            ? error.name === 'AbortError' ? 'Message cancelled' : error.message
+            : 'An unknown error occurred',
+          isLoading: false,
+        }))
       }
     },
     [state.messages, state.sessionId, options]
   )
 
-  // Cancel current message
   const cancel = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-      }))
-    }
+    abortControllerRef.current?.abort()
+    setState((prev) => ({ ...prev, isLoading: false }))
   }, [])
 
-  // Clear messages
   const clearMessages = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      messages: [],
-      error: null,
-    }))
+    setState((prev) => ({ ...prev, messages: [], error: null, ragUsed: false }))
   }, [])
 
-  // Load session messages
   const loadSession = useCallback(async (sessionId: string) => {
     try {
-      const response = await fetch(
-        `/api/tutor/sessions/${sessionId}?messages=true`
-      )
-      if (!response.ok) {
-        throw new Error('Failed to load session')
-      }
-
-      const { data } = await response.json()
-      const messages = (data.messages || []).map((msg: any, idx: number) => ({
-        id: `msg-${idx}`,
-        role: msg.role,
-        content: msg.content,
-      }))
-
+      const res = await fetch(`/api/tutor/sessions/${sessionId}?messages=true`)
+      if (!res.ok) throw new Error('Failed to load session')
+      const { data } = await res.json()
       setState((prev) => ({
         ...prev,
         sessionId,
-        messages,
+        messages: (data.messages || []).map((msg: { role: string; content: string }, idx: number) => ({
+          id: `msg-${idx}`,
+          role: msg.role,
+          content: msg.content,
+        })),
       }))
     } catch (error) {
       setState((prev) => ({
@@ -246,45 +169,17 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, [])
 
-  // Create new session
   const createSession = useCallback(async (mode: string) => {
-    try {
-      const response = await fetch('/api/tutor/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ mode }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create session')
-      }
-
-      const { data } = await response.json()
-      setState((prev) => ({
-        ...prev,
-        sessionId: data.id,
-      }))
-
-      return data.id
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unknown error'
-      setState((prev) => ({
-        ...prev,
-        error: `Failed to create session: ${message}`,
-      }))
-      throw error
-    }
+    const res = await fetch('/api/tutor/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    })
+    if (!res.ok) throw new Error('Failed to create session')
+    const { data } = await res.json()
+    setState((prev) => ({ ...prev, sessionId: data.id }))
+    return data.id
   }, [])
 
-  return {
-    ...state,
-    sendMessage,
-    cancel,
-    clearMessages,
-    loadSession,
-    createSession,
-  }
+  return { ...state, sendMessage, cancel, clearMessages, loadSession, createSession }
 }

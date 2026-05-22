@@ -2,128 +2,203 @@ import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Sparkles, TrendingUp, BookOpen, Award } from 'lucide-react'
+import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock } from 'lucide-react'
 import Link from 'next/link'
+import { db } from '@/lib/db'
+import { formatDistanceToNow } from 'date-fns'
 
 export default async function DashboardPage() {
   const { userId } = await auth()
+  if (!userId) redirect('/sign-in')
 
-  if (!userId) {
-    redirect('/sign-in')
-  }
+  // Fetch real stats
+  const [noteCount, sessionCount, recentNotes] = await Promise.all([
+    db.note.count({ where: { userId } }),
+    db.tutorSession.count({ where: { userId } }),
+    db.note.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      take: 4,
+      select: { id: true, title: true, subject: true, updatedAt: true, tags: true },
+    }),
+  ])
+
+  const greetingHour = new Date().getHours()
+  const greeting =
+    greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening'
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-4xl font-bold">Welcome back!</h1>
+      <div className="space-y-1">
+        <h1 className="text-4xl font-bold">{greeting}, Daniel! 👋</h1>
         <p className="text-muted-foreground text-lg">
-          Let&apos;s continue your learning journey with CogniBloom.
+          Ready to learn something amazing today?
         </p>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid md:grid-cols-4 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          icon={<BookOpen className="w-6 h-6 text-blue-600" />}
+          icon={<BookOpen className="w-5 h-5 text-blue-500" />}
           title="Notes"
-          value="0"
-          subtitle="This week"
+          value={String(noteCount)}
+          subtitle="Total created"
+          href="/dashboard/notes"
+          color="blue"
         />
         <StatCard
-          icon={<Sparkles className="w-6 h-6 text-purple-600" />}
-          title="Learning Streak"
-          value="0"
-          subtitle="Days"
+          icon={<MessageSquare className="w-5 h-5 text-purple-500" />}
+          title="Sessions"
+          value={String(sessionCount)}
+          subtitle="AI chats"
+          href="/dashboard/chat"
+          color="purple"
         />
         <StatCard
-          icon={<TrendingUp className="w-6 h-6 text-green-600" />}
-          title="Progress"
-          value="0%"
-          subtitle="Overall"
+          icon={<TrendingUp className="w-5 h-5 text-green-500" />}
+          title="Streak"
+          value="🔥 1"
+          subtitle="Days active"
+          color="green"
         />
         <StatCard
-          icon={<Award className="w-6 h-6 text-pink-600" />}
-          title="Skills Mastered"
-          value="0"
-          subtitle="Subjects"
+          icon={<Sparkles className="w-5 h-5 text-amber-500" />}
+          title="AI Model"
+          value="RAG"
+          subtitle="Smart search on"
+          color="amber"
         />
       </div>
 
-      {/* Main Content */}
-      <div className="grid md:grid-cols-3 gap-8">
-        {/* Chat Section */}
-        <Card className="md:col-span-2 p-6">
+      {/* Main grid */}
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* Start Chat */}
+        <Card className="md:col-span-2 p-6 border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
           <div className="space-y-4">
-            <div>
-              <h2 className="text-2xl font-bold mb-2">AI Tutor</h2>
-              <p className="text-muted-foreground">
-                Get personalized tutoring in any subject. Ask questions, solve problems, and learn at
-                your own pace.
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <MessageSquare className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">AI Tutor</h2>
+                <p className="text-sm text-muted-foreground">
+                  Powered by Google Gemini · Grounded in your notes
+                </p>
+              </div>
             </div>
-            <Link href="/dashboard/chat">
-              <Button className="w-full">Start Chat with AI</Button>
-            </Link>
+            <p className="text-muted-foreground">
+              Ask anything — math, coding, science, language. The AI uses your own notes as
+              context to give you personalised answers.
+            </p>
+            <div className="flex gap-3">
+              <Link href="/dashboard/chat" className="flex-1">
+                <Button className="w-full gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Start Chatting
+                </Button>
+              </Link>
+              <Link href="/dashboard/notes">
+                <Button variant="outline" className="gap-2">
+                  <BookOpen className="w-4 h-4" />
+                  Notes
+                </Button>
+              </Link>
+            </div>
           </div>
         </Card>
 
-        {/* Quick Actions */}
-        <Card className="p-6">
-          <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
-          <div className="space-y-3">
-            <Link href="/dashboard/notes">
-              <Button variant="outline" className="w-full justify-start">
-                <BookOpen className="w-4 h-4 mr-2" />
-                New Note
+        {/* Quick actions */}
+        <Card className="p-6 space-y-3">
+          <h2 className="text-lg font-bold">Quick Start</h2>
+          {[
+            { href: '/dashboard/chat', label: 'Math Tutor', emoji: '📐' },
+            { href: '/dashboard/chat', label: 'Coding Help', emoji: '💻' },
+            { href: '/dashboard/notes', label: 'New Note', emoji: '✏️' },
+            { href: '/dashboard/chat', label: 'Homework Help', emoji: '📚' },
+          ].map(({ href, label, emoji }) => (
+            <Link key={label} href={href}>
+              <Button variant="outline" className="w-full justify-start gap-3 text-base h-11">
+                <span>{emoji}</span>
+                {label}
               </Button>
             </Link>
-            <Link href="/dashboard/quizzes">
-              <Button variant="outline" className="w-full justify-start">
-                <Award className="w-4 h-4 mr-2" />
-                Take a Quiz
-              </Button>
-            </Link>
-            <Link href="/dashboard/learning">
-              <Button variant="outline" className="w-full justify-start">
-                <Sparkles className="w-4 h-4 mr-2" />
-                Today&apos;s Feed
-              </Button>
-            </Link>
-          </div>
+          ))}
         </Card>
       </div>
 
-      {/* Recent Activity */}
-      <Card className="p-6">
-        <h2 className="text-2xl font-bold mb-4">Recent Activity</h2>
-        <div className="text-center py-8 text-muted-foreground">
-          <p>No activity yet. Start learning to see your progress here!</p>
+      {/* Recent Notes */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Recent Notes</h2>
+          <Link href="/dashboard/notes">
+            <Button variant="ghost" size="sm">View all →</Button>
+          </Link>
         </div>
-      </Card>
+
+        {recentNotes.length === 0 ? (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground mb-4">No notes yet — create your first one!</p>
+            <Link href="/dashboard/notes">
+              <Button variant="outline" className="gap-2">
+                <BookOpen className="w-4 h-4" /> Create Note
+              </Button>
+            </Link>
+          </Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {recentNotes.map((note) => (
+              <Link key={note.id} href="/dashboard/notes">
+                <Card className="p-4 hover:border-primary/50 transition-colors cursor-pointer h-full">
+                  <p className="font-semibold line-clamp-2 mb-2">{note.title}</p>
+                  {note.subject && (
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                      {note.subject}
+                    </span>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+                  </p>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 function StatCard({
-  icon,
-  title,
-  value,
-  subtitle,
+  icon, title, value, subtitle, href, color,
 }: {
   icon: React.ReactNode
   title: string
   value: string
   subtitle: string
+  href?: string
+  color: 'blue' | 'purple' | 'green' | 'amber'
 }) {
-  return (
-    <Card className="p-6 flex items-start gap-4">
-      <div className="mt-1">{icon}</div>
-      <div className="flex-1">
-        <p className="text-sm text-muted-foreground">{title}</p>
-        <p className="text-3xl font-bold">{value}</p>
-        <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+  const bg = {
+    blue: 'bg-blue-500/10',
+    purple: 'bg-purple-500/10',
+    green: 'bg-green-500/10',
+    amber: 'bg-amber-500/10',
+  }[color]
+
+  const card = (
+    <Card className={`p-4 flex items-center gap-3 ${href ? 'hover:border-primary/40 transition-colors cursor-pointer' : ''}`}>
+      <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground truncate">{title}</p>
+        <p className="text-2xl font-bold leading-none my-0.5">{value}</p>
+        <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
       </div>
     </Card>
   )
+
+  return href ? <Link href={href}>{card}</Link> : card
 }

@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Bookmark,
-  BookmarkX,
+  BookmarkPlus,
   Trash2,
   Edit2,
   Code,
@@ -47,9 +47,9 @@ export function NoteCard({
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             {note.isBookmarked ? (
-              <Bookmark className="h-5 w-5 fill-current" />
+              <Bookmark className="h-5 w-5 fill-current text-primary" />
             ) : (
-              <BookmarkX className="h-5 w-5" />
+              <BookmarkPlus className="h-5 w-5" />
             )}
           </button>
         </div>

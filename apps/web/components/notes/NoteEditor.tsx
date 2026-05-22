@@ -131,7 +131,12 @@ export function NoteEditor({ note, onClose, onSave }: NoteEditorProps) {
 
         {/* Content */}
         <div>
-          <label className="text-sm font-medium">Content</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium">Content</label>
+            <span className="text-xs text-muted-foreground">
+              {content.trim() ? content.trim().split(/\s+/).length : 0} words · {content.length} chars
+            </span>
+          </div>
           <p className="text-xs text-muted-foreground mb-2">
             Supports Markdown, LaTeX ($...$), and code blocks (```...```)
           </p>
@@ -139,7 +144,7 @@ export function NoteEditor({ note, onClose, onSave }: NoteEditorProps) {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Write your note here... (Markdown supported)"
-            className="w-full h-64 p-3 border rounded-md font-mono text-sm"
+            className="w-full h-64 p-3 border border-input rounded-md font-mono text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
             disabled={isSaving}
           />
         </div>
