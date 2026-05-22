@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
+import { awardXP, XP } from '@/lib/gamification'
 
 const saveSchema = z.object({
   topic: z.string().min(1),
@@ -87,6 +88,10 @@ export async function POST(request: NextRequest) {
         },
       })
     }
+
+    // Award XP after response — perfect score earns a bonus
+    const isPerfect = correctAnswers === total && total > 0
+    after(() => awardXP(userId, XP.QUIZ_COMPLETED + (isPerfect ? XP.QUIZ_PERFECT_BONUS : 0)))
 
     return NextResponse.json({
       success: true,

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Sparkles, BookOpen, MessageSquare, BarChart3, Settings, Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch } from 'lucide-react'
+import { Sparkles, BookOpen, MessageSquare, BarChart3, Settings, Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/dashboard/feed', icon: Rss, label: 'Daily Feed' },
   { href: '/dashboard/analytics', icon: Brain, label: 'Analytics' },
   { href: '/dashboard/knowledge-graph', icon: GitBranch, label: 'Knowledge Graph' },
+  { href: '/dashboard/achievements', icon: Medal, label: 'Achievements' },
   { href: '/dashboard/flashcards', icon: Layers, label: 'Flashcards', badge: 'flashcards-due' },
   { href: '/dashboard/uploads', icon: Upload, label: 'Uploads' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },

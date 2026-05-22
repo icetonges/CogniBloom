@@ -109,11 +109,27 @@ model LearningProfile {
   currentStreak        Int        @default(0)
   longestStreak        Int        @default(0)
 
+  // Gamification
+  xp                   Int        @default(0)
+  level                Int        @default(1)
+
   recentTopics         String[]    @default([])
   recommendedTopics    String[]    @default([])
 
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
+}
+
+// ============ GAMIFICATION ============
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId])
 }
 
 // ============ NOTES & JOURNALING ============

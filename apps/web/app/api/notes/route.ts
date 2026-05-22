@@ -3,6 +3,7 @@ import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 import { embedNote } from '@/lib/notes'
+import { awardXP, updateStreak, XP } from '@/lib/gamification'
 
 const createNoteSchema = z.object({
   title: z.string().min(1).max(200),
@@ -82,10 +83,13 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Schedule embedding to run after the response is delivered.
-    // next/server `after()` keeps the function alive until the promise resolves,
-    // which prevents Vercel from killing it mid-write.
-    after(() => embedNote(note.id, note.title, note.content))
+    // After the response: embed the note and award XP (non-blocking)
+    after(async () => {
+      await embedNote(note.id, note.title, note.content)
+      const streak = await updateStreak(userId)
+      const bonus = Math.max(streak - 1, 0) * XP.STREAK_BONUS
+      await awardXP(userId, XP.NOTE_CREATED + bonus)
+    })
 
     return NextResponse.json({ success: true, data: note }, { status: 201 })
   } catch (error) {

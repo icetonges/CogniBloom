@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { sm2 } from '@/lib/flashcards'
+import { awardXP, XP } from '@/lib/gamification'
 
 // POST /api/flashcards/review — record a review result
 export async function POST(request: NextRequest) {
@@ -52,6 +53,9 @@ export async function POST(request: NextRequest) {
         },
       }),
     ])
+
+    // Award XP per card reviewed
+    after(() => awardXP(userId, XP.FLASHCARD_REVIEWED))
 
     return NextResponse.json({
       success: true,

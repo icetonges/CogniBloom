@@ -3,10 +3,11 @@ export const dynamic = 'force-dynamic'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock, Brain, Layers } from 'lucide-react'
+import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock, Brain, Layers, Medal } from 'lucide-react'
 import Link from 'next/link'
 import { db } from '@/lib/db'
 import { formatDistanceToNow } from 'date-fns'
+import { xpToLevel, xpForLevel } from '@/lib/gamification'
 
 export default async function DashboardPage() {
   const userId = DANIEL_USER_ID
@@ -23,7 +24,7 @@ export default async function DashboardPage() {
     }),
     db.learningProfile.findUnique({
       where: { userId },
-      select: { masteryScores: true, weakAreas: true, strongAreas: true },
+      select: { masteryScores: true, weakAreas: true, strongAreas: true, xp: true, level: true },
     }),
     db.flashcard.count({ where: { userId, nextReviewAt: { lte: new Date() } } }),
   ])
@@ -163,6 +164,45 @@ export default async function DashboardPage() {
           color="amber"
         />
       </div>
+
+      {/* XP / Level widget */}
+      {(() => {
+        const xp = learningProfile?.xp ?? 0
+        const level = learningProfile?.level ?? xpToLevel(xp)
+        const levelStart = xpForLevel(level)
+        const levelEnd = xpForLevel(level + 1)
+        const pct = Math.min(Math.round(((xp - levelStart) / (levelEnd - levelStart)) * 100), 100)
+        return (
+          <Link href="/dashboard/achievements">
+            <Card className="p-4 hover:border-primary/40 transition-colors cursor-pointer">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Medal className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-lg leading-none">Level {level}</span>
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-sm text-muted-foreground">{xp.toLocaleString()} XP</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">View achievements →</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-2 rounded-full bg-gradient-to-r from-primary to-secondary"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {xp - levelStart} / {levelEnd - levelStart} XP to level {level + 1}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </Link>
+        )
+      })()}
 
       {/* Mastery Summary */}
       {masteryEntries.length > 0 && (

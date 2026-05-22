@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { getAIManager } from '@/lib/ai'
 import { getRagContext } from '@/lib/ai/rag'
 import type { ChatMessage } from '@/lib/ai/providers/types'
+import { awardXP, XP } from '@/lib/gamification'
 
 interface ChatRequestBody {
   sessionId?: string
@@ -120,6 +121,9 @@ export async function POST(request: NextRequest) {
               totalTokensUsed: { increment: totalInputTokens + totalOutputTokens },
             },
           })
+
+          // Award XP for completing an AI session exchange
+          after(() => awardXP(userId, XP.SESSION_COMPLETED))
 
           controller.enqueue(
             encoder.encode(
