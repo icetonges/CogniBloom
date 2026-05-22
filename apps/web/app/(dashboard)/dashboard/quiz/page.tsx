@@ -2,7 +2,8 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Loader2, Sparkles, CheckCircle2, XCircle, RotateCcw, Trophy, History, BookOpen } from 'lucide-react'
@@ -48,8 +49,9 @@ const SUBJECT_SUGGESTIONS = [
 ]
 
 export default function QuizPage() {
-  const [topic, setTopic] = useState('')
-  const [subject, setSubject] = useState('')
+  const searchParams = useSearchParams()
+  const [topic, setTopic] = useState(() => searchParams.get('topic') ?? '')
+  const [subject, setSubject] = useState(() => searchParams.get('subject') ?? '')
   const [difficulty, setDifficulty] = useState<Difficulty>('medium')
   const [count, setCount] = useState(5)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -58,6 +60,7 @@ export default function QuizPage() {
   const [pastQuizzes, setPastQuizzes] = useState<PastQuiz[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const autoTriggeredRef = useRef(false)
 
   useEffect(() => {
     fetch('/api/quiz/save?limit=6')
@@ -65,6 +68,36 @@ export default function QuizPage() {
       .then(({ data }) => { if (Array.isArray(data)) setPastQuizzes(data as PastQuiz[]) })
       .catch(() => {})
   }, [])
+
+  // Auto-generate when navigated here with ?topic= param (e.g. from feed card)
+  useEffect(() => {
+    const paramTopic = searchParams.get('topic')
+    if (paramTopic && !autoTriggeredRef.current) {
+      autoTriggeredRef.current = true
+      // Small delay so state is settled
+      const t = setTimeout(() => {
+        setIsGenerating(true)
+        setError(null)
+        setQuiz(null)
+        const paramSubject = searchParams.get('subject') ?? undefined
+        fetch('/api/quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic: paramTopic.trim(), subject: paramSubject, difficulty: 'medium', count: 5 }),
+        })
+          .then(async (res) => {
+            if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Failed') }
+            return res.json()
+          })
+          .then(({ data }) => {
+            setQuiz({ questions: data.questions, topic: data.topic, subject: paramSubject, difficulty: 'medium', current: 0, answers: {}, revealed: {}, finished: false, startedAt: Date.now() })
+          })
+          .catch((e) => setError(e instanceof Error ? e.message : 'Something went wrong'))
+          .finally(() => setIsGenerating(false))
+      }, 100)
+      return () => clearTimeout(t)
+    }
+  }, [searchParams])
 
   const generateQuiz = async () => {
     if (!topic.trim()) return
@@ -216,6 +249,17 @@ export default function QuizPage() {
           {revealed && <div className="rounded-lg bg-muted/60 p-3 text-sm text-muted-foreground">💡 {q.explanation}</div>}
           {revealed && <Button onClick={next} className="w-full">{quiz.current + 1 < quiz.questions.length ? 'Next question →' : 'See results'}</Button>}
         </Card>
+      </div>
+    )
+  }
+
+  // ── Auto-generating loading screen ────────────────────────────
+  if (isGenerating && searchParams.get('topic')) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4 text-muted-foreground">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-sm font-medium">Generating quiz on &ldquo;{topic}&rdquo;…</p>
+        <p className="text-xs opacity-60">This takes about 5 seconds</p>
       </div>
     )
   }
