@@ -37,6 +37,7 @@ model User {
   notes                Note[]
   uploads              Upload[]
   quizzes              Quiz[]
+  flashcards           Flashcard[]
   subscriptions        Subscription[]
   preferences          UserPreferences?
   learningProfile      LearningProfile?
@@ -135,6 +136,7 @@ model Note {
 
   uploads              Upload[]
   reviews              NoteReview[]
+  flashcards           Flashcard[]
 
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
@@ -337,6 +339,60 @@ model Option {
   isCorrect           Boolean
 
   @@unique([questionId, optionIndex])
+}
+
+// ============ FLASHCARDS & SPACED REPETITION ============
+
+model Flashcard {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Source
+  noteId                String?
+  note                  Note?       @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  // Content
+  front                 String      @db.Text  // question / term
+  back                  String      @db.Text  // answer / definition
+  subject               String?
+  tags                  String[]    @default([])
+
+  // SM-2 Spaced Repetition fields
+  easeFactor            Float       @default(2.5)   // difficulty multiplier
+  interval              Int         @default(0)      // days until next review
+  repetitions           Int         @default(0)      // times reviewed successfully
+  nextReviewAt          DateTime    @default(now())  // when to show next
+
+  // Stats
+  totalReviews          Int         @default(0)
+  correctReviews        Int         @default(0)
+
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  reviews               FlashcardReview[]
+
+  @@index([userId])
+  @@index([nextReviewAt])
+  @@index([noteId])
+}
+
+model FlashcardReview {
+  id                    String      @id @default(cuid())
+  flashcardId           String
+  flashcard             Flashcard   @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+
+  // Rating 0-5 (SM-2 standard: 0=blackout, 3=correct with effort, 5=perfect)
+  rating                Int
+  previousInterval      Int
+  previousEaseFactor    Float
+  newInterval           Int
+  newEaseFactor         Float
+
+  reviewedAt            DateTime    @default(now())
+
+  @@index([flashcardId])
 }
 
 // ============ KNOWLEDGE & MASTERY ============

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { Loader2, X, Sparkles, BookOpen, AlertCircle, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Loader2, X, Sparkles, BookOpen, AlertCircle, ChevronRight, Eye, EyeOff, Layers } from 'lucide-react'
 import { useNotes } from '@/hooks/useNotes'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { FileUploadButton } from '@/components/uploads/FileUpload'
@@ -38,6 +38,7 @@ export function NoteEditor({ note, onClose, onSave }: NoteEditorProps) {
   const [review, setReview] = useState<NoteReview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savedNoteId, setSavedNoteId] = useState<string | null>(note?.id ?? null)
+  const [isGeneratingCards, setIsGeneratingCards] = useState(false)
 
   const notesHook = useNotes()
 
@@ -199,6 +200,29 @@ export function NoteEditor({ note, onClose, onSave }: NoteEditorProps) {
         {/* Actions */}
         <div className="flex gap-2 justify-end pt-4 border-t flex-wrap">
           {savedNoteId && <FileUploadButton noteId={savedNoteId} />}
+          {savedNoteId && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isGeneratingCards || isSaving || isReviewing}
+              onClick={async () => {
+                setIsGeneratingCards(true)
+                try {
+                  await fetch('/api/flashcards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ noteId: savedNoteId, count: 8 }),
+                  })
+                } finally {
+                  setIsGeneratingCards(false)
+                }
+              }}
+              className="gap-1.5"
+            >
+              {isGeneratingCards ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
+              {isGeneratingCards ? 'Generating…' : 'Make flashcards'}
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose} disabled={isSaving || isReviewing}>Cancel</Button>
           <Button variant="outline" onClick={handleSaveAndReview} disabled={isSaving || isReviewing} className="gap-1.5">
             {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}

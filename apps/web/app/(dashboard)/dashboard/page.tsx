@@ -168,7 +168,7 @@ export default async function DashboardPage() {
           {[
             { href: '/dashboard/chat', label: 'AI Tutor', emoji: '🤖' },
             { href: '/dashboard/quiz', label: 'Take a Quiz', emoji: '🏆' },
-            { href: '/dashboard/feed', label: 'Daily Feed', emoji: '📰' },
+            { href: '/dashboard/flashcards', label: 'Flashcards', emoji: '🃏' },
             { href: '/dashboard/analytics', label: 'My Progress', emoji: '📊' },
           ].map(({ href, label, emoji }) => (
             <Link key={label} href={href}>
