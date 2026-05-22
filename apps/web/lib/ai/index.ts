@@ -32,3 +32,8 @@ export { getProvider, detectProvider, AVAILABLE_MODELS } from './router'
 // Manager
 export { initializeAIManager, getAIManager } from './manager'
 export type { AIUsageMetrics } from './manager'
+
+// Embeddings & RAG
+export { generateEmbedding, generateEmbeddings, embeddingToSql, EMBEDDING_DIMS } from './embeddings'
+export { searchSimilarNotes, buildRagContext, getRagContext } from './rag'
+export type { RagNote } from './rag'

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
 import { z } from 'zod'
+import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
 
-// Validation schemas
 const createNoteSchema = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1),
@@ -11,20 +11,25 @@ const createNoteSchema = z.object({
   subject: z.string().optional(),
 })
 
-interface CreateNoteRequest {
-  title: string
-  content: string
-  tags?: string[]
-  subject?: string
+// Fire-and-forget: generate and store embedding after note is created
+async function embedNote(noteId: string, title: string, content: string) {
+  try {
+    const text = `${title}\n\n${content}`
+    const embedding = await generateEmbedding(text)
+    const vectorStr = embeddingToSql(embedding)
+    await db.$executeRaw`
+      UPDATE "Note" SET embedding = ${vectorStr}::vector WHERE id = ${noteId}
+    `
+  } catch {
+    // Non-fatal — note is still usable without embedding
+  }
 }
 
-// GET /api/notes - List user's notes
+// GET /api/notes
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
@@ -33,8 +38,7 @@ export async function GET(request: NextRequest) {
     const tag = searchParams.get('tag')
     const bookmarkedOnly = searchParams.get('bookmarked') === 'true'
 
-    // Build where clause
-    const where: any = { userId }
+    const where: Record<string, unknown> = { userId }
     if (subject) where.subject = subject
     if (tag) where.tags = { has: tag }
     if (bookmarkedOnly) where.isBookmarked = true
@@ -62,43 +66,26 @@ export async function GET(request: NextRequest) {
       db.note.count({ where }),
     ])
 
-    return NextResponse.json({
-      success: true,
-      data: notes,
-      meta: {
-        total,
-        limit,
-        offset,
-      },
-    })
+    return NextResponse.json({ success: true, data: notes, meta: { total, limit, offset } })
   } catch (error) {
-    console.error('[notes GET] Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('[notes GET]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// POST /api/notes - Create new note
+// POST /api/notes
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body: CreateNoteRequest = await request.json()
-
-    // Validate request
+    const body = await request.json()
     const validated = createNoteSchema.parse(body)
 
-    // Detect content features
     const hasMath = /\$.*\$|\\[.*\\]|\\\(.*\\\)/.test(validated.content)
     const hasCode = /```|`/.test(validated.content)
     const hasImages = /!\[.*\]\(.*\)|<img/.test(validated.content)
 
-    // Create note
     const note = await db.note.create({
       data: {
         userId,
@@ -112,28 +99,15 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: note,
-      },
-      { status: 201 }
-    )
+    // Generate embedding asynchronously — don't block the response
+    embedNote(note.id, note.title, note.content)
+
+    return NextResponse.json({ success: true, data: note }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: 'Validation error',
-          details: error.errors,
-        },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
     }
-
-    console.error('[notes POST] Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('[notes POST]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

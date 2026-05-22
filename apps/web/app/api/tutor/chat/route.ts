@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
 import { getAIManager } from '@/lib/ai'
+import { getRagContext } from '@/lib/ai/rag'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 
-// Request body schema
 interface ChatRequestBody {
   sessionId?: string
   messages: ChatMessage[]
@@ -16,23 +16,15 @@ interface ChatRequestBody {
 
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate user
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Parse request
     const body: ChatRequestBody = await request.json()
-
     if (!body.messages || body.messages.length === 0) {
-      return NextResponse.json(
-        { error: 'Messages are required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Messages are required' }, { status: 400 })
     }
 
-    const model = body.model || 'claude-sonnet-4.6'
+    const model = body.model || 'gemini-2.0-flash'
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 2048
 
@@ -42,135 +34,88 @@ export async function POST(request: NextRequest) {
       const session = await db.tutorSession.create({
         data: {
           userId,
-          mode: (body.mode as any) || 'GENERAL',
-          aiProvider: extractProviderFromModel(model),
+          mode: (body.mode as never) || 'GENERAL',
+          aiProvider: extractProvider(model),
           aiModel: model,
         },
       })
       sessionId = session.id
     }
 
-    // Validate session ownership
-    const session = await db.tutorSession.findFirst({
-      where: { id: sessionId, userId },
-    })
+    const session = await db.tutorSession.findFirst({ where: { id: sessionId, userId } })
+    if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Session not found' },
-        { status: 404 }
-      )
-    }
+    // Get RAG context from the student's notes
+    const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
+    const ragContext = lastUserMsg ? await getRagContext(userId, lastUserMsg.content) : ''
 
-    // Get AI manager
+    // Build system prompt with RAG context
+    const baseSystemPrompt = getSystemPrompt(body.mode || 'general')
+    const systemPrompt = ragContext
+      ? `${baseSystemPrompt}\n\n${ragContext}\n\nUse the student's notes above as context when relevant. Reference them naturally in your response.`
+      : baseSystemPrompt
+
+    // Prepend system message
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...body.messages.filter((m) => m.role !== 'system'),
+    ]
+
     const aiManager = getAIManager()
-
-    // Prepare system message if not present
-    const messages = body.messages
-    if (!messages[0] || messages[0].role !== 'system') {
-      const systemPrompt = getSystemPrompt(body.mode || 'general')
-      messages.unshift({
-        role: 'system',
-        content: systemPrompt,
-      })
-    }
-
-    // Stream response using encoder
     const encoder = new TextEncoder()
     let totalInputTokens = 0
     let totalOutputTokens = 0
+    const assistantChunks: string[] = []
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Stream from AI provider
-          for await (const chunk of aiManager.stream(model, {
-            messages,
-            temperature,
-            maxTokens,
-          })) {
-            // Track tokens
+          for await (const chunk of aiManager.stream(model, { messages, temperature, maxTokens })) {
             if (chunk.tokensUsed) {
               totalInputTokens = chunk.tokensUsed.input
               totalOutputTokens = chunk.tokensUsed.output
             }
-
-            // Send chunk as SSE
             if (chunk.content) {
-              const data = {
-                type: 'content',
-                content: chunk.content,
-                tokensUsed: chunk.tokensUsed,
-              }
+              assistantChunks.push(chunk.content)
               controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+                encoder.encode(`data: ${JSON.stringify({ type: 'content', content: chunk.content })}\n\n`)
               )
             }
           }
 
-          // Save messages to database
-          const lastUserMessage = messages
-            .slice()
-            .reverse()
-            .find((m) => m.role === 'user')
+          const assistantContent = assistantChunks.join('')
 
-          if (lastUserMessage) {
+          // Persist messages
+          if (lastUserMsg) {
             await db.tutorMessage.create({
-              data: {
-                sessionId,
-                role: 'user',
-                content: lastUserMessage.content,
-                tokensUsed: 0,
-              },
+              data: { sessionId: sessionId!, role: 'user', content: lastUserMsg.content, tokensUsed: 0 },
             })
           }
-
-          // Extract assistant message from stream
-          const assistantContent: string[] = []
-          for await (const chunk of aiManager.stream(model, {
-            messages,
-            temperature,
-            maxTokens,
-          })) {
-            if (chunk.content) {
-              assistantContent.push(chunk.content)
-            }
-          }
-
-          const fullContent = assistantContent.join('')
-
-          if (fullContent) {
+          if (assistantContent) {
             await db.tutorMessage.create({
-              data: {
-                sessionId,
-                role: 'assistant',
-                content: fullContent,
-                tokensUsed: totalOutputTokens,
-              },
+              data: { sessionId: sessionId!, role: 'assistant', content: assistantContent, tokensUsed: totalOutputTokens },
             })
           }
 
           // Update session stats
           await db.tutorSession.update({
-            where: { id: sessionId },
+            where: { id: sessionId! },
             data: {
               messageCount: { increment: 2 },
               totalTokensUsed: { increment: totalInputTokens + totalOutputTokens },
             },
           })
 
-          // Send completion
-          const done = {
-            type: 'done',
-            sessionId,
-            tokensUsed: {
-              input: totalInputTokens,
-              output: totalOutputTokens,
-              total: totalInputTokens + totalOutputTokens,
-            },
-          }
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(done)}\n\n`))
-
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'done',
+                sessionId,
+                ragUsed: ragContext.length > 0,
+                tokensUsed: { input: totalInputTokens, output: totalOutputTokens, total: totalInputTokens + totalOutputTokens },
+              })}\n\n`
+            )
+          )
           controller.close()
         } catch (error) {
           controller.error(error)
@@ -182,19 +127,16 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     })
   } catch (error) {
-    console.error('[tutor/chat] Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('[tutor/chat]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-function extractProviderFromModel(model: string): string {
+function extractProvider(model: string): string {
   if (model.startsWith('gemini')) return 'google'
   if (model.startsWith('claude')) return 'anthropic'
   return 'groq'
@@ -202,23 +144,14 @@ function extractProviderFromModel(model: string): string {
 
 function getSystemPrompt(mode: string): string {
   const prompts: Record<string, string> = {
-    general: `You are a helpful AI tutor. Answer questions clearly and provide examples when helpful.
-Adapt your responses to the student's learning level.`,
-    math: `You are an expert math tutor. Help students understand mathematical concepts step-by-step.
-Break down problems into manageable parts. Encourage problem-solving rather than just providing answers.`,
-    coding: `You are an expert programming tutor. Help students learn to code effectively.
-Provide clean code examples and explain concepts clearly. Encourage best practices and clean code principles.`,
-    language: `You are a language learning tutor. Help students improve their language skills.
-Correct mistakes gently and provide context for grammar and vocabulary.`,
-    science: `You are a science tutor. Help students understand scientific concepts and principles.
-Use examples from real-world applications to illustrate concepts.`,
-    homework_helper: `You are a homework helper. Guide students through assignments without simply providing answers.
-Help them understand the concepts and develop problem-solving skills.`,
-    socratic_coach: `You are a Socratic method coach. Guide students to answers through thoughtful questioning.
-Help them develop critical thinking skills.`,
-    quiz: `You are a quiz master. Ask clear questions and provide feedback on student answers.
-Explain correct answers and help students understand why.`,
+    general: `You are CogniBloom, a friendly and encouraging AI tutor for K-12 students. Answer questions clearly with examples. Adapt to the student's level.`,
+    math: `You are an expert math tutor. Break problems into clear steps. Encourage the student to try before showing the answer. Use LaTeX notation where helpful (wrap in $...$).`,
+    coding: `You are an expert programming tutor. Provide clean, well-explained code examples. Teach best practices and help students debug effectively.`,
+    language: `You are a language tutor. Correct mistakes gently with clear explanations. Provide context for grammar rules and vocabulary.`,
+    science: `You are a science tutor. Connect concepts to real-world examples. Encourage curiosity and scientific thinking.`,
+    homework_helper: `You are a homework guide. Never just give the answer — ask leading questions to help the student work it out themselves. Celebrate their progress.`,
+    socratic_coach: `You are a Socratic coach. Guide students to insight through thoughtful questions. Help them discover answers rather than telling them.`,
+    quiz: `You are a quiz master. Ask one clear question at a time, give feedback on answers, and explain the reasoning behind correct answers.`,
   }
-
-  return prompts[mode] || prompts['general']
+  return prompts[mode] ?? prompts['general']
 }

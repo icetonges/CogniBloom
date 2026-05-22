@@ -132,6 +132,9 @@ model Note {
   isPublic             Boolean     @default(false)
   isBookmarked         Boolean     @default(false)
 
+  // pgvector embedding (768 dims — Google text-embedding-004)
+  embedding            Unsupported("vector(768)")?
+
   uploads              Upload[]
   reviews              NoteReview[]
 

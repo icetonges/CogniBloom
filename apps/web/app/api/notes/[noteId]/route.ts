@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
 import { z } from 'zod'
+import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
+
+async function reEmbedNote(noteId: string, title: string, content: string) {
+  try {
+    const embedding = await generateEmbedding(`${title}\n\n${content}`)
+    const vectorStr = embeddingToSql(embedding)
+    await db.$executeRaw`UPDATE "Note" SET embedding = ${vectorStr}::vector WHERE id = ${noteId}`
+  } catch {
+    // Non-fatal
+  }
+}
 
 const updateNoteSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -55,6 +66,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const updated = await db.note.update({ where: { id: noteId }, data: updateData })
+
+    // Re-embed if title or content changed
+    if (validated.title || validated.content) {
+      reEmbedNote(noteId, updated.title, updated.content)
+    }
+
     return NextResponse.json({ success: true, data: updated })
   } catch (error) {
     if (error instanceof z.ZodError) {
