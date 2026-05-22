@@ -24,7 +24,6 @@ export interface UserProfile {
   id: string
   email: string
   name: string
-  clerkId: string
   role: 'STUDENT' | 'PARENT' | 'ADMIN'
   grade?: number
   age?: number

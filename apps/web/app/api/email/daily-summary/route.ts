@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       streak,
       topSubjects: subjects.map((s) => s.subject ?? 'General'),
       tokensUsed: tokenStats._sum.totalTokensUsed ?? 0,
-      recentNotes,
+      recentNotes: recentNotes.map((n) => ({ title: n.title, subject: n.subject ?? undefined })),
     })
 
     return NextResponse.json({

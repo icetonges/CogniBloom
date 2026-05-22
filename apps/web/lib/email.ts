@@ -122,8 +122,7 @@ export async function sendDailySummary(
   data: DailySummaryData
 ): Promise<void> {
   if (recipients.length === 0) {
-    console.warn('[email] No recipients configured — skipping daily summary')
-    return
+    return // No recipients configured — skip silently
   }
 
   const transport = createTransport()
@@ -135,6 +134,4 @@ export async function sendDailySummary(
     subject: `📚 ${data.studentName}'s Daily Learning Summary — ${data.date}`,
     html: buildSummaryHtml(data),
   })
-
-  console.log(`[email] Daily summary sent to ${recipients.join(', ')}`)
 }

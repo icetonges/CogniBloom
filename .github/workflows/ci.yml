@@ -116,8 +116,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cognibleom_test
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/cognibleom_test
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
-      CLERK_SECRET_KEY: sk_test_placeholder
 
     steps:
       - uses: actions/checkout@v4
