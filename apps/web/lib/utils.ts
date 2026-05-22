@@ -45,7 +45,7 @@ export function errorResponse(
 export class AppError extends Error {
   constructor(
     public code: string,
-    public message: string,
+    public override message: string,
     public statusCode: number = 400,
     public details?: unknown
   ) {
@@ -190,7 +190,7 @@ export function pick<T, K extends keyof T>(obj: T, ...keys: K[]): Pick<T, K> {
   return result
 }
 
-export function omit<T, K extends keyof T>(obj: T, ...keys: K[]): Omit<T, K> {
+export function omit<T extends Record<string, unknown>, K extends keyof T>(obj: T, ...keys: K[]): Omit<T, K> {
   const result = { ...obj }
   keys.forEach((key) => {
     delete result[key]

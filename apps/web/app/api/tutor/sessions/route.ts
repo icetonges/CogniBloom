@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/db'
+import { db } from '@/lib/db'
 import { z } from 'zod'
 
 // Validation schemas
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
     const includeMessages = searchParams.get('messages') === 'true'
 
-    const sessions = await prisma.tutorSession.findMany({
+    const sessions = await db.tutorSession.findMany({
       where: { userId },
       include: {
         messages: includeMessages
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       skip: offset,
     })
 
-    const total = await prisma.tutorSession.count({
+    const total = await db.tutorSession.count({
       where: { userId },
     })
 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     const validated = createSessionSchema.parse(body)
 
     // Create session
-    const session = await prisma.tutorSession.create({
+    const session = await db.tutorSession.create({
       data: {
         userId,
         mode: validated.mode as any,

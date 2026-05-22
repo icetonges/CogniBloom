@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/db'
+import { db } from '@/lib/db'
 import { z } from 'zod'
 
 // Validation schemas
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     if (bookmarkedOnly) where.isBookmarked = true
 
     const [notes, total] = await Promise.all([
-      prisma.note.findMany({
+      db.note.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
           updatedAt: true,
         },
       }),
-      prisma.note.count({ where }),
+      db.note.count({ where }),
     ])
 
     return NextResponse.json({
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     const hasImages = /!\[.*\]\(.*\)|<img/.test(validated.content)
 
     // Create note
-    const note = await prisma.note.create({
+    const note = await db.note.create({
       data: {
         userId,
         title: validated.title,

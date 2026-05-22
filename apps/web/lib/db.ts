@@ -19,7 +19,7 @@ export const createDbClient = () => {
 export async function withTransaction<T>(
   callback: (prisma: PrismaClient) => Promise<T>
 ) {
-  return db.$transaction(async (tx) => {
-    return callback(tx as PrismaClient)
+  return db.$transaction(async (tx: PrismaClient) => {
+    return callback(tx)
   })
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/db'
+import { db } from '@/lib/db'
 import { z } from 'zod'
 
 const updateNoteSchema = z.object({
@@ -30,7 +30,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const note = await prisma.note.findFirst({
+    const note = await db.note.findFirst({
       where: {
         id: params.noteId,
         userId,
@@ -74,7 +74,7 @@ export async function PUT(
     const validated = updateNoteSchema.parse(body)
 
     // Verify ownership
-    const note = await prisma.note.findFirst({
+    const note = await db.note.findFirst({
       where: {
         id: params.noteId,
         userId,
@@ -94,7 +94,7 @@ export async function PUT(
     }
 
     // Update note
-    const updated = await prisma.note.update({
+    const updated = await db.note.update({
       where: { id: params.noteId },
       data: updateData,
     })
@@ -134,7 +134,7 @@ export async function DELETE(
     }
 
     // Verify ownership
-    const note = await prisma.note.findFirst({
+    const note = await db.note.findFirst({
       where: {
         id: params.noteId,
         userId,
@@ -146,7 +146,7 @@ export async function DELETE(
     }
 
     // Delete note (cascade deletes reviews)
-    await prisma.note.delete({
+    await db.note.delete({
       where: { id: params.noteId },
     })
 

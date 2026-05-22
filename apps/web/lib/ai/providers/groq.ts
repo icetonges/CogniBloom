@@ -232,11 +232,10 @@ export class GroqProvider extends AIProvider {
     }
 
     if (error instanceof Groq.RateLimitError) {
+      const retryAfterHeader = error.headers?.['get']?.('retry-after')
       return new RateLimitError(
         'Groq API rate limit exceeded',
-        error.headers?.get('retry-after')
-          ? parseInt(error.headers.get('retry-after')!)
-          : undefined
+        retryAfterHeader ? parseInt(retryAfterHeader) : undefined
       )
     }
 

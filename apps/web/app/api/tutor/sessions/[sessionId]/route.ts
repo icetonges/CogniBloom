@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/db'
+import { db } from '@/lib/db'
 import { z } from 'zod'
 
 const updateSessionSchema = z.object({
@@ -29,7 +29,7 @@ export async function GET(
     const { searchParams } = new URL(request.url)
     const includeMessages = searchParams.get('messages') === 'true'
 
-    const session = await prisma.tutorSession.findFirst({
+    const session = await db.tutorSession.findFirst({
       where: {
         id: params.sessionId,
         userId,
@@ -78,7 +78,7 @@ export async function PUT(
     const validated = updateSessionSchema.parse(body)
 
     // Verify ownership
-    const session = await prisma.tutorSession.findFirst({
+    const session = await db.tutorSession.findFirst({
       where: {
         id: params.sessionId,
         userId,
@@ -93,7 +93,7 @@ export async function PUT(
     }
 
     // Update session
-    const updated = await prisma.tutorSession.update({
+    const updated = await db.tutorSession.update({
       where: { id: params.sessionId },
       data: {
         ...(validated.studentRating && { studentRating: validated.studentRating }),
@@ -138,7 +138,7 @@ export async function DELETE(
     }
 
     // Verify ownership
-    const session = await prisma.tutorSession.findFirst({
+    const session = await db.tutorSession.findFirst({
       where: {
         id: params.sessionId,
         userId,
@@ -153,7 +153,7 @@ export async function DELETE(
     }
 
     // Delete session (cascade deletes messages)
-    await prisma.tutorSession.delete({
+    await db.tutorSession.delete({
       where: { id: params.sessionId },
     })
 

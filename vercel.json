@@ -4,7 +4,6 @@
   "installCommand": "pnpm install",
   "outputDirectory": "apps/web/.next",
   "framework": "nextjs",
-  "rootDirectory": "apps/web",
   "env": {
     "DATABASE_URL": "@database_url",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "@clerk_publishable_key",

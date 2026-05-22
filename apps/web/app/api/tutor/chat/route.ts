@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/db'
+import { db } from '@/lib/db'
 import { getAIManager } from '@/lib/ai'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Get or create session
     let sessionId = body.sessionId
     if (!sessionId) {
-      const session = await prisma.tutorSession.create({
+      const session = await db.tutorSession.create({
         data: {
           userId,
           mode: (body.mode as any) || 'GENERAL',
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate session ownership
-    const session = await prisma.tutorSession.findFirst({
+    const session = await db.tutorSession.findFirst({
       where: { id: sessionId, userId },
     })
 
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
             .find((m) => m.role === 'user')
 
           if (lastUserMessage) {
-            await prisma.tutorMessage.create({
+            await db.tutorMessage.create({
               data: {
                 sessionId,
                 role: 'user',
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
           const fullContent = assistantContent.join('')
 
           if (fullContent) {
-            await prisma.tutorMessage.create({
+            await db.tutorMessage.create({
               data: {
                 sessionId,
                 role: 'assistant',
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Update session stats
-          await prisma.tutorSession.update({
+          await db.tutorSession.update({
             where: { id: sessionId },
             data: {
               messageCount: { increment: 2 },

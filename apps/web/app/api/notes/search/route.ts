@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/db'
+import { db } from '@/lib/db'
 
 // GET /api/notes/search - Search notes by title, content, tags
 export async function GET(request: NextRequest) {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Search in title and content using case-insensitive search
-    const notes = await prisma.note.findMany({
+    const notes = await db.note.findMany({
       where: {
         userId,
         OR: [
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const total = await prisma.note.count({
+    const total = await db.note.count({
       where: {
         userId,
         OR: [
