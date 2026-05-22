@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Loader2, Plus, Search } from 'lucide-react'
+import { Loader2, Plus, Search, Sparkles, X } from 'lucide-react'
 import { useNotes } from '@/hooks/useNotes'
 import { NoteCard } from './NoteCard'
 import type { Note } from '@/hooks/useNotes'
@@ -15,42 +15,58 @@ interface NotesListProps {
 
 export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchMode, setSearchMode] = useState<'semantic' | 'keyword' | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notes = useNotes()
 
-  // Load notes on mount — getNotes is stable (wrapped in useCallback with no deps)
+  // Load notes on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { notes.getNotes(0) }, [])
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      await notes.searchNotes(searchQuery, 0)
-    } else {
-      await notes.getNotes(0)
+  // Debounced live search — 400 ms after typing stops
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    if (!searchQuery.trim()) {
+      setSearchMode(null)
+      debounceRef.current = setTimeout(() => notes.getNotes(0), 200)
+      return
     }
+
+    if (searchQuery.trim().length < 2) return
+
+    debounceRef.current = setTimeout(async () => {
+      const params = new URLSearchParams({ q: searchQuery.trim(), limit: '20', offset: '0' })
+      const res = await fetch(`/api/notes/search?${params}`)
+      if (!res.ok) return
+      const json = await res.json()
+      if (json.success) {
+        setSearchMode(json.meta?.searchType === 'semantic' ? 'semantic' : 'keyword')
+        // Directly update through the hook's internal state via search
+        notes.searchNotes(searchQuery.trim(), 0)
+      }
+    }, 400)
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clearSearch = () => {
+    setSearchQuery('')
+    setSearchMode(null)
+    notes.getNotes(0)
   }
 
   const handleDeleteNote = async (noteId: string) => {
     if (confirm('Are you sure you want to delete this note?')) {
-      try {
-        await notes.deleteNote(noteId)
-      } catch (error) {
-        console.error('Failed to delete note:', error)
-      }
+      await notes.deleteNote(noteId).catch(() => {})
     }
   }
 
   const handleToggleBookmark = async (noteId: string) => {
-    try {
-      await notes.toggleBookmark(noteId)
-    } catch (error) {
-      console.error('Failed to toggle bookmark:', error)
-    }
+    await notes.toggleBookmark(noteId).catch(() => {})
   }
 
-  const handleEditNote = (note: Note) => {
-    onEditNote?.(note)
-  }
+  const isSearching = searchQuery.trim().length >= 2
 
   return (
     <div className="space-y-6">
@@ -59,7 +75,9 @@ export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
         <div>
           <h2 className="text-2xl font-bold">My Notes</h2>
           <p className="text-sm text-muted-foreground">
-            {notes.total} note{notes.total !== 1 ? 's' : ''}
+            {isSearching
+              ? `${notes.total} result${notes.total !== 1 ? 's' : ''}`
+              : `${notes.total} note${notes.total !== 1 ? 's' : ''}`}
           </p>
         </div>
         <Button onClick={onNewNote}>
@@ -68,79 +86,85 @@ export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
         </Button>
       </div>
 
-      {/* Search */}
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <div className="flex-1 relative">
+      {/* Search bar */}
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
-            placeholder="Search notes..."
+            placeholder="Search notes — AI semantic search enabled…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-10"
+            className="pl-9 pr-9"
           />
-          <button
-            type="submit"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            <Search className="h-4 w-4" />
-          </button>
+          {searchQuery && (
+            <button
+              onClick={clearSearch}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        {searchQuery && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setSearchQuery('')
-              notes.getNotes(0)
-            }}
-          >
-            Clear
-          </Button>
-        )}
-      </form>
 
-      {/* Error Display */}
+        {/* Search mode badge */}
+        {isSearching && searchMode && (
+          <div className="flex items-center gap-2 text-xs">
+            {searchMode === 'semantic' ? (
+              <span className="inline-flex items-center gap-1 bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">
+                <Sparkles className="w-3 h-3" /> Semantic AI search
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 bg-muted text-muted-foreground px-2.5 py-1 rounded-full">
+                <Search className="w-3 h-3" /> Keyword search
+              </span>
+            )}
+            <span className="text-muted-foreground">{notes.total} result{notes.total !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;</span>
+          </div>
+        )}
+      </div>
+
+      {/* Error */}
       {notes.error && (
         <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
           {notes.error}
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Loading */}
       {notes.isLoading && notes.notes.length === 0 ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : notes.notes.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">
-            {searchQuery
-              ? 'No notes found matching your search'
-              : 'No notes yet. Create your first note!'}
+        <div className="text-center py-12 space-y-3">
+          <p className="text-muted-foreground">
+            {isSearching ? `No notes found for "${searchQuery}"` : 'No notes yet — create your first one!'}
           </p>
-          {!searchQuery && (
+          {isSearching ? (
+            <Button variant="outline" onClick={clearSearch}>
+              <X className="h-4 w-4 mr-2" /> Clear search
+            </Button>
+          ) : (
             <Button onClick={onNewNote}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Note
+              <Plus className="h-4 w-4 mr-2" /> Create Note
             </Button>
           )}
         </div>
       ) : (
         <>
-          {/* Notes Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {notes.notes.map((note) => (
               <NoteCard
                 key={note.id}
                 note={note}
-                onEdit={handleEditNote}
+                onEdit={(n) => onEditNote?.(n)}
                 onDelete={handleDeleteNote}
                 onToggleBookmark={handleToggleBookmark}
               />
             ))}
           </div>
 
-          {/* Load More */}
           {notes.hasMore && (
             <div className="flex justify-center pt-4">
               <Button
@@ -149,10 +173,7 @@ export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
                 disabled={notes.isLoading}
               >
                 {notes.isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Loading...
-                  </>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Loading...</>
                 ) : (
                   'Load More'
                 )}

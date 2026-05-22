@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Sparkles, BookOpen, MessageSquare, BarChart3, Settings, Menu, X, Brain, Rss, Trophy, Upload, Layers } from 'lucide-react'
@@ -15,12 +15,12 @@ const navItems = [
   { href: '/dashboard/quiz', icon: Trophy, label: 'Quiz' },
   { href: '/dashboard/feed', icon: Rss, label: 'Daily Feed' },
   { href: '/dashboard/analytics', icon: Brain, label: 'Analytics' },
-  { href: '/dashboard/flashcards', icon: Layers, label: 'Flashcards' },
+  { href: '/dashboard/flashcards', icon: Layers, label: 'Flashcards', badge: 'flashcards-due' },
   { href: '/dashboard/uploads', icon: Upload, label: 'Uploads' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ]
 
-function Sidebar({ onClose }: { onClose?: () => void }) {
+function Sidebar({ onClose, flashcardsDue }: { onClose?: () => void; flashcardsDue: number }) {
   const pathname = usePathname()
 
   return (
@@ -42,8 +42,9 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map(({ href, icon: Icon, label }) => {
+        {navItems.map(({ href, icon: Icon, label, badge }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+          const showBadge = badge === 'flashcards-due' && flashcardsDue > 0
           return (
             <Link
               key={href}
@@ -57,7 +58,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
               )}
             >
               <Icon className="w-5 h-5 shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {showBadge && (
+                <span className="min-w-[1.25rem] h-5 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center px-1">
+                  {flashcardsDue > 99 ? '99+' : flashcardsDue}
+                </span>
+              )}
             </Link>
           )
         })}
@@ -83,6 +89,20 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [flashcardsDue, setFlashcardsDue] = useState(0)
+
+  // Poll due flashcard count every 2 minutes
+  useEffect(() => {
+    const load = () => {
+      fetch('/api/flashcards?due=true')
+        .then((r) => r.json())
+        .then(({ dueCount }) => { if (typeof dueCount === 'number') setFlashcardsDue(dueCount) })
+        .catch(() => {})
+    }
+    load()
+    const interval = setInterval(load, 120_000)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -101,7 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <Sidebar onClose={() => setSidebarOpen(false)} flashcardsDue={flashcardsDue} />
       </aside>
 
       {/* Main content */}

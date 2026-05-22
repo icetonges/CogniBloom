@@ -96,8 +96,7 @@ export async function GET(request: NextRequest) {
       data: notes,
       meta: { query, total, limit, offset, searchType },
     })
-  } catch (error) {
-    console.error('[notes/search GET]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

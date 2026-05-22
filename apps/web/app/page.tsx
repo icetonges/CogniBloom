@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import {
   ArrowRight, Sparkles, BookOpen, Brain, BarChart3,
-  MessageSquare, Trophy, Rss, CheckCircle2, Zap, Shield, Clock,
+  MessageSquare, Trophy, Rss, CheckCircle2, Zap, Shield, Clock, Layers, Globe,
 } from 'lucide-react'
 
 export default function Home() {
@@ -66,7 +66,7 @@ export default function Home() {
               { stat: '24/7', label: 'AI Tutor available' },
               { stat: '8+', label: 'Tutor modes' },
               { stat: '∞', label: 'Practice quizzes' },
-              { stat: '3', label: 'AI providers' },
+              { stat: 'SM-2', label: 'Spaced repetition' },
             ].map(({ stat, label }) => (
               <div key={label}>
                 <div className="text-3xl sm:text-4xl font-bold text-primary">{stat}</div>
@@ -87,48 +87,62 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {[
               {
                 icon: <MessageSquare className="w-6 h-6" />,
                 color: 'bg-blue-500/10 text-blue-500',
                 title: 'AI Tutor Chat',
-                desc: 'Chat with Gemini, Claude, or Llama. The AI reads your own notes and uses them as context for hyper-personalised answers.',
+                desc: 'Chat with Gemini, Claude, or Llama. RAG search means the AI draws on your own notes for every answer.',
                 badge: 'RAG-powered',
+              },
+              {
+                icon: <Globe className="w-6 h-6" />,
+                color: 'bg-cyan-500/10 text-cyan-500',
+                title: 'Web Grounding',
+                desc: 'Gemini automatically searches Google when needed — every response cites real educational sources.',
+                badge: 'Live sources',
               },
               {
                 icon: <BookOpen className="w-6 h-6" />,
                 color: 'bg-purple-500/10 text-purple-500',
                 title: 'Smart Notes',
-                desc: 'Write in Markdown with LaTeX math and code blocks. Notes are auto-embedded into a vector database for semantic search.',
-                badge: 'pgvector search',
+                desc: 'Markdown + LaTeX + code blocks. Notes embed into pgvector for instant semantic AI search.',
+                badge: 'Semantic search',
+              },
+              {
+                icon: <Layers className="w-6 h-6" />,
+                color: 'bg-rose-500/10 text-rose-500',
+                title: 'Flashcards',
+                desc: 'AI generates flashcards from any note. SM-2 spaced repetition schedules each card at the perfect time.',
+                badge: 'SM-2 algorithm',
               },
               {
                 icon: <Trophy className="w-6 h-6" />,
                 color: 'bg-amber-500/10 text-amber-500',
                 title: 'AI Quizzes',
-                desc: 'Type any topic and get a tailored multiple-choice quiz in seconds. Instant feedback + explanations on every answer.',
+                desc: 'Type any topic and get a tailored multiple-choice quiz in seconds. Mastery scores update automatically.',
                 badge: 'Instant',
               },
               {
                 icon: <Rss className="w-6 h-6" />,
                 color: 'bg-green-500/10 text-green-500',
                 title: 'Daily Learning Feed',
-                desc: 'A fresh batch of facts, challenges, vocabulary, puzzles, and study tips generated every day just for you.',
+                desc: 'Fresh facts, challenges, vocabulary, puzzles, and study tips — generated every morning just for you.',
                 badge: 'Daily refresh',
               },
               {
                 icon: <BarChart3 className="w-6 h-6" />,
                 color: 'bg-pink-500/10 text-pink-500',
-                title: 'Learning Analytics',
-                desc: 'See your 7-day activity, notes by subject, streak counter, and AI usage — all in clear, visual charts.',
+                title: 'Mastery Analytics',
+                desc: 'Per-subject mastery bars, quiz history, 7-day streak chart, and AI usage — all in one dashboard.',
                 badge: 'Progress tracking',
               },
               {
                 icon: <Brain className="w-6 h-6" />,
                 color: 'bg-indigo-500/10 text-indigo-500',
                 title: '8 Tutor Modes',
-                desc: 'Math, Coding, Language, Science, Homework Helper, Socratic Coach, Quiz mode — each with a tailored AI persona.',
+                desc: 'Math, Coding, Language, Science, Homework Helper, Socratic Coach, Quiz — each with a tailored persona.',
                 badge: 'Adaptive AI',
               },
             ].map(({ icon, color, title, desc, badge }) => (
@@ -192,11 +206,11 @@ export default function Home() {
               </p>
               <ul className="space-y-3">
                 {[
-                  'AI answers grounded in your own notes (RAG)',
+                  'AI answers grounded in your notes AND Google Search',
+                  'Flashcards with SM-2 spaced repetition from any note',
+                  'Mastery tracking per subject — see yourself improve',
                   'Works across Gemini, Claude, and Llama models',
-                  'Dark mode, mobile-friendly, fast',
-                  'Streak tracking keeps you consistent',
-                  'Free to start — no credit card',
+                  'Dark mode, mobile-friendly, no sign-up needed',
                 ].map((point) => (
                   <li key={point} className="flex items-start gap-3 text-sm">
                     <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
@@ -218,9 +232,14 @@ export default function Home() {
                 <div className="w-3 h-3 rounded-full bg-amber-400" />
                 <div className="w-3 h-3 rounded-full bg-green-400" />
                 <span className="ml-2 text-xs text-muted-foreground">AI Tutor · Gemini Flash</span>
-                <span className="ml-auto text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Brain className="w-3 h-3" /> Using your notes
-                </span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Brain className="w-3 h-3" /> Your notes
+                  </span>
+                  <span className="text-xs bg-cyan-500/15 text-cyan-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Globe className="w-3 h-3" /> Web
+                  </span>
+                </div>
               </div>
               <div className="p-4 space-y-4 text-sm">
                 <div className="flex justify-end">
