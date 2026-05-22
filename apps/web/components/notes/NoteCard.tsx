@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,8 +11,14 @@ import {
   Code,
   Zap,
   Image as ImageIcon,
+  Trophy,
+  Layers,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
+import { cn } from '@/lib/utils'
 import type { Note } from '@/hooks/useNotes'
 
 interface NoteCardProps {
@@ -27,9 +34,35 @@ export function NoteCard({
   onDelete,
   onToggleBookmark,
 }: NoteCardProps) {
+  const router = useRouter()
+  const [makingCards, setMakingCards] = useState(false)
+  const [cardsMade, setCardsMade] = useState(false)
   const preview = note.content
     .replace(/[#*_`\[\]()]/g, '')
     .substring(0, 100)
+
+  const makeFlashcards = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (makingCards || cardsMade) return
+    setMakingCards(true)
+    try {
+      await fetch('/api/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId: note.id, count: 8 }),
+      })
+      setCardsMade(true)
+    } finally {
+      setMakingCards(false)
+    }
+  }
+
+  const quizMe = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const params = new URLSearchParams({ topic: note.title })
+    if (note.subject) params.set('subject', note.subject)
+    router.push(`/dashboard/quiz?${params}`)
+  }
 
   return (
     <Card className="p-4 hover:shadow-md transition-shadow">
@@ -103,7 +136,33 @@ export function NoteCard({
               addSuffix: true,
             })}
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
+            {/* Quiz me */}
+            <button
+              onClick={quizMe}
+              title="Quiz me on this"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+            >
+              <Trophy className="h-3.5 w-3.5" />
+            </button>
+            {/* Make flashcards */}
+            <button
+              onClick={makeFlashcards}
+              disabled={makingCards || cardsMade}
+              title={cardsMade ? 'Flashcards created!' : 'Make flashcards'}
+              className={cn(
+                'p-1.5 rounded-md transition-colors',
+                cardsMade
+                  ? 'text-green-500'
+                  : 'text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10'
+              )}
+            >
+              {makingCards
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : cardsMade
+                  ? <CheckCircle2 className="h-3.5 w-3.5" />
+                  : <Layers className="h-3.5 w-3.5" />}
+            </button>
             <Button
               variant="ghost"
               size="sm"

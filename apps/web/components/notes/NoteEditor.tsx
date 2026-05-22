@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { Loader2, X, Sparkles, BookOpen, AlertCircle, ChevronRight, Eye, EyeOff, Layers } from 'lucide-react'
+import { Loader2, X, Sparkles, BookOpen, AlertCircle, ChevronRight, Eye, EyeOff, Layers, Trophy } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useNotes } from '@/hooks/useNotes'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { FileUploadButton } from '@/components/uploads/FileUpload'
@@ -41,6 +42,7 @@ export function NoteEditor({ note, onClose, onSave }: NoteEditorProps) {
   const [isGeneratingCards, setIsGeneratingCards] = useState(false)
 
   const notesHook = useNotes()
+  const router = useRouter()
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0
   const parseTagArray = () => tags.split(',').map((t) => t.trim()).filter(Boolean)
@@ -221,6 +223,22 @@ export function NoteEditor({ note, onClose, onSave }: NoteEditorProps) {
             >
               {isGeneratingCards ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
               {isGeneratingCards ? 'Generating…' : 'Make flashcards'}
+            </Button>
+          )}
+          {title.trim() && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isSaving || isReviewing}
+              onClick={() => {
+                const params = new URLSearchParams({ topic: title.trim() })
+                if (subject.trim()) params.set('subject', subject.trim())
+                router.push(`/dashboard/quiz?${params}`)
+              }}
+              className="gap-1.5"
+            >
+              <Trophy className="h-4 w-4" />
+              Quiz me
             </Button>
           )}
           <Button variant="outline" onClick={onClose} disabled={isSaving || isReviewing}>Cancel</Button>
