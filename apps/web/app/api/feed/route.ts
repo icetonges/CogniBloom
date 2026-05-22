@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { getAIManager } from '@/lib/ai'
 import { db } from '@/lib/db'
 
@@ -28,6 +29,7 @@ const FEED_TOPICS = [
 // GET /api/feed — return today's personalised feed
 export async function GET(request: NextRequest) {
   try {
+    const userId = DANIEL_USER_ID
     const { searchParams } = new URL(request.url)
     const refresh = searchParams.get('refresh') === 'true'
 
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
       today.setHours(0, 0, 0, 0)
       const cached = await db.dailyFeedItem.findMany({
         where: { createdAt: { gte: today } },
-        take: 6,
+        take: 8,
         orderBy: { createdAt: 'asc' },
       })
       if (cached.length >= 4) {
@@ -49,9 +51,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Load user preferences for personalisation
+    const prefs = await db.userPreferences.findUnique({ where: { userId } })
+    const userSubjects = prefs?.subjects?.length ? prefs.subjects : ['Math', 'Science']
+    const userGrade = prefs?.grade ?? 'Year 9'
+
+    // Weight topics: preferred subjects get 2 entries, others get 1
+    const weightedTopics = FEED_TOPICS.flatMap((t) =>
+      userSubjects.some((s) => t.subject.toLowerCase().includes(s.toLowerCase()))
+        ? [t, t]
+        : [t]
+    )
+    const selected = shuffle(weightedTopics).slice(0, 6)
+
     // Generate fresh feed via AI
     const aiManager = getAIManager()
-    const selected = shuffle(FEED_TOPICS).slice(0, 5)
 
     const items = await Promise.allSettled(
       selected.map(async (topic) => {
@@ -59,7 +73,7 @@ export async function GET(request: NextRequest) {
           messages: [
             {
               role: 'user',
-              content: `Create ${topic.prompt} for a K-12 student. Be engaging, concise, and educational.
+              content: `Create ${topic.prompt} for a ${userGrade} student. Be engaging, concise, and educational.
 
 Return ONLY valid JSON:
 {
@@ -115,8 +129,7 @@ Return ONLY valid JSON:
       data: feed,
       meta: { cached: false, generatedAt: new Date() },
     })
-  } catch (error) {
-    console.error('[feed GET]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
