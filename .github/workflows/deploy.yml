@@ -52,7 +52,19 @@ jobs:
 
       - name: Run smoke tests
         run: |
-          curl -f https://cognibleom.vercel.app/api/health || exit 1
+          echo "Waiting for deployment to warm up..."
+          sleep 15
+          for i in 1 2 3 4 5; do
+            echo "Health check attempt $i/5..."
+            if curl -sf https://cognibleom.vercel.app/api/health; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            echo "Not ready yet, retrying in 10s..."
+            sleep 10
+          done
+          echo "❌ Health check failed after 5 attempts"
+          exit 1
 
       - name: Deployment Status
         if: success()
