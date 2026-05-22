@@ -220,5 +220,5 @@ Help them develop critical thinking skills.`,
 Explain correct answers and help students understand why.`,
   }
 
-  return prompts[mode] || prompts.general
+  return prompts[mode] || prompts['general']
 }

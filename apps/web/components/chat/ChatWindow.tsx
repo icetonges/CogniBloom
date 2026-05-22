@@ -36,7 +36,7 @@ export function ChatWindow({ options, initialMode }: ChatWindowProps) {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     const message = inputRef.current?.value.trim()
-    if (!message) return
+    if (!message || !inputRef.current) return
 
     inputRef.current.value = ''
     await chat.sendMessage(message)

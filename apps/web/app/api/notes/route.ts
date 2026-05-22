@@ -11,27 +11,11 @@ const createNoteSchema = z.object({
   subject: z.string().optional(),
 })
 
-const updateNoteSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  content: z.string().min(1).optional(),
-  tags: z.array(z.string()).optional(),
-  subject: z.string().optional(),
-  isBookmarked: z.boolean().optional(),
-})
-
 interface CreateNoteRequest {
   title: string
   content: string
   tags?: string[]
   subject?: string
-}
-
-interface UpdateNoteRequest {
-  title?: string
-  content?: string
-  tags?: string[]
-  subject?: string
-  isBookmarked?: boolean
 }
 
 // GET /api/notes - List user's notes

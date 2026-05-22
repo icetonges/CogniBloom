@@ -15,7 +15,6 @@ export type {
   TokenCountResponse,
   ModelInfo,
   ProviderConfig,
-  ProviderError,
   AIUsage,
   ToolCall,
 } from './providers/types'

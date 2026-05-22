@@ -7,7 +7,7 @@ import type {
   TokenCountResponse,
   ProviderConfig,
 } from './providers/types'
-import { getProvider, detectProvider } from './router'
+import { getProvider } from './router'
 import { AIProvider } from './providers/base'
 
 export interface AIUsageMetrics {
@@ -223,7 +223,7 @@ export function initializeAIManager(config: ProviderConfig): AIManager {
  */
 export function getAIManager(): AIManager {
   if (!aiManager) {
-    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.GOOGLE_API_KEY || process.env.GROQ_API_KEY
+    const apiKey = process.env['ANTHROPIC_API_KEY'] || process.env['GOOGLE_API_KEY'] || process.env['GROQ_API_KEY']
 
     if (!apiKey) {
       throw new Error(

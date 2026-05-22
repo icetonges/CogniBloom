@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Bookmark,
-  BookmarkOff,
+  BookmarkX,
   Trash2,
   Edit2,
   Code,
@@ -49,7 +49,7 @@ export function NoteCard({
             {note.isBookmarked ? (
               <Bookmark className="h-5 w-5 fill-current" />
             ) : (
-              <BookmarkOff className="h-5 w-5" />
+              <BookmarkX className="h-5 w-5" />
             )}
           </button>
         </div>

@@ -128,7 +128,7 @@ export async function PUT(
 
 // DELETE /api/tutor/sessions/[sessionId] - Delete session
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { sessionId: string } }
 ) {
   try {

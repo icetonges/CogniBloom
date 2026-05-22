@@ -21,7 +21,7 @@ interface UpdateNoteRequest {
 
 // GET /api/notes/[noteId] - Get note details
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { noteId: string } }
 ) {
   try {
@@ -124,7 +124,7 @@ export async function PUT(
 
 // DELETE /api/notes/[noteId] - Delete note
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { noteId: string } }
 ) {
   try {

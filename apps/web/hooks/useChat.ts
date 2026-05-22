@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 
 export interface ChatState {
