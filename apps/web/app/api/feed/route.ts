@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const selected = shuffle(FEED_TOPICS).slice(0, 5)
 
     const items = await Promise.allSettled(
-      selected.map(async (topic, idx) => {
+      selected.map(async (topic) => {
         const res = await aiManager.chat('gemini-2.0-flash', {
           messages: [
             {
