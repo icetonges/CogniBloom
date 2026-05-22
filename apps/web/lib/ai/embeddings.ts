@@ -7,7 +7,7 @@ let genAI: GoogleGenerativeAI | null = null
 
 function getClient(): GoogleGenerativeAI {
   if (!genAI) {
-    const apiKey = process.env.GOOGLE_API_KEY
+    const apiKey = process.env['GOOGLE_API_KEY']
     if (!apiKey) throw new Error('GOOGLE_API_KEY is not set')
     genAI = new GoogleGenerativeAI(apiKey)
   }
