@@ -1,39 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-
-/**
- * SM-2 Spaced Repetition Algorithm
- * rating: 0=complete blackout, 1=wrong but familiar, 2=wrong easy, 3=correct with difficulty, 4=correct, 5=perfect
- * Returns { newInterval, newEaseFactor }
- */
-function sm2(rating: number, repetitions: number, easeFactor: number, interval: number) {
-  let newEaseFactor = easeFactor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02))
-  if (newEaseFactor < 1.3) newEaseFactor = 1.3
-
-  let newInterval: number
-  let newRepetitions: number
-
-  if (rating < 3) {
-    // Fail — reset
-    newInterval = 1
-    newRepetitions = 0
-  } else {
-    newRepetitions = repetitions + 1
-    if (newRepetitions === 1) {
-      newInterval = 1
-    } else if (newRepetitions === 2) {
-      newInterval = 6
-    } else {
-      newInterval = Math.round(interval * newEaseFactor)
-    }
-  }
-
-  const nextReviewAt = new Date()
-  nextReviewAt.setDate(nextReviewAt.getDate() + newInterval)
-
-  return { newInterval, newEaseFactor, newRepetitions, nextReviewAt }
-}
+import { sm2 } from '@/lib/flashcards'
 
 // POST /api/flashcards/review — record a review result
 export async function POST(request: NextRequest) {
@@ -51,12 +19,12 @@ export async function POST(request: NextRequest) {
     const card = await db.flashcard.findFirst({ where: { id: body.flashcardId, userId } })
     if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 })
 
-    const { newInterval, newEaseFactor, newRepetitions, nextReviewAt } = sm2(
-      body.rating,
-      card.repetitions,
-      card.easeFactor,
-      card.interval
-    )
+    const { newInterval, newEaseFactor, newRepetitions, nextReviewAt } = sm2({
+      rating: body.rating,
+      repetitions: card.repetitions,
+      easeFactor: card.easeFactor,
+      interval: card.interval,
+    })
 
     const isCorrect = body.rating >= 3
 

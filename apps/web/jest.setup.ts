@@ -1,3 +1,5 @@
+import 'groq-sdk/shims/node'
+import '@anthropic-ai/sdk/shims/node'
 import '@testing-library/jest-dom'
 import React from 'react'
 
