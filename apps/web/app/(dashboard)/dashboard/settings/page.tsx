@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Check, User, Brain, BookOpen, Bell } from 'lucide-react'
+import { Check, Loader2, User, Brain, BookOpen, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Settings {
@@ -15,7 +15,7 @@ interface Settings {
   subjects: string[]
   responseLength: string
   includeExamples: boolean
-  dailyEmailEnabled: boolean
+  emailFrequency: string
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -24,13 +24,13 @@ const DEFAULT_SETTINGS: Settings = {
   subjects: ['Math', 'Science'],
   responseLength: 'medium',
   includeExamples: true,
-  dailyEmailEnabled: true,
+  emailFrequency: 'daily',
 }
 
 const GRADES = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12']
 const MODELS = [
   { id: 'gemini-2.0-flash', label: 'Gemini Flash', note: 'Fast & smart (recommended)' },
-  { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5', note: 'Most capable Google model' },
+  { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash', note: 'Most capable Google model' },
   { id: 'claude-haiku-4-5', label: 'Claude Haiku', note: 'Concise & precise' },
   { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', note: 'Open-source, very fast' },
 ]
@@ -45,20 +45,60 @@ const STORAGE_KEY = 'cognibloom_settings'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [customSubject, setCustomSubject] = useState('')
 
+  // Load from API on mount (fall back to localStorage if offline)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) setSettings(JSON.parse(stored) as Settings)
-    } catch { /* ignore */ }
+    const localFallback = () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) setSettings(JSON.parse(stored) as Settings)
+      } catch { /* ignore */ }
+    }
+
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then(({ data }) => {
+        if (data) {
+          const merged: Settings = {
+            grade: data.grade ?? DEFAULT_SETTINGS.grade,
+            preferredModel: data.preferredModel ?? DEFAULT_SETTINGS.preferredModel,
+            subjects: (data.subjects as string[]).length > 0 ? (data.subjects as string[]) : DEFAULT_SETTINGS.subjects,
+            responseLength: data.responseLength ?? DEFAULT_SETTINGS.responseLength,
+            includeExamples: data.includeExamples ?? DEFAULT_SETTINGS.includeExamples,
+            emailFrequency: data.emailFrequency ?? DEFAULT_SETTINGS.emailFrequency,
+          }
+          setSettings(merged)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+        }
+      })
+      .catch(() => localFallback())
+      .finally(() => setLoading(false))
   }, [])
 
-  const save = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      // Also persist to localStorage as a fast cache for ChatWindow
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      setError('Failed to save — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const toggleSubject = (subject: string) => {
@@ -76,6 +116,14 @@ export default function SettingsPage() {
       setSettings((prev) => ({ ...prev, subjects: [...prev.subjects, trimmed] }))
       setCustomSubject('')
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   return (
@@ -126,6 +174,7 @@ export default function SettingsPage() {
 
         <div>
           <label className="text-sm font-medium mb-2 block">Default AI Model</label>
+          <p className="text-xs text-muted-foreground mb-3">This model will be pre-selected when you open the AI Tutor.</p>
           <div className="space-y-2">
             {MODELS.map((m) => (
               <button
@@ -257,16 +306,16 @@ export default function SettingsPage() {
             <p className="text-xs text-muted-foreground">Sent to Daniel and parents at 7 PM AEST</p>
           </div>
           <button
-            onClick={() => setSettings((p) => ({ ...p, dailyEmailEnabled: !p.dailyEmailEnabled }))}
+            onClick={() => setSettings((p) => ({ ...p, emailFrequency: p.emailFrequency === 'daily' ? 'off' : 'daily' }))}
             className={cn(
               'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-              settings.dailyEmailEnabled ? 'bg-primary' : 'bg-muted'
+              settings.emailFrequency === 'daily' ? 'bg-primary' : 'bg-muted'
             )}
           >
             <span
               className={cn(
                 'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-                settings.dailyEmailEnabled ? 'translate-x-6' : 'translate-x-1'
+                settings.emailFrequency === 'daily' ? 'translate-x-6' : 'translate-x-1'
               )}
             />
           </button>
@@ -274,12 +323,15 @@ export default function SettingsPage() {
       </Card>
 
       {/* Save */}
+      {error && (
+        <p className="text-sm text-destructive text-right">{error}</p>
+      )}
       <div className="flex justify-end pb-8">
-        <Button onClick={save} className="gap-2 min-w-32">
-          {saved ? (
-            <>
-              <Check className="w-4 h-4" /> Saved!
-            </>
+        <Button onClick={save} className="gap-2 min-w-36" disabled={saving}>
+          {saving ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+          ) : saved ? (
+            <><Check className="w-4 h-4" /> Saved!</>
           ) : (
             'Save Settings'
           )}

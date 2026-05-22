@@ -20,8 +20,23 @@ interface ChatWindowProps {
   initialMode?: string
 }
 
+function getPreferredModel(): string {
+  try {
+    const stored = localStorage.getItem('cognibloom_settings')
+    if (stored) {
+      const parsed = JSON.parse(stored) as { preferredModel?: string }
+      const found = MODELS.find((m) => m.id === parsed.preferredModel)
+      if (found) return found.id
+    }
+  } catch { /* ignore */ }
+  return MODELS[0].id
+}
+
 export function ChatWindow({ options, initialMode }: ChatWindowProps) {
-  const [selectedModel, setSelectedModel] = useState(MODELS[0].id)
+  const [selectedModel, setSelectedModel] = useState(() => {
+    if (typeof window !== 'undefined') return getPreferredModel()
+    return MODELS[0].id
+  })
   const chat = useChat({ ...options, model: selectedModel, mode: initialMode ?? options?.mode })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)

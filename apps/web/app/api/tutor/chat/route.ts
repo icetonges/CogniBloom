@@ -45,15 +45,26 @@ export async function POST(request: NextRequest) {
     const session = await db.tutorSession.findFirst({ where: { id: sessionId, userId } })
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
-    // Get RAG context from the student's notes
+    // Get RAG context from the student's notes + user preferences (parallel)
     const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
-    const ragContext = lastUserMsg ? await getRagContext(userId, lastUserMsg.content) : ''
+    const [ragContext, userPrefs] = await Promise.all([
+      lastUserMsg ? getRagContext(userId, lastUserMsg.content) : Promise.resolve(''),
+      db.userPreferences.findUnique({ where: { userId } }),
+    ])
 
-    // Build system prompt with RAG context
+    // Build system prompt with RAG context and response-length preference
     const baseSystemPrompt = getSystemPrompt(body.mode || 'general')
+    const lengthHint = userPrefs?.responseLength === 'short'
+      ? '\n\nKeep responses concise — favour brevity over exhaustive coverage.'
+      : userPrefs?.responseLength === 'detailed'
+        ? '\n\nGive thorough, in-depth explanations with worked examples where helpful.'
+        : ''
+    const examplesHint = userPrefs?.includeExamples === false
+      ? '\n\nDo not include worked examples unless the student explicitly asks for one.'
+      : ''
     const systemPrompt = ragContext
-      ? `${baseSystemPrompt}\n\n${ragContext}\n\nUse the student's notes above as context when relevant. Reference them naturally in your response.`
-      : baseSystemPrompt
+      ? `${baseSystemPrompt}${lengthHint}${examplesHint}\n\n${ragContext}\n\nUse the student's notes above as context when relevant. Reference them naturally in your response.`
+      : `${baseSystemPrompt}${lengthHint}${examplesHint}`
 
     // Prepend system message
     const messages: ChatMessage[] = [
