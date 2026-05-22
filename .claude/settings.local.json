@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path . -Force)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(pnpm run *)"
     ]
   }
 }

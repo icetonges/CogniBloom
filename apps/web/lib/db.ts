@@ -10,16 +10,13 @@ export const db =
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
 
-export const createDbClient = () => {
-  return new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-  })
-}
+type TransactionClient = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>
 
 export async function withTransaction<T>(
-  callback: (prisma: PrismaClient) => Promise<T>
-) {
-  return db.$transaction(async (tx: PrismaClient) => {
-    return callback(tx)
-  })
+  callback: (tx: TransactionClient) => Promise<T>
+): Promise<T> {
+  return db.$transaction(callback)
 }
