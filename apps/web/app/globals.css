@@ -92,24 +92,9 @@
 
 /* ── Landing page animations ─────────────────────────────────────────────── */
 
-@keyframes orb-pulse {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50%       { opacity: 1;   transform: scale(1.06); }
-}
-
-@keyframes orb-rotate {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
 @keyframes float {
-  0%, 100% { transform: translateY(0px) rotate(var(--card-rotate, -6deg)); }
-  50%       { transform: translateY(-12px) rotate(var(--card-rotate, -6deg)); }
-}
-
-@keyframes float-slow {
-  0%, 100% { transform: translateY(0px) rotate(var(--card-rotate, 5deg)); }
-  50%       { transform: translateY(-8px) rotate(var(--card-rotate, 5deg)); }
+  0%, 100% { transform: translateY(0px)   rotate(var(--card-rotate, -6deg)); }
+  50%       { transform: translateY(-14px) rotate(var(--card-rotate, -6deg)); }
 }
 
 @keyframes shimmer {
@@ -118,34 +103,67 @@
 }
 
 @keyframes streak-fire {
-  0%, 100% { transform: scaleY(1)   rotate(-2deg); }
-  33%       { transform: scaleY(1.1) rotate(2deg);  }
-  66%       { transform: scaleY(0.95) rotate(-1deg); }
+  0%, 100% { transform: scaleY(1)    rotate(-2deg); }
+  33%       { transform: scaleY(1.12) rotate(2deg);  }
+  66%       { transform: scaleY(0.94) rotate(-1deg); }
 }
 
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 40px 8px rgba(99,102,241,0.25); }
-  50%       { box-shadow: 0 0 80px 20px rgba(99,102,241,0.45); }
+/* Gyroscope ring rotations — each ring tilted on a fixed axis, spins on Y */
+@keyframes gyro-outer {
+  from { transform: rotateX(72deg) rotateY(0deg);    }
+  to   { transform: rotateX(72deg) rotateY(360deg);  }
+}
+@keyframes gyro-mid {
+  from { transform: rotateX(38deg) rotateZ(30deg) rotateY(0deg);   }
+  to   { transform: rotateX(38deg) rotateZ(30deg) rotateY(-360deg);}
+}
+@keyframes gyro-inner {
+  from { transform: rotateX(12deg) rotateZ(-20deg) rotateY(0deg);   }
+  to   { transform: rotateX(12deg) rotateZ(-20deg) rotateY(360deg); }
+}
+@keyframes gyro-vertical {
+  from { transform: rotateY(0deg) rotateZ(90deg);   }
+  to   { transform: rotateY(360deg) rotateZ(90deg); }
+}
+@keyframes core-breathe {
+  0%, 100% { opacity: 0.85; transform: scale(1);    }
+  50%       { opacity: 1;    transform: scale(1.04); }
+}
+@keyframes orbit-dot {
+  from { transform: rotateX(72deg) rotateY(0deg)   translateX(162px) rotateX(-72deg); }
+  to   { transform: rotateX(72deg) rotateY(360deg) translateX(162px) rotateX(-72deg); }
+}
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  10%  { transform: translate(-1%, -1%); }
+  30%  { transform: translate(1%, 0%);   }
+  50%  { transform: translate(-1%, 1%);  }
+  70%  { transform: translate(0%, -1%);  }
+  90%  { transform: translate(1%, 1%);   }
 }
 
-.animate-orb-pulse  { animation: orb-pulse  4s ease-in-out infinite; }
-.animate-orb-rotate { animation: orb-rotate 20s linear infinite; }
-.animate-float      { animation: float      5s ease-in-out infinite; }
-.animate-float-slow { animation: float-slow 7s ease-in-out infinite; }
-.animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+.animate-float      { animation: float      5.5s ease-in-out infinite; }
+.animate-float-slow { animation: float      7.5s ease-in-out infinite; }
 .animate-streak     { animation: streak-fire 1.2s ease-in-out infinite; display: inline-block; }
+.animate-core       { animation: core-breathe 3.5s ease-in-out infinite; }
+.gyro-outer  { animation: gyro-outer    18s linear infinite; }
+.gyro-mid    { animation: gyro-mid      12s linear infinite; }
+.gyro-inner  { animation: gyro-inner    8s  linear infinite; }
+.gyro-vert   { animation: gyro-vertical 22s linear infinite; }
+.orbit-dot   { animation: orbit-dot     18s linear infinite; }
+.grain-layer { animation: grain         0.4s steps(1) infinite; }
 
 .text-shimmer {
   background: linear-gradient(90deg,
-    #fff 0%, #fff 30%,
-    #a5b4fc 45%, #818cf8 50%, #a5b4fc 55%,
-    #fff 70%, #fff 100%
+    #fff 0%, #fff 25%,
+    #a5b4fc 42%, #818cf8 50%, #a5b4fc 58%,
+    #fff 75%, #fff 100%
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: shimmer 4s linear infinite;
+  animation: shimmer 5s linear infinite;
 }
 
 /* Custom scrollbar */
