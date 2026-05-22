@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ChatWindow } from './ChatWindow'
 import { formatDistanceToNow } from 'date-fns'
 import {
   BookOpen, Calculator, Code2, Globe, Beaker,
-  HelpCircle, Brain, Trophy, History, ChevronRight, Plus,
+  HelpCircle, Brain, Trophy, History, ChevronRight, Plus, RotateCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -32,18 +32,39 @@ interface Session {
 
 export function ChatPage() {
   const [selectedMode, setSelectedMode] = useState<string | null>(null)
+  const [resumeSessionId, setResumeSessionId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  // key forces ChatWindow remount on session switch
+  const chatKey = useRef(0)
 
   useEffect(() => {
-    fetch('/api/tutor/sessions?limit=6')
+    fetch('/api/tutor/sessions?limit=8')
       .then((r) => r.json())
       .then(({ data }) => { if (Array.isArray(data)) setSessions(data as Session[]) })
       .catch(() => {})
   }, [])
 
+  const startMode = (modeId: string) => {
+    chatKey.current += 1
+    setResumeSessionId(null)
+    setSelectedMode(modeId)
+  }
+
+  const resumeSession = (session: Session) => {
+    chatKey.current += 1
+    setResumeSessionId(session.id)
+    setSelectedMode(session.mode)
+  }
+
+  const handleBack = () => {
+    setSelectedMode(null)
+    setResumeSessionId(null)
+  }
+
   if (selectedMode) {
     const modeInfo = TUTOR_MODES.find((m) => m.id === selectedMode)
+    const isResuming = resumeSessionId !== null
     return (
       <div className="h-[calc(100vh-8rem)] flex flex-col">
         <div className="flex items-center gap-3 pb-3 border-b mb-3 shrink-0">
@@ -53,12 +74,29 @@ export function ChatPage() {
             </div>
           )}
           <span className="font-semibold">{modeInfo?.name}</span>
-          <Button variant="outline" size="sm" className="ml-auto gap-1.5" onClick={() => setSelectedMode(null)}>
-            <Plus className="w-3.5 h-3.5" /> New session
-          </Button>
+          {isResuming && (
+            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-1">
+              resuming session
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {isResuming && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground"
+                onClick={() => startMode(selectedMode)}>
+                <Plus className="w-3.5 h-3.5" /> New
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleBack}>
+              ← Back
+            </Button>
+          </div>
         </div>
         <div className="flex-1 min-h-0">
-          <ChatWindow initialMode={selectedMode} />
+          <ChatWindow
+            key={chatKey.current}
+            initialMode={selectedMode}
+            resumeSessionId={resumeSessionId ?? undefined}
+          />
         </div>
       </div>
     )
@@ -79,7 +117,7 @@ export function ChatPage() {
             <Card
               key={mode.id}
               className="p-4 cursor-pointer hover:border-primary/40 hover:shadow-md transition-all group"
-              onClick={() => setSelectedMode(mode.id)}
+              onClick={() => startMode(mode.id)}
             >
               <div className="space-y-3">
                 <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', mode.bg)}>
@@ -118,8 +156,7 @@ export function ChatPage() {
                 return (
                   <Card
                     key={s.id}
-                    className="p-3 cursor-pointer hover:border-primary/40 transition-colors"
-                    onClick={() => setSelectedMode(s.mode)}
+                    className="p-3 hover:border-primary/40 transition-colors group"
                   >
                     <div className="flex items-start gap-3">
                       <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5', modeInfo?.bg ?? 'bg-muted')}>
@@ -138,6 +175,14 @@ export function ChatPage() {
                           </span>
                         </div>
                       </div>
+                      {/* Resume button */}
+                      <button
+                        onClick={() => resumeSession(s)}
+                        title="Resume this session"
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </Card>
                 )

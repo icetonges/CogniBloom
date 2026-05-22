@@ -18,6 +18,7 @@ const MODELS = [
 interface ChatWindowProps {
   options?: UseChatOptions
   initialMode?: string
+  resumeSessionId?: string
 }
 
 function getPreferredModel(): string {
@@ -32,11 +33,12 @@ function getPreferredModel(): string {
   return MODELS[0].id
 }
 
-export function ChatWindow({ options, initialMode }: ChatWindowProps) {
+export function ChatWindow({ options, initialMode, resumeSessionId }: ChatWindowProps) {
   const [selectedModel, setSelectedModel] = useState(() => {
     if (typeof window !== 'undefined') return getPreferredModel()
     return MODELS[0].id
   })
+  const [isLoadingHistory, setIsLoadingHistory] = useState(!!resumeSessionId)
   const chat = useChat({ ...options, model: selectedModel, mode: initialMode ?? options?.mode })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -45,11 +47,21 @@ export function ChatWindow({ options, initialMode }: ChatWindowProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chat.messages])
 
+  // Load past session messages when resuming
   useEffect(() => {
-    if (!chat.sessionId && initialMode) {
+    if (resumeSessionId) {
+      setIsLoadingHistory(true)
+      chat.loadSession(resumeSessionId)
+        .catch(() => {})
+        .finally(() => setIsLoadingHistory(false))
+    }
+  }, [resumeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!resumeSessionId && !chat.sessionId && initialMode) {
       chat.createSession(initialMode).catch(() => {})
     }
-  }, [initialMode, chat.sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialMode, chat.sessionId, resumeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -112,7 +124,12 @@ export function ChatWindow({ options, initialMode }: ChatWindowProps) {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {chat.messages.length === 0 ? (
+        {isLoadingHistory ? (
+          <div className="h-full flex items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Loading conversation history…</span>
+          </div>
+        ) : chat.messages.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center space-y-3 max-w-sm">
               <div className="text-4xl">🎓</div>
