@@ -56,6 +56,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_DB: cognibleom_test
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready
@@ -82,12 +83,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup Prisma
+      - name: Generate Prisma client
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cognibleom_test
-        run: pnpm -C apps/web exec prisma migrate deploy --skip-generate
+        run: pnpm -C apps/web exec prisma generate
+
+      - name: Run Prisma migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cognibleom_test
+        run: pnpm -C apps/web exec prisma migrate deploy
 
       - name: Run unit tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cognibleom_test
         run: pnpm run test --coverage
 
       - name: Upload coverage
@@ -118,7 +126,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cognibleom_test
+        run: pnpm -C apps/web exec prisma generate
+
       - name: Build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cognibleom_test
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+          CLERK_SECRET_KEY: sk_test_placeholder
         run: pnpm run build
 
       - name: Save build artifacts

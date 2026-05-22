@@ -36,14 +36,24 @@ jobs:
       - name: Type check
         run: pnpm -C apps/web run type-check
 
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm -C apps/web exec prisma generate
+
       - name: Deploy to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "❌ VERCEL_TOKEN secret is not set in GitHub repository secrets"
+            echo "Go to: Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
           npm install -g vercel
-          vercel --prod --token $VERCEL_TOKEN --scope $VERCEL_ORG_ID
+          vercel --prod --token "$VERCEL_TOKEN"
 
       - name: Run smoke tests
         run: |
