@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Loader2, BookOpen, MessageSquare, Zap, Flame, TrendingUp, Brain, Trophy, Target } from 'lucide-react'
+import { Loader2, BookOpen, MessageSquare, Zap, Flame, TrendingUp, Brain, Trophy, Target, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -37,6 +37,13 @@ interface Analytics {
   modeCounts: Record<string, number>
   mastery: MasteryData
   recentQuizzes: RecentQuiz[]
+  flashcards: {
+    total: number
+    due: number
+    reviewsThisWeek: number
+    correctThisWeek: number
+    avgEaseFactor: number
+  }
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -313,6 +320,49 @@ export default function AnalyticsPage() {
           </div>
         )}
       </Card>
+
+      {/* Flashcard Health */}
+      {data.flashcards.total > 0 && (
+        <Card className="p-5 space-y-4">
+          <h2 className="font-semibold flex items-center gap-2">
+            <Layers className="w-4 h-4 text-rose-500" /> Flashcard Health
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-bold text-foreground">{data.flashcards.total}</p>
+              <p className="text-xs text-muted-foreground">total cards</p>
+            </div>
+            <div>
+              <p className={cn('text-2xl font-bold', data.flashcards.due > 0 ? 'text-amber-500' : 'text-green-500')}>
+                {data.flashcards.due}
+              </p>
+              <p className="text-xs text-muted-foreground">due for review</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-blue-500">{data.flashcards.reviewsThisWeek}</p>
+              <p className="text-xs text-muted-foreground">reviews this week</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-green-500">
+                {data.flashcards.reviewsThisWeek > 0
+                  ? `${Math.round((data.flashcards.correctThisWeek / data.flashcards.reviewsThisWeek) * 100)}%`
+                  : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground">correct this week</p>
+            </div>
+          </div>
+          {data.flashcards.due > 0 && (
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 flex items-center justify-between">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                You have <strong>{data.flashcards.due}</strong> card{data.flashcards.due !== 1 ? 's' : ''} due for review.
+              </p>
+              <a href="/dashboard/flashcards" className="text-xs font-medium text-amber-600 hover:underline shrink-0 ml-3">
+                Review now →
+              </a>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Encouragement */}
       <Card className="p-5 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">

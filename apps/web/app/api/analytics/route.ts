@@ -22,6 +22,8 @@ export async function GET() {
       tokenStats,
       learningProfile,
       recentQuizzes,
+      flashcardStats,
+      flashcardReviewsThisWeek,
     ] = await Promise.all([
       db.note.count({ where: { userId } }),
       db.tutorSession.count({ where: { userId } }),
@@ -57,6 +59,19 @@ export async function GET() {
         orderBy: { completedAt: 'desc' },
         take: 5,
         select: { id: true, title: true, subject: true, score: true, totalQuestions: true, correctAnswers: true, completedAt: true, difficulty: true },
+      }),
+      // Flashcard aggregate stats
+      db.flashcard.aggregate({
+        where: { userId },
+        _count: { id: true },
+        _avg: { easeFactor: true },
+      }),
+      // Flashcard reviews this week
+      db.flashcardReview.count({
+        where: {
+          flashcard: { userId },
+          reviewedAt: { gte: startOfWeek },
+        },
       }),
     ])
 
@@ -107,6 +122,20 @@ export async function GET() {
       }
     }
 
+    // Flashcard due count
+    const flashcardsDue = await db.flashcard.count({
+      where: { userId, nextReviewAt: { lte: now } },
+    })
+
+    // Flashcard correct review rate this week
+    const correctReviewsThisWeek = await db.flashcardReview.count({
+      where: {
+        flashcard: { userId },
+        reviewedAt: { gte: startOfWeek },
+        rating: { gte: 3 },
+      },
+    })
+
     return NextResponse.json({
       success: true,
       data: {
@@ -145,6 +174,13 @@ export async function GET() {
           completedAt: q.completedAt?.toISOString() ?? null,
           difficulty: q.difficulty,
         })),
+        flashcards: {
+          total: flashcardStats._count.id,
+          due: flashcardsDue,
+          reviewsThisWeek: flashcardReviewsThisWeek,
+          correctThisWeek: correctReviewsThisWeek,
+          avgEaseFactor: flashcardStats._avg.easeFactor ?? 0,
+        },
       },
     })
   } catch {
