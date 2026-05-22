@@ -20,12 +20,9 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-1.5">
             <ThemeToggle />
-            <Link href="/sign-in">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </Link>
-            <Link href="/sign-up">
+            <Link href="/dashboard">
               <Button size="sm" className="gap-1.5">
-                Get Started <ArrowRight className="w-3.5 h-3.5" />
+                Open App <ArrowRight className="w-3.5 h-3.5" />
               </Button>
             </Link>
           </div>
@@ -56,14 +53,9 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-16">
-            <Link href="/sign-up">
+            <Link href="/dashboard">
               <Button size="lg" className="gap-2 w-full sm:w-auto px-8 text-base">
-                Start for free <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/sign-in">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto px-8 text-base">
-                Sign in to dashboard
+                Open Dashboard <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
           </div>
@@ -168,7 +160,7 @@ export default function Home() {
 
           <div className="grid sm:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {[
-              { step: '1', icon: '✍️', title: 'Create your account', desc: 'Sign up free with your email. No credit card needed.' },
+              { step: '1', icon: '🌱', title: 'Open the app', desc: 'Just go to cognibloom.vercel.app — no sign-up needed.' },
               { step: '2', icon: '📝', title: 'Add your notes', desc: 'Write notes in Markdown. The AI learns from them automatically.' },
               { step: '3', icon: '🚀', title: 'Start learning', desc: 'Chat with your AI tutor, take quizzes, read the daily feed.' },
             ].map(({ step, icon, title, desc }) => (
@@ -212,9 +204,9 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <Link href="/sign-up">
+              <Link href="/dashboard">
                 <Button size="lg" className="gap-2 mt-2">
-                  Try it free <ArrowRight className="w-4 h-4" />
+                  Open Dashboard <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
             </div>
@@ -293,16 +285,15 @@ export default function Home() {
       <section className="py-20 sm:py-28 bg-gradient-to-br from-primary/90 to-secondary/90 text-white">
         <div className="container mx-auto text-center px-4 sm:px-6 max-w-2xl">
           <div className="text-5xl mb-4">🌱</div>
-          <h2 className="text-3xl sm:text-5xl font-bold mb-4">Ready to bloom?</h2>
+          <h2 className="text-3xl sm:text-5xl font-bold mb-4">Ready to bloom, Daniel?</h2>
           <p className="text-lg opacity-90 mb-8">
-            Join Daniel and thousands of K-12 students who are learning smarter with AI.
+            Your AI tutor, notes, quizzes, and daily feed are waiting.
           </p>
-          <Link href="/sign-up">
+          <Link href="/dashboard">
             <Button size="lg" variant="secondary" className="gap-2 px-10 text-base font-semibold">
-              Start learning free <ArrowRight className="w-4 h-4" />
+              Open Dashboard <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
-          <p className="text-sm opacity-70 mt-4">No credit card required · Takes 30 seconds</p>
         </div>
       </section>
 
@@ -327,7 +318,7 @@ export default function Home() {
                 <h4 className="font-semibold mb-3">Product</h4>
                 <ul className="space-y-2 text-muted-foreground">
                   <li><Link href="#features" className="hover:text-foreground transition-colors">Features</Link></li>
-                  <li><Link href="/sign-up" className="hover:text-foreground transition-colors">Get Started</Link></li>
+                  <li><Link href="/dashboard" className="hover:text-foreground transition-colors">Open App</Link></li>
                   <li><Link href="/dashboard" className="hover:text-foreground transition-colors">Dashboard</Link></li>
                 </ul>
               </div>

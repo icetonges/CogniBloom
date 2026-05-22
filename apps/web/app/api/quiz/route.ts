@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { z } from 'zod'
 import { getAIManager } from '@/lib/ai'
 
@@ -22,8 +22,7 @@ export interface QuizQuestion {
 // POST /api/quiz — generate a quiz via AI
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const body = await request.json()
     const { topic, subject, difficulty, count, model } = generateSchema.parse(body)

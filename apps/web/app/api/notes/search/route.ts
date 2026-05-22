@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
 
@@ -21,8 +21,7 @@ interface NoteResult {
 // GET /api/notes/search?q=...&semantic=true
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') ?? ''

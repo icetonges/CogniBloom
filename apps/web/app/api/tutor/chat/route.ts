@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { getAIManager } from '@/lib/ai'
 import { getRagContext } from '@/lib/ai/rag'
@@ -16,8 +16,7 @@ interface ChatRequestBody {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const body: ChatRequestBody = await request.json()
     if (!body.messages || body.messages.length === 0) {

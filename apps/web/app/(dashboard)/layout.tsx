@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Sparkles, BookOpen, MessageSquare, BarChart3, Settings, Menu, X, Brain, Rss, Trophy } from 'lucide-react'
@@ -69,8 +68,11 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           <ThemeToggle />
         </div>
         <div className="flex items-center gap-3 px-3 py-2 rounded-lg">
-          <UserButton />
-          <span className="text-sm font-medium">Account</span>
+          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+            D
+          </div>
+          <span className="text-sm font-medium">Daniel</span>
+          <span className="ml-auto text-xs text-muted-foreground">🌱</span>
         </div>
       </div>
     </div>
@@ -90,7 +92,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      {/* Sidebar — desktop always visible, mobile drawer */}
+      {/* Sidebar */}
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transition-transform duration-200 md:static md:translate-x-0',
@@ -115,7 +117,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
-            <UserButton />
           </div>
         </header>
 

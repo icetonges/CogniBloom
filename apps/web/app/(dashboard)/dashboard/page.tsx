@@ -1,5 +1,4 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock } from 'lucide-react'
@@ -8,8 +7,7 @@ import { db } from '@/lib/db'
 import { formatDistanceToNow } from 'date-fns'
 
 export default async function DashboardPage() {
-  const { userId } = await auth()
-  if (!userId) redirect('/sign-in')
+  const userId = DANIEL_USER_ID
 
   // Fetch real stats
   const [noteCount, sessionCount, recentNotes] = await Promise.all([

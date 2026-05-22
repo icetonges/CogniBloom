@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 
 // GET /api/analytics — return learning stats for the authenticated user
 export async function GET() {
   try {
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const now = new Date()
     const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
@@ -28,8 +28,7 @@ type RouteParams = { params: Promise<{ noteId: string }> }
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const note = await db.note.findFirst({
       where: { id: noteId, userId },
@@ -49,8 +48,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const body = await request.json()
     const validated = updateNoteSchema.parse(body)
@@ -86,8 +84,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const note = await db.note.findFirst({ where: { id: noteId, userId } })
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })

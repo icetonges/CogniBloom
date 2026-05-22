@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 
@@ -19,10 +19,7 @@ interface CreateSessionRequest {
 // GET /api/tutor/sessions - List user's sessions
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const userId = DANIEL_USER_ID
 
     const { searchParams } = new URL(request.url)
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 100)
@@ -66,10 +63,7 @@ export async function GET(request: NextRequest) {
 // POST /api/tutor/sessions - Create new session
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const userId = DANIEL_USER_ID
 
     const body: CreateSessionRequest = await request.json()
 

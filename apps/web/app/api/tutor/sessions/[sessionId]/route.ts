@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 
@@ -15,8 +15,7 @@ type RouteParams = { params: Promise<{ sessionId: string }> }
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { sessionId } = await params
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const { searchParams } = new URL(request.url)
     const includeMessages = searchParams.get('messages') === 'true'
@@ -39,8 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { sessionId } = await params
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const body = await request.json()
     const validated = updateSessionSchema.parse(body)
@@ -72,8 +70,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { sessionId } = await params
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const session = await db.tutorSession.findFirst({ where: { id: sessionId, userId } })
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })

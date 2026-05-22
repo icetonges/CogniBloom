@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
@@ -28,8 +28,7 @@ async function embedNote(noteId: string, title: string, content: string) {
 // GET /api/notes
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const { searchParams } = new URL(request.url)
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
@@ -76,8 +75,7 @@ export async function GET(request: NextRequest) {
 // POST /api/notes
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = DANIEL_USER_ID
 
     const body = await request.json()
     const validated = createNoteSchema.parse(body)
