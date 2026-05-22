@@ -1,22 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import {
-  Bookmark,
-  BookmarkPlus,
-  Trash2,
-  Edit2,
-  Code,
-  Zap,
-  Image as ImageIcon,
-  Trophy,
-  Layers,
-  Loader2,
-  CheckCircle2,
-  Download,
-} from 'lucide-react'
+import { Bookmark, BookmarkPlus, Trash2, Edit2, Code, Zap, Image as ImageIcon, Trophy, Layers, Loader2, CheckCircle2, Download } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -29,18 +14,29 @@ interface NoteCardProps {
   onToggleBookmark?: (noteId: string) => void
 }
 
-export function NoteCard({
-  note,
-  onEdit,
-  onDelete,
-  onToggleBookmark,
-}: NoteCardProps) {
+// Deterministic color per subject (hashes subject string to an index)
+const SUBJECT_COLORS = [
+  { from: '#6366f1', to: '#8b5cf6', border: 'rgba(99,102,241,0.35)',   bg: 'rgba(99,102,241,0.07)'  },
+  { from: '#10b981', to: '#0ea5e9', border: 'rgba(16,185,129,0.35)',   bg: 'rgba(16,185,129,0.07)'  },
+  { from: '#f59e0b', to: '#ef4444', border: 'rgba(245,158,11,0.35)',   bg: 'rgba(245,158,11,0.07)'  },
+  { from: '#ec4899', to: '#a855f7', border: 'rgba(236,72,153,0.35)',   bg: 'rgba(236,72,153,0.07)'  },
+  { from: '#0ea5e9', to: '#6366f1', border: 'rgba(14,165,233,0.35)',   bg: 'rgba(14,165,233,0.07)'  },
+  { from: '#14b8a6', to: '#10b981', border: 'rgba(20,184,166,0.35)',   bg: 'rgba(20,184,166,0.07)'  },
+]
+
+function subjectColor(subject?: string | null) {
+  if (!subject) return SUBJECT_COLORS[0]
+  let hash = 0
+  for (const c of subject) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff
+  return SUBJECT_COLORS[Math.abs(hash) % SUBJECT_COLORS.length]
+}
+
+export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardProps) {
   const router = useRouter()
   const [makingCards, setMakingCards] = useState(false)
   const [cardsMade, setCardsMade] = useState(false)
-  const preview = note.content
-    .replace(/[#*_`\[\]()]/g, '')
-    .substring(0, 100)
+  const preview = note.content.replace(/[#*_`\[\]()]/g, '').substring(0, 100)
+  const color = subjectColor(note.subject)
 
   const makeFlashcards = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -72,9 +68,7 @@ export function NoteCard({
       note.subject ? `**Subject:** ${note.subject}` : '',
       note.tags.length > 0 ? `**Tags:** ${note.tags.join(', ')}` : '',
       `**Created:** ${new Date(note.createdAt).toLocaleDateString()}`,
-      '',
-      '---',
-      '',
+      '', '---', '',
     ].filter(Boolean).join('\n')
     const blob = new Blob([header + note.content], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
@@ -86,130 +80,136 @@ export function NoteCard({
   }
 
   return (
-    <Card className="p-4 hover:shadow-md transition-shadow">
-      <div className="space-y-3">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
-            <h3 className="font-semibold line-clamp-2">{note.title}</h3>
-            {note.subject && (
-              <p className="text-xs text-muted-foreground">{note.subject}</p>
-            )}
+    <div
+      className="group rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:scale-[1.01] hover:-translate-y-0.5"
+      style={{
+        background: color.bg,
+        border: `1px solid ${color.border}`,
+        boxShadow: `0 4px 20px ${color.from}12`,
+      }}
+    >
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          {/* Colored accent dot + title */}
+          <div className="flex items-start gap-2">
+            <div
+              className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+              style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})`, boxShadow: `0 0 6px ${color.from}80` }}
+            />
+            <h3 className="font-bold text-sm leading-snug line-clamp-2">{note.title}</h3>
           </div>
-          <button
-            onClick={() => onToggleBookmark?.(note.id)}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {note.isBookmarked ? (
-              <Bookmark className="h-5 w-5 fill-current text-primary" />
-            ) : (
-              <BookmarkPlus className="h-5 w-5" />
-            )}
-          </button>
+          {note.subject && (
+            <span
+              className="inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md mt-1.5"
+              style={{ background: `${color.from}20`, color: color.from }}
+            >
+              {note.subject}
+            </span>
+          )}
         </div>
 
-        {/* Preview */}
-        <p className="text-sm text-muted-foreground line-clamp-2">
-          {preview}
-          {note.content.length > 100 ? '...' : ''}
-        </p>
+        <button
+          onClick={() => onToggleBookmark?.(note.id)}
+          className="shrink-0 p-1 rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+        >
+          {note.isBookmarked
+            ? <Bookmark className="h-4 w-4 fill-current text-primary" />
+            : <BookmarkPlus className="h-4 w-4" />}
+        </button>
+      </div>
 
-        {/* Features */}
-        <div className="flex gap-2 flex-wrap">
+      {/* ── Preview ── */}
+      {preview && (
+        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+          {preview}{note.content.length > 100 ? '…' : ''}
+        </p>
+      )}
+
+      {/* ── Feature pills ── */}
+      {(note.hasMath || note.hasCode || note.hasImages) && (
+        <div className="flex gap-1.5 flex-wrap">
           {note.hasMath && (
-            <div className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-              <Zap className="h-3 w-3" />
-              Math
-            </div>
+            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(99,102,241,0.12)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.2)' }}>
+              <Zap className="h-2.5 w-2.5" /> Math
+            </span>
           )}
           {note.hasCode && (
-            <div className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-              <Code className="h-3 w-3" />
-              Code
-            </div>
+            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(16,185,129,0.12)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.2)' }}>
+              <Code className="h-2.5 w-2.5" /> Code
+            </span>
           )}
           {note.hasImages && (
-            <div className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-              <ImageIcon className="h-3 w-3" />
-              Images
-            </div>
+            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(14,165,233,0.12)', color: '#7dd3fc', border: '1px solid rgba(14,165,233,0.2)' }}>
+              <ImageIcon className="h-2.5 w-2.5" /> Images
+            </span>
           )}
         </div>
+      )}
 
-        {/* Tags */}
-        {note.tags.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            {note.tags.map((tag) => (
-              <span
-                key={tag}
-                className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+      {/* ── Tags ── */}
+      {note.tags.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {note.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'inherit' }}
+            >
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
 
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t">
-          <p className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(note.updatedAt), {
-              addSuffix: true,
-            })}
-          </p>
-          <div className="flex gap-1">
-            {/* Quiz me */}
-            <button
-              onClick={quizMe}
-              title="Quiz me on this"
-              className="p-1.5 rounded-md text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
-            >
-              <Trophy className="h-3.5 w-3.5" />
-            </button>
-            {/* Make flashcards */}
-            <button
-              onClick={makeFlashcards}
-              disabled={makingCards || cardsMade}
-              title={cardsMade ? 'Flashcards created!' : 'Make flashcards'}
-              className={cn(
-                'p-1.5 rounded-md transition-colors',
-                cardsMade
-                  ? 'text-green-500'
-                  : 'text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10'
-              )}
-            >
-              {makingCards
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : cardsMade
-                  ? <CheckCircle2 className="h-3.5 w-3.5" />
-                  : <Layers className="h-3.5 w-3.5" />}
-            </button>
-            {/* Download as .md */}
-            <button
-              onClick={downloadMd}
-              title="Download as Markdown"
-              className="p-1.5 rounded-md text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors"
-            >
-              <Download className="h-3.5 w-3.5" />
-            </button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onEdit?.(note)}
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => onDelete?.(note.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+      {/* ── Footer ── */}
+      <div className="flex items-center justify-between pt-1 border-t border-white/[0.06] mt-auto">
+        <p className="text-[10px] text-muted-foreground">
+          {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+        </p>
+
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Quiz */}
+          <button onClick={quizMe} title="Quiz me on this"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-colors">
+            <Trophy className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Flashcards */}
+          <button onClick={makeFlashcards} disabled={makingCards || cardsMade}
+            title={cardsMade ? 'Flashcards created!' : 'Make flashcards'}
+            className={cn('p-1.5 rounded-lg transition-colors',
+              cardsMade ? 'text-emerald-400' : 'text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10'
+            )}>
+            {makingCards
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : cardsMade
+                ? <CheckCircle2 className="h-3.5 w-3.5" />
+                : <Layers className="h-3.5 w-3.5" />}
+          </button>
+
+          {/* Download */}
+          <button onClick={downloadMd} title="Download as Markdown"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-sky-400 hover:bg-sky-500/10 transition-colors">
+            <Download className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Edit */}
+          <button onClick={() => onEdit?.(note)}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+            <Edit2 className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Delete */}
+          <button onClick={() => onDelete?.(note.id)}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
-    </Card>
+    </div>
   )
 }
