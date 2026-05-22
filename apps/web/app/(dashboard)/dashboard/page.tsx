@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         <Card className="p-6">
           <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
           <div className="space-y-3">
-            <Link href="/dashboard/notes/new">
+            <Link href="/dashboard/notes">
               <Button variant="outline" className="w-full justify-start">
                 <BookOpen className="w-4 h-4 mr-2" />
                 New Note
