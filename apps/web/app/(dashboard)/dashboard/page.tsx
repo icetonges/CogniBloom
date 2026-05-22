@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { DANIEL_USER_ID } from '@/lib/user'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,6 +22,21 @@ export default async function DashboardPage() {
       select: { id: true, title: true, subject: true, updatedAt: true, tags: true },
     }),
   ])
+
+  // Real streak calculation
+  const allActivity = await db.$queryRaw<{ day: Date }[]>`
+    SELECT DISTINCT DATE("createdAt") AS day FROM "TutorSession" WHERE "userId" = ${userId}
+    UNION
+    SELECT DISTINCT DATE("createdAt") AS day FROM "Note" WHERE "userId" = ${userId}
+    ORDER BY day DESC LIMIT 60
+  `
+  let streak = 0
+  const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0)
+  for (let i = 0; i < allActivity.length; i++) {
+    const expected = new Date(todayDate); expected.setDate(todayDate.getDate() - i)
+    if (new Date(allActivity[i].day).toDateString() === expected.toDateString()) streak++
+    else break
+  }
 
   const greetingHour = new Date().getHours()
   const greeting =
@@ -56,7 +73,7 @@ export default async function DashboardPage() {
         <StatCard
           icon={<TrendingUp className="w-5 h-5 text-green-500" />}
           title="Streak"
-          value="🔥 1"
+          value={streak > 0 ? `🔥 ${streak}` : '—'}
           subtitle="Days active"
           color="green"
         />

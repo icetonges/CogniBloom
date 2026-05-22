@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NotesPage } from '@/components/notes/NotesPage'
 
 export const metadata = {

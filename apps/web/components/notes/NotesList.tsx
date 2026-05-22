@@ -17,10 +17,9 @@ export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const notes = useNotes()
 
-  // Load notes on mount
-  useEffect(() => {
-    notes.getNotes(0)
-  }, [])
+  // Load notes on mount — getNotes is stable (wrapped in useCallback with no deps)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { notes.getNotes(0) }, [])
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()

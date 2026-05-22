@@ -57,14 +57,33 @@ jobs:
           echo "DEPLOY_URL=${DEPLOY_URL}" >> "$GITHUB_ENV"
           echo "Deployed to: ${DEPLOY_URL}"
 
+      - name: Run DB migration
+        # Apply pending Prisma migrations to production DB
+        continue-on-error: true
+        run: pnpm -C apps/web exec prisma migrate deploy
+
+      - name: Seed database
+        # Create the 'daniel' user if it doesn't exist yet (idempotent)
+        continue-on-error: true
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          TARGET="${DEPLOY_URL:-https://cognibloom.vercel.app}"
+          echo "Seeding DB via $TARGET/api/setup"
+          sleep 15
+          RESPONSE=$(curl -s -w "\nHTTP:%{http_code}" -X POST "$TARGET/api/setup" -H "x-cron-secret: $CRON_SECRET")
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP:")
+          echo "Status: $HTTP_STATUS — $BODY"
+
       - name: Run smoke tests
         # Non-fatal: smoke test is informational; actual build validity
         # is already confirmed by the Vercel build step above.
         continue-on-error: true
         run: |
-          TARGET="${DEPLOY_URL:-https://cognibleom.vercel.app}"
+          TARGET="${DEPLOY_URL:-https://cognibloom.vercel.app}"
           echo "Smoke testing: $TARGET/api/health"
-          sleep 10
+          sleep 5
           for i in 1 2 3 4 5; do
             echo "Attempt $i/5..."
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET/api/health")

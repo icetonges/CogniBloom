@@ -25,8 +25,7 @@ model User {
   learningStyle         String?
   interests             String[]    @default([])
 
-  // Auth
-  clerkId              String      @unique
+  // Auth — clerkId removed (single-user app, no OAuth)
   emailVerified        Boolean     @default(false)
 
   // Relationships
@@ -47,7 +46,6 @@ model User {
   lastActiveAt         DateTime    @default(now())
 
   @@index([email])
-  @@index([clerkId])
   @@index([parentId])
 }
 
