@@ -95,9 +95,9 @@ export function useNotes(options: NotesOptions = {}) {
     []
   )
 
-  // Get all notes with pagination
+  // Get all notes with pagination (optional subject filter)
   const getNotes = useCallback(
-    async (newOffset: number = 0) => {
+    async (newOffset: number = 0, subject?: string) => {
       setState((prev) => ({ ...prev, isLoading: true, error: null }))
       setOffset(newOffset)
 
@@ -106,6 +106,7 @@ export function useNotes(options: NotesOptions = {}) {
           limit: limit.toString(),
           offset: newOffset.toString(),
         })
+        if (subject) params.set('subject', subject)
 
         const response = await fetch(`/api/notes?${params}`)
 

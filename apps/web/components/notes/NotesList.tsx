@@ -16,12 +16,27 @@ interface NotesListProps {
 export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState<'semantic' | 'keyword' | null>(null)
+  const [activeSubject, setActiveSubject] = useState<string | null>(null)
+  const [subjects, setSubjects] = useState<string[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notes = useNotes()
 
-  // Load notes on mount
+  // Load notes on mount; also fetch distinct subjects for filter chips
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { notes.getNotes(0) }, [])
+  useEffect(() => {
+    notes.getNotes(0)
+    // Fetch a larger page to collect all subjects seen
+    fetch('/api/notes?limit=100&offset=0')
+      .then((r) => r.json())
+      .then(({ data }) => {
+        if (Array.isArray(data)) {
+          const seen = new Set<string>()
+          ;(data as { subject?: string | null }[]).forEach((n) => { if (n.subject) seen.add(n.subject) })
+          setSubjects(Array.from(seen).sort())
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Debounced live search — 400 ms after typing stops
   useEffect(() => {
@@ -53,7 +68,14 @@ export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
   const clearSearch = () => {
     setSearchQuery('')
     setSearchMode(null)
-    notes.getNotes(0)
+    notes.getNotes(0, activeSubject ?? undefined)
+  }
+
+  const selectSubject = (subject: string | null) => {
+    setActiveSubject(subject)
+    setSearchQuery('')
+    setSearchMode(null)
+    notes.getNotes(0, subject ?? undefined)
   }
 
   const handleDeleteNote = async (noteId: string) => {
@@ -85,6 +107,35 @@ export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
           New Note
         </Button>
       </div>
+
+      {/* Subject filter chips */}
+      {subjects.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => selectSubject(null)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              activeSubject === null
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border text-muted-foreground hover:border-primary/50'
+            }`}
+          >
+            All
+          </button>
+          {subjects.map((s) => (
+            <button
+              key={s}
+              onClick={() => selectSubject(s)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                activeSubject === s
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/50'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Search bar */}
       <div className="space-y-2">

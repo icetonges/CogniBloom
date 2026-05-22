@@ -15,6 +15,7 @@ import {
   Layers,
   Loader2,
   CheckCircle2,
+  Download,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
@@ -62,6 +63,26 @@ export function NoteCard({
     const params = new URLSearchParams({ topic: note.title })
     if (note.subject) params.set('subject', note.subject)
     router.push(`/dashboard/quiz?${params}`)
+  }
+
+  const downloadMd = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const header = [
+      `# ${note.title}`,
+      note.subject ? `**Subject:** ${note.subject}` : '',
+      note.tags.length > 0 ? `**Tags:** ${note.tags.join(', ')}` : '',
+      `**Created:** ${new Date(note.createdAt).toLocaleDateString()}`,
+      '',
+      '---',
+      '',
+    ].filter(Boolean).join('\n')
+    const blob = new Blob([header + note.content], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${note.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -162,6 +183,14 @@ export function NoteCard({
                 : cardsMade
                   ? <CheckCircle2 className="h-3.5 w-3.5" />
                   : <Layers className="h-3.5 w-3.5" />}
+            </button>
+            {/* Download as .md */}
+            <button
+              onClick={downloadMd}
+              title="Download as Markdown"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" />
             </button>
             <Button
               variant="ghost"
