@@ -130,3 +130,23 @@ export async function GET() {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+// DELETE /api/uploads?id=xxx — remove an upload and its chunks
+export async function DELETE(request: NextRequest) {
+  try {
+    const userId = DANIEL_USER_ID
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+    const upload = await db.upload.findFirst({ where: { id, userId } })
+    if (!upload) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // Chunks cascade-delete via FK
+    await db.upload.delete({ where: { id } })
+
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

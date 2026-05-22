@@ -3,10 +3,12 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { FileUpload } from '@/components/uploads/FileUpload'
-import { Loader2, File, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { Loader2, File, CheckCircle2, Clock, AlertCircle, Trophy, Trash2 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { cn } from '@/lib/utils'
 
 interface Upload {
   id: string
@@ -29,9 +31,15 @@ const StatusIcon = ({ status }: { status: string }) => {
   return <AlertCircle className="w-4 h-4 text-red-500" />
 }
 
+function filenameToTopic(filename: string) {
+  return filename.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ')
+}
+
 export default function UploadsPage() {
+  const router = useRouter()
   const [uploads, setUploads] = useState<Upload[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const refresh = () => {
     fetch('/api/uploads')
@@ -42,6 +50,22 @@ export default function UploadsPage() {
   }
 
   useEffect(() => { refresh() }, [])
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this upload and all its embedded chunks?')) return
+    setDeleting(id)
+    try {
+      await fetch(`/api/uploads?id=${id}`, { method: 'DELETE' })
+      setUploads((prev) => prev.filter((u) => u.id !== id))
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const handleQuiz = (upload: Upload) => {
+    const topic = filenameToTopic(upload.filename)
+    router.push(`/dashboard/quiz?topic=${encodeURIComponent(topic)}`)
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -68,7 +92,7 @@ export default function UploadsPage() {
         ) : (
           <div className="space-y-2">
             {uploads.map((u) => (
-              <Card key={u.id} className="p-3 flex items-center gap-3">
+              <Card key={u.id} className="p-3 flex items-center gap-3 group">
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   <File className="w-4 h-4 text-primary" />
                 </div>
@@ -79,7 +103,33 @@ export default function UploadsPage() {
                     {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
                   </p>
                 </div>
-                <StatusIcon status={u.status} />
+                <div className="flex items-center gap-1">
+                  <StatusIcon status={u.status} />
+                  {u.status === 'ready' && (
+                    <button
+                      onClick={() => handleQuiz(u)}
+                      title="Quiz me on this document"
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-colors ml-1"
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(u.id)}
+                    disabled={deleting === u.id}
+                    title="Delete this upload"
+                    className={cn(
+                      'p-1.5 rounded-md transition-colors',
+                      deleting === u.id
+                        ? 'text-muted-foreground'
+                        : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+                    )}
+                  >
+                    {deleting === u.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Trash2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </Card>
             ))}
           </div>
@@ -92,6 +142,7 @@ export default function UploadsPage() {
         <p>2. Text is extracted and split into chunks</p>
         <p>3. Each chunk is embedded with Google&apos;s text-embedding-004</p>
         <p>4. The AI tutor searches your uploads when answering questions</p>
+        <p>5. Once ready, click <Trophy className="w-3 h-3 inline" /> to generate a quiz from the document</p>
       </Card>
     </div>
   )
