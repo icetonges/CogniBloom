@@ -80,7 +80,6 @@ Rules:
     if (error instanceof SyntaxError) {
       return NextResponse.json({ error: 'AI returned invalid JSON — please retry' }, { status: 502 })
     }
-    console.error('[quiz POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -3,7 +3,9 @@
     "allow": [
       "Bash(Get-ChildItem -Path . -Force)",
       "Bash(Select-Object Name)",
-      "Bash(pnpm run *)"
+      "Bash(pnpm run *)",
+      "Bash(git add *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

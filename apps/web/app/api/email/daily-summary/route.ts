@@ -79,8 +79,7 @@ export async function POST(request: NextRequest) {
       message: `Daily summary sent to ${ALL_SUMMARY_RECIPIENTS.length} recipient(s)`,
       recipients: ALL_SUMMARY_RECIPIENTS,
     })
-  } catch (error) {
-    console.error('[email/daily-summary]', error)
+  } catch {
     return NextResponse.json({ error: 'Failed to send summary' }, { status: 500 })
   }
 }

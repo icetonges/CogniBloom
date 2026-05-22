@@ -74,8 +74,7 @@ export async function GET(_request: NextRequest) {
         models: AVAILABLE_MODELS,
       },
     })
-  } catch (error) {
-    console.error('[tutor/modes GET] Error:', error)
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

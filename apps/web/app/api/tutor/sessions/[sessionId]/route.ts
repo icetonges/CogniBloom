@@ -28,8 +28,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
     return NextResponse.json({ success: true, data: session })
-  } catch (error) {
-    console.error('[sessions/[sessionId] GET]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -61,7 +60,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
     }
-    console.error('[sessions/[sessionId] PUT]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -77,8 +75,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
     await db.tutorSession.delete({ where: { id: sessionId } })
     return NextResponse.json({ success: true, message: 'Session deleted' })
-  } catch (error) {
-    console.error('[sessions/[sessionId] DELETE]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

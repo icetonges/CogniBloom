@@ -66,8 +66,7 @@ export async function GET(request: NextRequest) {
     ])
 
     return NextResponse.json({ success: true, data: notes, meta: { total, limit, offset } })
-  } catch (error) {
-    console.error('[notes GET]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -105,7 +104,6 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
     }
-    console.error('[notes POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -38,8 +38,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
 
     return NextResponse.json({ success: true, data: note })
-  } catch (error) {
-    console.error('[notes/[noteId] GET]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -75,7 +74,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
     }
-    console.error('[notes/[noteId] PUT]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -91,8 +89,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
     await db.note.delete({ where: { id: noteId } })
     return NextResponse.json({ success: true, message: 'Note deleted' })
-  } catch (error) {
-    console.error('[notes/[noteId] DELETE]', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

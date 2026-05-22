@@ -51,8 +51,7 @@ export async function GET(request: NextRequest) {
         offset,
       },
     })
-  } catch (error) {
-    console.error('[tutor/sessions GET] Error:', error)
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -100,7 +99,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.error('[tutor/sessions POST] Error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
