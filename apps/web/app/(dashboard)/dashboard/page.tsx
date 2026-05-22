@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock, Brain } from 'lucide-react'
+import { Sparkles, TrendingUp, BookOpen, MessageSquare, Clock, Brain, Layers } from 'lucide-react'
 import Link from 'next/link'
 import { db } from '@/lib/db'
 import { formatDistanceToNow } from 'date-fns'
@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   const userId = DANIEL_USER_ID
 
   // Fetch real stats
-  const [noteCount, sessionCount, recentNotes, learningProfile] = await Promise.all([
+  const [noteCount, sessionCount, recentNotes, learningProfile, flashcardsDue] = await Promise.all([
     db.note.count({ where: { userId } }),
     db.tutorSession.count({ where: { userId } }),
     db.note.findMany({
@@ -25,6 +25,7 @@ export default async function DashboardPage() {
       where: { userId },
       select: { masteryScores: true, weakAreas: true, strongAreas: true },
     }),
+    db.flashcard.count({ where: { userId, nextReviewAt: { lte: new Date() } } }),
   ])
 
   // Real streak calculation
@@ -86,10 +87,11 @@ export default async function DashboardPage() {
           color="green"
         />
         <StatCard
-          icon={<Sparkles className="w-5 h-5 text-amber-500" />}
-          title="AI Model"
-          value="RAG"
-          subtitle="Smart search on"
+          icon={<Layers className="w-5 h-5 text-amber-500" />}
+          title="Cards Due"
+          value={flashcardsDue > 0 ? String(flashcardsDue) : '✓'}
+          subtitle={flashcardsDue > 0 ? 'Review now!' : 'All caught up'}
+          href={flashcardsDue > 0 ? '/dashboard/flashcards' : undefined}
           color="amber"
         />
       </div>
