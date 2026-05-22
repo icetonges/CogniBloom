@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -48,7 +48,9 @@ const SUBJECT_SUGGESTIONS = [
   { label: 'Solar system', emoji: '🪐', subject: 'Science' },
 ]
 
-export default function QuizPage() {
+// ─── Inner component — uses useSearchParams, must be inside Suspense ──────────
+
+function QuizPageInner() {
   const searchParams = useSearchParams()
   const [topic, setTopic] = useState(() => searchParams.get('topic') ?? '')
   const [subject, setSubject] = useState(() => searchParams.get('subject') ?? '')
@@ -355,5 +357,19 @@ export default function QuizPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Page export — wraps inner component in Suspense ─────────────────────────
+
+export default function QuizPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <QuizPageInner />
+    </Suspense>
   )
 }
