@@ -39,9 +39,9 @@ export async function GET(request: NextRequest) {
     const bookmarkedOnly = searchParams.get('bookmarked') === 'true'
 
     const where: Record<string, unknown> = { userId }
-    if (subject) where.subject = subject
-    if (tag) where.tags = { has: tag }
-    if (bookmarkedOnly) where.isBookmarked = true
+    if (subject) where['subject'] = subject
+    if (tag) where['tags'] = { has: tag }
+    if (bookmarkedOnly) where['isBookmarked'] = true
 
     const [notes, total] = await Promise.all([
       db.note.findMany({
