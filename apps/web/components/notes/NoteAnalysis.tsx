@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Brain, GitBranch, Lightbulb, BookOpen, Loader2, Sparkles, ExternalLink } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Brain, GitBranch, Lightbulb, BookOpen, Loader2, Sparkles, ExternalLink, Compass } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { NoteMindMapNode, NoteReasoningHint, NoteKnowledgePoint } from '@/hooks/useNotes'
 
@@ -16,35 +16,301 @@ interface NoteAnalysisProps {
   onAnalyze?: () => void
 }
 
-// ── Mind Map Tree ─────────────────────────────────────────────────────────────
-function MindMapNode({ node, depth = 0 }: { node: NoteMindMapNode; depth?: number }) {
-  const colors = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd']
-  const color = colors[Math.min(depth, colors.length - 1)]
-  const isRoot = depth === 0
+// ── SVG Radial Mind Map ────────────────────────────────────────────────────────
+
+const BRANCH_COLORS = [
+  '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#0ea5e9',
+  '#8b5cf6', '#f43f5e', '#14b8a6', '#f97316', '#84cc16',
+]
+
+interface MindMapNode {
+  label: string
+  children?: MindMapNode[]
+}
+
+interface LayoutNode {
+  label: string
+  x: number
+  y: number
+  color: string
+  depth: number
+  isRoot?: boolean
+}
+
+interface LayoutEdge {
+  x1: number; y1: number
+  x2: number; y2: number
+  color: string
+  cx1: number; cy1: number
+  cx2: number; cy2: number
+}
+
+function buildLayout(root: MindMapNode): { nodes: LayoutNode[]; edges: LayoutEdge[] } {
+  const nodes: LayoutNode[] = []
+  const edges: LayoutEdge[] = []
+
+  const CX = 320
+  const CY = 260
+  const R1 = 150  // radius level 1
+  const R2 = 270  // radius level 2
+
+  nodes.push({ label: root.label, x: CX, y: CY, color: '#6366f1', depth: 0, isRoot: true })
+
+  const children1 = root.children ?? []
+  const count1 = children1.length || 1
+
+  children1.forEach((child1, i1) => {
+    const angle1 = (2 * Math.PI * i1) / count1 - Math.PI / 2
+    const x1 = CX + R1 * Math.cos(angle1)
+    const y1 = CY + R1 * Math.sin(angle1)
+    const color = BRANCH_COLORS[i1 % BRANCH_COLORS.length]
+
+    nodes.push({ label: child1.label, x: x1, y: y1, color, depth: 1 })
+
+    // Bezier edge from root → level 1
+    const cx1 = CX + (R1 * 0.4) * Math.cos(angle1)
+    const cy1 = CY + (R1 * 0.4) * Math.sin(angle1)
+    edges.push({ x1: CX, y1: CY, x2: x1, y2: y1, color, cx1, cy1, cx2: x1, cy2: y1 })
+
+    const children2 = child1.children ?? []
+    const count2 = children2.length || 1
+
+    children2.forEach((child2, i2) => {
+      // Spread child-2 nodes around their parent, biased away from center
+      const spread = Math.min(Math.PI * 0.6, (Math.PI * 0.8) / count2)
+      const baseAngle = angle1
+      const startAngle = baseAngle - (spread * (count2 - 1)) / 2
+      const angle2 = startAngle + spread * i2
+
+      const x2 = CX + R2 * Math.cos(angle2)
+      const y2 = CY + R2 * Math.sin(angle2)
+
+      nodes.push({ label: child2.label, x: x2, y: y2, color, depth: 2 })
+
+      // Bezier edge from level 1 → level 2
+      const mx = (x1 + x2) / 2
+      const my = (y1 + y2) / 2
+      edges.push({ x1, y1: y1, x2, y2, color, cx1: mx, cy1: my, cx2: mx, cy2: my })
+    })
+  })
+
+  return { nodes, edges }
+}
+
+function truncate(s: string, max = 18): string {
+  return s.length > max ? s.slice(0, max - 1) + '…' : s
+}
+
+function RadialMindMap({ root }: { root: MindMapNode }) {
+  const [hovered, setHovered] = useState<string | null>(null)
+  const { nodes, edges } = buildLayout(root)
+  const svgRef = useRef<SVGSVGElement>(null)
 
   return (
-    <li className="list-none">
-      <span
-        className="inline-block rounded-lg font-semibold transition-all"
-        style={{
-          background: isRoot ? `linear-gradient(135deg, #6366f1, #8b5cf6)` : `${color}18`,
-          color: isRoot ? 'white' : color,
-          border: isRoot ? 'none' : `1px solid ${color}40`,
-          padding: isRoot ? '6px 18px' : depth === 1 ? '4px 12px' : '3px 10px',
-          fontSize: isRoot ? '14px' : depth === 1 ? '13px' : '12px',
-          boxShadow: isRoot ? `0 0 20px ${color}40` : 'none',
-        }}
+    <div className="w-full overflow-x-auto rounded-xl" style={{ background: 'rgba(0,0,0,0.2)' }}>
+      <svg
+        ref={svgRef}
+        viewBox="0 0 640 520"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ width: '100%', minWidth: '400px', maxWidth: '640px', display: 'block', margin: '0 auto' }}
       >
-        {node.label}
-      </span>
-      {node.children && node.children.length > 0 && (
-        <ul className="ml-4 mt-2 space-y-2 border-l-2 pl-4" style={{ borderColor: `${color}30` }}>
-          {node.children.map((child, i) => (
-            <MindMapNode key={i} node={child} depth={depth + 1} />
-          ))}
-        </ul>
-      )}
-    </li>
+        <defs>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          <filter id="glow-strong">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        {/* Background subtle grid */}
+        <circle cx="320" cy="260" r="150" fill="none" stroke="rgba(99,102,241,0.06)" strokeWidth="1" strokeDasharray="4,8" />
+        <circle cx="320" cy="260" r="270" fill="none" stroke="rgba(99,102,241,0.04)" strokeWidth="1" strokeDasharray="4,10" />
+
+        {/* Edges */}
+        {edges.map((e, i) => (
+          <path
+            key={i}
+            d={`M ${e.x1} ${e.y1} C ${e.cx1} ${e.cy1}, ${e.cx2} ${e.cy2}, ${e.x2} ${e.y2}`}
+            fill="none"
+            stroke={e.color}
+            strokeWidth="1.5"
+            strokeOpacity="0.4"
+          />
+        ))}
+
+        {/* Nodes */}
+        {nodes.map((n, i) => {
+          const isRoot = n.isRoot
+          const isHovered = hovered === `${n.x},${n.y}`
+          const rx = isRoot ? 48 : n.depth === 1 ? 38 : 32
+          const ry = isRoot ? 18 : n.depth === 1 ? 14 : 12
+          const label = truncate(n.label, isRoot ? 22 : n.depth === 1 ? 16 : 14)
+          const fontSize = isRoot ? 12 : n.depth === 1 ? 10 : 9
+
+          return (
+            <g
+              key={i}
+              onMouseEnter={() => setHovered(`${n.x},${n.y}`)}
+              onMouseLeave={() => setHovered(null)}
+              style={{ cursor: 'default' }}
+            >
+              {/* Glow effect */}
+              {(isRoot || isHovered) && (
+                <ellipse
+                  cx={n.x}
+                  cy={n.y}
+                  rx={rx + 6}
+                  ry={ry + 6}
+                  fill={n.color}
+                  opacity="0.15"
+                  filter="url(#glow)"
+                />
+              )}
+              <ellipse
+                cx={n.x}
+                cy={n.y}
+                rx={rx}
+                ry={ry}
+                fill={isRoot ? `url(#root-grad)` : `${n.color}18`}
+                stroke={n.color}
+                strokeWidth={isRoot ? 0 : 1}
+                strokeOpacity={isHovered ? 0.9 : 0.5}
+              />
+              {isRoot && (
+                <defs>
+                  <linearGradient id="root-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#8b5cf6" />
+                  </linearGradient>
+                </defs>
+              )}
+              <text
+                x={n.x}
+                y={n.y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={fontSize}
+                fontWeight={isRoot ? '800' : n.depth === 1 ? '700' : '500'}
+                fill={isRoot ? 'white' : n.color}
+                fontFamily="system-ui, sans-serif"
+              >
+                {label}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Hover tooltip */}
+        {hovered && (() => {
+          const n = nodes.find((nd) => `${nd.x},${nd.y}` === hovered)
+          if (!n || n.label.length <= 18) return null
+          return (
+            <g>
+              <rect
+                x={n.x - 90}
+                y={n.y - 40}
+                width={180}
+                height={26}
+                rx={6}
+                fill="#1a1a2e"
+                stroke={n.color}
+                strokeWidth="1"
+                strokeOpacity="0.5"
+              />
+              <text
+                x={n.x}
+                y={n.y - 27}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={10}
+                fill="white"
+                fontFamily="system-ui, sans-serif"
+              >
+                {n.label}
+              </text>
+            </g>
+          )
+        })()}
+      </svg>
+    </div>
+  )
+}
+
+// ── Study Recommendations ─────────────────────────────────────────────────────
+
+function StudyRecommendations({ concepts, hints }: {
+  concepts: NoteKnowledgePoint[]
+  hints: NoteReasoningHint[]
+}) {
+  // Derive recommendations from concepts and hints
+  const coreCount = concepts.filter((c) => c.importance === 'core').length
+  const supportCount = concepts.filter((c) => c.importance === 'supporting').length
+  const weakAreas = concepts.filter((c) => c.importance === 'context').map((c) => c.term)
+
+  const tips = [
+    coreCount > 0 && {
+      emoji: '🎯',
+      title: 'Master the core concepts first',
+      body: `Focus on the ${coreCount} core concept${coreCount !== 1 ? 's' : ''} before moving on. These are the foundation everything else builds on.`,
+      color: '#6366f1',
+    },
+    supportCount > 0 && {
+      emoji: '🔗',
+      title: 'Build supporting knowledge',
+      body: `There are ${supportCount} supporting ideas that connect the core concepts. Understanding these will deepen your grasp significantly.`,
+      color: '#10b981',
+    },
+    hints.length > 2 && {
+      emoji: '📝',
+      title: 'Practice the reasoning steps',
+      body: `Try to reproduce the ${hints.length} reasoning steps without looking. If you can explain each step, you truly understand the topic.`,
+      color: '#f59e0b',
+    },
+    weakAreas.length > 0 && {
+      emoji: '🔍',
+      title: 'Explore context topics',
+      body: `Look deeper into: ${weakAreas.slice(0, 3).join(', ')}${weakAreas.length > 3 ? ', and more' : ''}. These form the wider context for this subject.`,
+      color: '#ec4899',
+    },
+    {
+      emoji: '🃏',
+      title: 'Make flashcards from key concepts',
+      body: 'The best way to lock in what you learned is spaced repetition. Turn each key concept into a flashcard and review them over the next few days.',
+      color: '#8b5cf6',
+    },
+    {
+      emoji: '🗣️',
+      title: 'Teach it back',
+      body: `Try explaining this topic out loud as if you were teaching someone else. The Feynman Technique is one of the most powerful study methods.`,
+      color: '#0ea5e9',
+    },
+  ].filter(Boolean) as Array<{ emoji: string; title: string; body: string; color: string }>
+
+  if (tips.length === 0) {
+    return <p className="text-sm text-muted-foreground">Run the analysis to get personalised study recommendations.</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {tips.map((tip, i) => (
+        <div
+          key={i}
+          className="rounded-xl p-4"
+          style={{ background: `${tip.color}08`, border: `1px solid ${tip.color}20` }}
+        >
+          <div className="flex items-start gap-3">
+            <span className="text-xl leading-none mt-0.5">{tip.emoji}</span>
+            <div>
+              <p className="text-sm font-bold mb-1" style={{ color: tip.color }}>{tip.title}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">{tip.body}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -59,7 +325,7 @@ export function NoteAnalysis({
   publishedSlug,
   onAnalyze,
 }: NoteAnalysisProps) {
-  const [activeTab, setActiveTab] = useState<'mindmap' | 'reasoning' | 'concepts' | 'tutor'>('mindmap')
+  const [activeTab, setActiveTab] = useState<'mindmap' | 'reasoning' | 'concepts' | 'tutor' | 'study'>('mindmap')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -125,13 +391,14 @@ export function NoteAnalysis({
   const parsedHints = (() => { try { return JSON.parse(localHints ?? '') as NoteReasoningHint[] } catch { return [] } })()
   const parsedConcepts = (() => { try { return JSON.parse(localConcepts ?? '') as NoteKnowledgePoint[] } catch { return [] } })()
 
-  const importanceColor = { core: '#6366f1', supporting: '#10b981', context: '#f59e0b' }
+  const importanceColor: Record<string, string> = { core: '#6366f1', supporting: '#10b981', context: '#f59e0b' }
 
   const TABS = [
-    { id: 'mindmap' as const, label: 'Mind Map', icon: GitBranch, count: parsedMindMap ? '✓' : null },
+    { id: 'mindmap' as const, label: 'Mind Map', icon: GitBranch },
     { id: 'reasoning' as const, label: 'Reasoning', icon: Lightbulb, count: parsedHints.length || null },
     { id: 'concepts' as const, label: 'Key Concepts', icon: BookOpen, count: parsedConcepts.length || null },
-    { id: 'tutor' as const, label: 'Tutor Notes', icon: Brain, count: localSummary ? '✓' : null },
+    { id: 'tutor' as const, label: 'Tutor Notes', icon: Brain },
+    { id: 'study' as const, label: 'Study Plan', icon: Compass },
   ]
 
   return (
@@ -198,33 +465,42 @@ export function NoteAnalysis({
           <div className="text-4xl">🧠</div>
           <p className="font-semibold">Get expert tutor insights</p>
           <p className="text-sm text-muted-foreground max-w-xs">
-            Click <strong>Analyze Note</strong> to generate a mind map, reasoning steps, key concepts, and tutor summary — all powered by AI.
+            Click <strong>Analyze Note</strong> to generate a visual mind map, reasoning steps, key concepts, and a personalised study plan — all powered by AI.
           </p>
         </div>
       ) : isAnalyzing ? (
-        <div className="flex flex-col items-center justify-center py-12 gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">AI is analyzing your note…</p>
+        <div className="flex flex-col items-center justify-center py-12 gap-4">
+          <div className="relative">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <div className="absolute inset-0 rounded-full animate-ping"
+              style={{ background: 'rgba(99,102,241,0.15)', animationDuration: '1.5s' }} />
+          </div>
+          <div className="text-center">
+            <p className="font-semibold text-sm">AI is analyzing your note…</p>
+            <p className="text-xs text-muted-foreground mt-1">Building mind map, extracting concepts, drafting study plan</p>
+          </div>
         </div>
       ) : (
         <>
           {/* Tabs */}
-          <div className="flex px-4 pt-3 gap-1 overflow-x-auto">
+          <div className="flex px-4 pt-3 gap-1 overflow-x-auto" style={{ borderBottom: '1px solid rgba(99,102,241,0.08)' }}>
             {TABS.map(({ id, label, icon: Icon, count }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
                 className={cn(
-                  'flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg whitespace-nowrap transition-all',
+                  'flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-t-lg whitespace-nowrap transition-all mb-0',
                   activeTab === id
-                    ? 'text-primary'
+                    ? 'text-primary border-b-2'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
-                style={activeTab === id ? { background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)' } : {}}
+                style={activeTab === id
+                  ? { borderBottomColor: '#6366f1', background: 'rgba(99,102,241,0.08)' }
+                  : {}}
               >
                 <Icon className="w-3.5 h-3.5" />
                 {label}
-                {count !== null && (
+                {count != null && (
                   <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full"
                     style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
                     {count}
@@ -236,18 +512,22 @@ export function NoteAnalysis({
 
           {/* Tab content */}
           <div className="p-5">
-            {/* Mind Map */}
+
+            {/* ── Mind Map (SVG radial) ── */}
             {activeTab === 'mindmap' && (
               parsedMindMap ? (
-                <ul className="space-y-3">
-                  <MindMapNode node={parsedMindMap} depth={0} />
-                </ul>
+                <div>
+                  <RadialMindMap root={parsedMindMap} />
+                  <p className="text-[10px] text-muted-foreground text-center mt-2">
+                    Hover over nodes to see full labels
+                  </p>
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No mind map data available.</p>
               )
             )}
 
-            {/* Reasoning Steps */}
+            {/* ── Reasoning Steps ── */}
             {activeTab === 'reasoning' && (
               parsedHints.length > 0 ? (
                 <div className="space-y-3">
@@ -268,10 +548,19 @@ export function NoteAnalysis({
               )
             )}
 
-            {/* Key Concepts */}
+            {/* ── Key Concepts ── */}
             {activeTab === 'concepts' && (
               parsedConcepts.length > 0 ? (
                 <div className="space-y-3">
+                  {/* Legend */}
+                  <div className="flex gap-3 text-[10px] text-muted-foreground">
+                    {(['core', 'supporting', 'context'] as const).map((imp) => (
+                      <span key={imp} className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: importanceColor[imp] }} />
+                        {imp}
+                      </span>
+                    ))}
+                  </div>
                   {parsedConcepts.map((kp, i) => {
                     const color = importanceColor[kp.importance] ?? '#6366f1'
                     return (
@@ -299,7 +588,7 @@ export function NoteAnalysis({
               )
             )}
 
-            {/* Tutor Summary */}
+            {/* ── Tutor Summary ── */}
             {activeTab === 'tutor' && (
               localSummary ? (
                 <div
@@ -309,6 +598,11 @@ export function NoteAnalysis({
               ) : (
                 <p className="text-sm text-muted-foreground">No tutor summary available.</p>
               )
+            )}
+
+            {/* ── Study Plan ── */}
+            {activeTab === 'study' && (
+              <StudyRecommendations concepts={parsedConcepts} hints={parsedHints} />
             )}
           </div>
         </>

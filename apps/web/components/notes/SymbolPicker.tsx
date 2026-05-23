@@ -100,6 +100,125 @@ const CATEGORIES = [
       { char: '⤵', name: 'down hook' }, { char: '⤴', name: 'up hook' },
     ],
   },
+  {
+    label: 'Physics',
+    symbols: [
+      // Mechanics
+      { char: 'F', name: 'force' }, { char: 'N', name: 'newton' }, { char: 'J', name: 'joule' },
+      { char: 'W', name: 'watt' }, { char: 'Pa', name: 'pascal' }, { char: 'kg', name: 'kilogram' },
+      { char: 'ℏ', name: 'h-bar (reduced Planck)' }, { char: 'ħ', name: 'planck constant' },
+      { char: 'ℓ', name: 'length / quantum number' },
+      // Waves & Optics
+      { char: 'λ', name: 'wavelength' }, { char: 'ν', name: 'frequency' }, { char: 'ω', name: 'angular frequency' },
+      { char: 'κ', name: 'wave number' }, { char: 'φ', name: 'phase' },
+      // Electricity & Magnetism
+      { char: 'Ω', name: 'ohm' }, { char: 'μ', name: 'micro / permeability' },
+      { char: 'ε', name: 'permittivity / emf' }, { char: 'ε₀', name: 'epsilon naught' },
+      { char: 'μ₀', name: 'mu naught' }, { char: 'B', name: 'magnetic field' },
+      { char: 'Φ', name: 'magnetic flux' }, { char: 'Φ_E', name: 'electric flux' },
+      { char: 'E', name: 'electric field / energy' }, { char: 'V', name: 'volt / potential' },
+      { char: 'A', name: 'ampere' }, { char: 'C', name: 'coulomb / capacitance' },
+      // Thermodynamics
+      { char: 'T', name: 'temperature' }, { char: 'K', name: 'kelvin' },
+      { char: 'η', name: 'efficiency' }, { char: 'κ', name: 'thermal conductivity' },
+      // Quantum / Relativity
+      { char: 'ψ', name: 'wave function' }, { char: '|ψ⟩', name: 'ket' }, { char: '⟨ψ|', name: 'bra' },
+      { char: 'c', name: 'speed of light' }, { char: 'γ', name: 'lorentz factor' },
+    ],
+  },
+  {
+    label: 'Statistics',
+    symbols: [
+      { char: 'x̄', name: 'x-bar (mean)' }, { char: 'ȳ', name: 'y-bar (mean)' },
+      { char: 'μ', name: 'population mean' }, { char: 'σ', name: 'std deviation (pop)' },
+      { char: 'σ²', name: 'variance (pop)' }, { char: 's', name: 'std deviation (sample)' },
+      { char: 's²', name: 'variance (sample)' }, { char: 'ŷ', name: 'y-hat (predicted)' },
+      { char: 'p̂', name: 'p-hat (sample proportion)' }, { char: 'p', name: 'population proportion' },
+      { char: 'n', name: 'sample size' }, { char: 'N', name: 'population size' },
+      { char: 'r', name: 'correlation coefficient' }, { char: 'r²', name: 'R-squared' },
+      { char: 'β₀', name: 'intercept' }, { char: 'β₁', name: 'slope' },
+      { char: 'H₀', name: 'null hypothesis' }, { char: 'H₁', name: 'alt hypothesis' },
+      { char: 'α', name: 'significance level' }, { char: 'p', name: 'p-value' },
+      { char: 'z', name: 'z-score' }, { char: 't', name: 't-score' },
+      { char: 'χ²', name: 'chi-squared' }, { char: 'F', name: 'F-statistic' },
+      { char: '~', name: 'distributed as' }, { char: '∼', name: 'sim' },
+      { char: 'P(A)', name: 'probability of A' }, { char: 'P(A|B)', name: 'conditional prob' },
+      { char: 'E(X)', name: 'expected value' }, { char: 'Var(X)', name: 'variance' },
+      { char: 'Cov(X,Y)', name: 'covariance' }, { char: 'IQR', name: 'inter-quartile range' },
+      { char: 'Q₁', name: 'first quartile' }, { char: 'Q₃', name: 'third quartile' },
+      { char: 'CI', name: 'confidence interval' }, { char: '%', name: 'percent' },
+    ],
+  },
+  {
+    label: 'Logic',
+    symbols: [
+      // Propositional
+      { char: '∧', name: 'and (conjunction)' }, { char: '∨', name: 'or (disjunction)' },
+      { char: '¬', name: 'not (negation)' }, { char: '⊕', name: 'xor' },
+      { char: '→', name: 'implies' }, { char: '↔', name: 'iff (biconditional)' },
+      { char: '⇒', name: 'implies (double)' }, { char: '⇔', name: 'iff (double)' },
+      // Quantifiers
+      { char: '∀', name: 'for all' }, { char: '∃', name: 'there exists' }, { char: '∄', name: 'does not exist' },
+      { char: '∃!', name: 'unique existence' },
+      // Proof
+      { char: '∴', name: 'therefore' }, { char: '∵', name: 'because' },
+      { char: '⊢', name: 'proves (turnstile)' }, { char: '⊨', name: 'models (semantic)' },
+      { char: '◻', name: 'QED / end proof' }, { char: '□', name: 'QED (hollow)' },
+      { char: '∎', name: 'QED (filled)' },
+      // Sets
+      { char: '∈', name: 'element of' }, { char: '∉', name: 'not element of' },
+      { char: '⊂', name: 'proper subset' }, { char: '⊆', name: 'subset' },
+      { char: '⊄', name: 'not subset' }, { char: '⊃', name: 'proper superset' },
+      { char: '⊇', name: 'superset' }, { char: '∩', name: 'intersection' },
+      { char: '∪', name: 'union' }, { char: '∅', name: 'empty set' },
+      { char: '∁', name: 'complement' }, { char: '\\', name: 'set minus' },
+      { char: '×', name: 'cartesian product' }, { char: '℘', name: 'power set' },
+    ],
+  },
+  {
+    label: 'Geometry',
+    symbols: [
+      // Angles & Shape
+      { char: '∠', name: 'angle' }, { char: '∡', name: 'measured angle' }, { char: '∢', name: 'spherical angle' },
+      { char: '°', name: 'degree' }, { char: "'", name: 'arcminute' }, { char: '"', name: 'arcsecond' },
+      { char: '△', name: 'triangle' }, { char: '□', name: 'square' }, { char: '▱', name: 'parallelogram' },
+      { char: '⬡', name: 'hexagon' }, { char: '○', name: 'circle' }, { char: '⊙', name: 'circle dot' },
+      // Relations
+      { char: '≅', name: 'congruent' }, { char: '∼', name: 'similar' }, { char: '∝', name: 'proportional' },
+      { char: '⊥', name: 'perpendicular' }, { char: '∥', name: 'parallel' }, { char: '∦', name: 'not parallel' },
+      // Coordinates & Measure
+      { char: '|AB|', name: 'length AB' }, { char: 'AB⃡', name: 'line AB' }, { char: 'AB⃗', name: 'ray AB' },
+      { char: '⌀', name: 'diameter' }, { char: 'r', name: 'radius' }, { char: 'π', name: 'pi' },
+      // 3D
+      { char: '∠', name: 'dihedral angle' }, { char: 'V', name: 'volume' }, { char: 'S', name: 'surface area' },
+      // Transforms
+      { char: 'T', name: 'translation' }, { char: 'R', name: 'rotation' }, { char: 'S', name: 'scaling' },
+      { char: "'", name: 'image prime' }, { char: '→', name: 'maps to' },
+    ],
+  },
+  {
+    label: 'Biology',
+    symbols: [
+      // Genetics
+      { char: '♀', name: 'female' }, { char: '♂', name: 'male' },
+      { char: 'A', name: 'dominant allele' }, { char: 'a', name: 'recessive allele' },
+      { char: 'F₁', name: 'F1 generation' }, { char: 'F₂', name: 'F2 generation' },
+      { char: 'P', name: 'parental generation' }, { char: 'n', name: 'haploid' },
+      { char: '2n', name: 'diploid' }, { char: '×', name: 'cross' },
+      // Cell Biology
+      { char: 'ATP', name: 'adenosine triphosphate' }, { char: 'ADP', name: 'ADP' },
+      { char: 'DNA', name: 'deoxyribonucleic acid' }, { char: 'RNA', name: 'ribonucleic acid' },
+      { char: 'mRNA', name: 'messenger RNA' }, { char: 'tRNA', name: 'transfer RNA' },
+      { char: 'rRNA', name: 'ribosomal RNA' },
+      // Ecology
+      { char: '→', name: 'energy flow' }, { char: '↑', name: 'increase' }, { char: '↓', name: 'decrease' },
+      { char: '⇌', name: 'equilibrium' }, { char: '∝', name: 'proportional to' },
+      // Classification
+      { char: '†', name: 'extinct' }, { char: '*', name: 'note / asterisk' },
+      { char: '≈', name: 'approximately' }, { char: 'n', name: 'sample size' },
+      { char: '%', name: 'percent' }, { char: '‰', name: 'per mille' },
+    ],
+  },
 ]
 
 export function SymbolPicker({ onInsert }: SymbolPickerProps) {

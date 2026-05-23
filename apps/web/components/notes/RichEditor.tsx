@@ -47,6 +47,8 @@ interface RichEditorProps {
   disabled?: boolean
   placeholder?: string
   noteId?: string
+  /** When true, expands the editor to fill available height (full-page mode) */
+  fullPage?: boolean
 }
 
 interface MathEditState {
@@ -91,7 +93,7 @@ function Divider() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
-  ({ content, onChange, disabled, placeholder, noteId }, ref) => {
+  ({ content, onChange, disabled, placeholder, noteId, fullPage }, ref) => {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const uploadingRef = useRef(false)
     const [mathState, setMathState] = useState<MathEditState>({ open: false, latex: '', display: true })
@@ -117,7 +119,10 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
 
       editorProps: {
         attributes: {
-          class: 'prose prose-sm prose-invert max-w-none focus:outline-none min-h-[320px] px-5 py-4',
+          class: cn(
+            'prose prose-sm prose-invert max-w-none focus:outline-none px-5 py-4',
+            fullPage ? 'min-h-[calc(100vh-200px)]' : 'min-h-[320px]'
+          ),
         },
         handleDrop: (_view, event: DragEvent) => {
           const files = Array.from(event.dataTransfer?.files ?? [])
@@ -225,8 +230,10 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
     return (
       <>
         <div
-          className="rounded-xl overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.09)' }}
+          className={cn('overflow-hidden', fullPage ? '' : 'rounded-xl')}
+          style={fullPage
+            ? {}
+            : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.09)' }}
         >
           {/* ── Toolbar ── */}
           <div

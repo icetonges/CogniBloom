@@ -4,10 +4,21 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  Plus, Search, X, Loader2, Calendar,
+  Plus, Search, X, Loader2, Calendar, ArrowUpDown,
+  Clock, BookOpen, Brain, Tag as TagIcon,
 } from 'lucide-react'
 import { formatNoteTitle, formatTimelineHeading, getDateGroupKey } from '@/lib/note-format'
+import { cn } from '@/lib/utils'
 import type { Note } from '@/hooks/useNotes'
+
+type SortOption = 'newest' | 'oldest' | 'updated' | 'subject'
+
+const SORT_LABELS: Record<SortOption, string> = {
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  updated: 'Recently updated',
+  subject: 'Subject A–Z',
+}
 
 interface SubjectCount { subject: string; count: number }
 interface GroupedNotes { [dateKey: string]: Note[] }
@@ -42,73 +53,104 @@ function subjectColor(subject?: string | null) {
 
 // ── Note Card ─────────────────────────────────────────────────────────────────
 function NoteTimelineCard({ note }: { note: Note }) {
-  const preview = note.content
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120)
+  const plainText = note.content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+  const preview = plainText.slice(0, 130)
+  const wordCount = plainText.split(/\s+/).filter(Boolean).length
+  const readMins = Math.max(1, Math.ceil(wordCount / 200))
   const displayTitle = formatNoteTitle(note)
   const color = subjectColor(note.subject)
+  const hasAI = !!(note.aiAnalyzedAt || note.mindMap || note.tutorSummary)
 
   return (
     <Link
       href={`/dashboard/notes/${note.slug || note.id}`}
-      className="group block rounded-2xl p-4 transition-all duration-200 hover:scale-[1.01] hover:-translate-y-0.5"
+      className="group block rounded-2xl transition-all duration-200 hover:scale-[1.01] hover:-translate-y-0.5 overflow-hidden"
       style={{
         background: color.bg,
         border: `1px solid ${color.border}`,
-        boxShadow: `0 4px 20px ${color.from}12`,
+        boxShadow: `0 4px 20px ${color.from}10`,
       }}
     >
-      <div className="flex items-start gap-2.5 mb-2">
-        <div
-          className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-          style={{
-            background: `linear-gradient(135deg, ${color.from}, ${color.to})`,
-            boxShadow: `0 0 6px ${color.from}80`,
-          }}
-        />
-        <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-sm leading-snug line-clamp-2">{displayTitle}</h3>
+      {/* Color accent stripe */}
+      <div
+        className="h-0.5 w-full"
+        style={{ background: `linear-gradient(90deg, ${color.from}, ${color.to})` }}
+      />
+
+      <div className="p-4">
+        {/* Top row: subject + AI badge */}
+        <div className="flex items-center gap-2 mb-2">
           {note.subject && (
             <span
-              className="inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md mt-1"
+              className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md"
               style={{ background: `${color.from}20`, color: color.from }}
             >
+              <BookOpen className="w-2.5 h-2.5 inline mr-1" />
               {note.subject}
             </span>
           )}
-        </div>
-        {note.aiAnalyzedAt && (
-          <span title="AI analyzed" className="text-[10px] shrink-0" style={{ color: '#a5b4fc' }}>
-            🧠
-          </span>
-        )}
-      </div>
-
-      {preview && (
-        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed pl-4">
-          {preview}{note.content.length > 120 ? '…' : ''}
-        </p>
-      )}
-
-      {note.tags.length > 0 && (
-        <div className="flex gap-1 flex-wrap mt-2 pl-4">
-          {note.tags.slice(0, 3).map((tag) => (
+          <div className="flex-1" />
+          {hasAI && (
             <span
-              key={tag}
-              className="text-[10px] px-2 py-0.5 rounded-full"
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: 'inherit',
-              }}
+              title="AI analyzed"
+              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.2)' }}
             >
-              #{tag}
+              <Brain className="w-2.5 h-2.5" /> AI
             </span>
-          ))}
+          )}
+          {note.hasMath && (
+            <span
+              title="Contains math"
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}
+            >
+              ∑
+            </span>
+          )}
         </div>
-      )}
+
+        {/* Title */}
+        <h3 className="font-bold text-sm leading-snug line-clamp-2 mb-2">{displayTitle}</h3>
+
+        {/* Preview */}
+        {preview && (
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            {preview}{plainText.length > 130 ? '…' : ''}
+          </p>
+        )}
+
+        {/* Tags */}
+        {note.tags.length > 0 && (
+          <div className="flex gap-1 flex-wrap mt-2.5">
+            {note.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <TagIcon className="w-2 h-2" />#{tag}
+              </span>
+            ))}
+            {note.tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">+{note.tags.length - 3}</span>
+            )}
+          </div>
+        )}
+
+        {/* Footer: time + word count */}
+        <div className="flex items-center gap-3 mt-3 pt-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Clock className="w-2.5 h-2.5" />
+            {readMins} min read
+          </span>
+          <span className="text-[10px] text-muted-foreground">{wordCount.toLocaleString()} words</span>
+          <div className="flex-1" />
+          <span className="text-[10px] text-muted-foreground">
+            {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </span>
+        </div>
+      </div>
     </Link>
   )
 }
@@ -124,7 +166,22 @@ export function NotesIndexClient() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
+  const [sort, setSort] = useState<SortOption>('newest')
+  const [showSortMenu, setShowSortMenu] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sortMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close sort dropdown on outside click
+  useEffect(() => {
+    if (!showSortMenu) return
+    const handler = (e: MouseEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setShowSortMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showSortMenu])
 
   // Active filters from URL
   const activeSubject = searchParams.get('subject') || ''
@@ -197,8 +254,21 @@ export function NotesIndexClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
-  const grouped = groupNotesByDate(notes)
-  const sortedDateKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
+  // Sort notes before grouping
+  const sortedNotes = [...notes].sort((a, b) => {
+    switch (sort) {
+      case 'newest': return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      case 'oldest': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      case 'updated': return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      case 'subject': return (a.subject ?? '').localeCompare(b.subject ?? '')
+      default: return 0
+    }
+  })
+
+  const grouped = groupNotesByDate(sortedNotes)
+  const sortedDateKeys = sort === 'oldest'
+    ? Object.keys(grouped).sort((a, b) => a.localeCompare(b))
+    : Object.keys(grouped).sort((a, b) => b.localeCompare(a))
 
   return (
     <div className="space-y-6">
@@ -328,6 +398,46 @@ export function NotesIndexClient() {
               <X className="h-3 w-3" /> Clear
             </button>
           )}
+
+          {/* Sort dropdown */}
+          <div ref={sortMenuRef} className="relative ml-auto">
+            <button
+              onClick={() => setShowSortMenu((v) => !v)}
+              className={cn(
+                'flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold transition-all',
+                showSortMenu ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              )}
+              style={showSortMenu
+                ? { background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)' }
+                : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)' }
+              }
+            >
+              <ArrowUpDown className="h-3 w-3" />
+              {SORT_LABELS[sort]}
+            </button>
+            {showSortMenu && (
+              <div
+                className="absolute right-0 top-full mt-1 w-44 rounded-xl overflow-hidden shadow-2xl z-40"
+                style={{ background: '#0d1117', border: '1px solid rgba(99,102,241,0.2)' }}
+              >
+                {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => { setSort(key); setShowSortMenu(false) }}
+                    className={cn(
+                      'w-full text-left text-xs px-4 py-2.5 font-semibold transition-colors',
+                      sort === key
+                        ? 'text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04]'
+                    )}
+                  >
+                    {sort === key && <span className="mr-2">✓</span>}
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
