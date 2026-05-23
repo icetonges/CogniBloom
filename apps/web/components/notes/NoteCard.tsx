@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Bookmark, BookmarkPlus, Trash2, Edit2, Code, Zap, Image as ImageIcon, Trophy, Layers, Loader2, CheckCircle2, Download } from 'lucide-react'
+import { Bookmark, BookmarkPlus, Trash2, Edit2, Code, Zap, Image as ImageIcon, Trophy, Layers, Loader2, CheckCircle2, ExternalLink, Brain } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -35,7 +35,7 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
   const router = useRouter()
   const [makingCards, setMakingCards] = useState(false)
   const [cardsMade, setCardsMade] = useState(false)
-  const preview = note.content.replace(/[#*_`\[\]()]/g, '').substring(0, 100)
+  const preview = note.content.replace(/<[^>]+>/g, '').replace(/[#*_`\[\]()]/g, '').substring(0, 100)
   const color = subjectColor(note.subject)
 
   const makeFlashcards = async (e: React.MouseEvent) => {
@@ -61,23 +61,6 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
     router.push(`/dashboard/quiz?${params}`)
   }
 
-  const downloadMd = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    const header = [
-      `# ${note.title}`,
-      note.subject ? `**Subject:** ${note.subject}` : '',
-      note.tags.length > 0 ? `**Tags:** ${note.tags.join(', ')}` : '',
-      `**Created:** ${new Date(note.createdAt).toLocaleDateString()}`,
-      '', '---', '',
-    ].filter(Boolean).join('\n')
-    const blob = new Blob([header + note.content], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${note.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
 
   return (
     <div
@@ -167,9 +150,31 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
 
       {/* ── Footer ── */}
       <div className="flex items-center justify-between pt-1 border-t border-white/[0.06] mt-auto">
-        <p className="text-[10px] text-muted-foreground">
-          {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] text-muted-foreground">
+            {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+          </p>
+          {/* AI analysis indicator */}
+          {note.aiAnalyzedAt && (
+            <span title="AI analyzed" className="text-[10px] flex items-center gap-0.5" style={{ color: '#a5b4fc' }}>
+              <Brain className="h-2.5 w-2.5" /> AI
+            </span>
+          )}
+          {/* Published indicator */}
+          {note.publishedSlug && (
+            <a
+              href={`/notes/view/${note.publishedSlug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View published page"
+              className="text-[10px] flex items-center gap-0.5 hover:underline"
+              style={{ color: '#10b981' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="h-2.5 w-2.5" /> Published
+            </a>
+          )}
+        </div>
 
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {/* Quiz */}
@@ -191,11 +196,19 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
                 : <Layers className="h-3.5 w-3.5" />}
           </button>
 
-          {/* Download */}
-          <button onClick={downloadMd} title="Download as Markdown"
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-sky-400 hover:bg-sky-500/10 transition-colors">
-            <Download className="h-3.5 w-3.5" />
-          </button>
+          {/* View published page or publish shortcut */}
+          {note.publishedSlug ? (
+            <a
+              href={`/notes/view/${note.publishedSlug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View published page"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
 
           {/* Edit */}
           <button onClick={() => onEdit?.(note)}

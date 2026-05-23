@@ -8,8 +8,12 @@ import { awardXP, updateStreak, XP } from '@/lib/gamification'
 const createNoteSchema = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1),
+  contentFormat: z.enum(['html', 'markdown']).default('html'),
   tags: z.array(z.string()).optional(),
-  subject: z.string().optional(),
+  subject: z.string().max(100).optional(),
+  hasMath: z.boolean().optional(),
+  hasCode: z.boolean().optional(),
+  hasImages: z.boolean().optional(),
 })
 
 // GET /api/notes
@@ -39,12 +43,20 @@ export async function GET(request: NextRequest) {
           id: true,
           title: true,
           content: true,
+          contentFormat: true,
           tags: true,
           subject: true,
           isBookmarked: true,
           hasMath: true,
           hasCode: true,
           hasImages: true,
+          mindMap: true,
+          reasoningHints: true,
+          knowledgePoints: true,
+          tutorSummary: true,
+          aiAnalyzedAt: true,
+          publishedSlug: true,
+          publishedAt: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -66,15 +78,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validated = createNoteSchema.parse(body)
 
-    const hasMath = /\$.*\$|\\[.*\\]|\\\(.*\\\)/.test(validated.content)
-    const hasCode = /```|`/.test(validated.content)
-    const hasImages = /!\[.*\]\(.*\)|<img/.test(validated.content)
+    // Detect content features — prefer client-supplied values (more accurate for HTML)
+    const hasMath = validated.hasMath ?? /\$.*?\$|\\[.*?\\]|\\\(.*?\\\)/.test(validated.content)
+    const hasCode = validated.hasCode ?? (/<code|<pre|```/.test(validated.content))
+    const hasImages = validated.hasImages ?? /<img/.test(validated.content)
 
     const note = await db.note.create({
       data: {
         userId,
         title: validated.title,
         content: validated.content,
+        contentFormat: validated.contentFormat ?? 'html',
         tags: validated.tags || [],
         subject: validated.subject,
         hasMath,

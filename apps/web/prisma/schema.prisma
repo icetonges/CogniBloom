@@ -140,7 +140,8 @@ model Note {
   user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title                 String
-  content               String      @db.Text
+  content               String      @db.Text   // rich HTML (TipTap output)
+  contentFormat         String      @default("html")  // "html" | "markdown" (legacy)
 
   hasMath              Boolean     @default(false)
   hasCode              Boolean     @default(false)
@@ -151,6 +152,18 @@ model Note {
 
   isPublic             Boolean     @default(false)
   isBookmarked         Boolean     @default(false)
+
+  // AI Expert Tutor analysis (generated async after save)
+  mindMap              String?     @db.Text   // JSON: { label, children[] } tree
+  reasoningHints       String?     @db.Text   // JSON: { step, hint }[]
+  knowledgePoints      String?     @db.Text   // JSON: { term, definition, importance }[]
+  tutorSummary         String?     @db.Text   // HTML: teacher's expert notes
+  aiAnalyzedAt         DateTime?              // when analysis last ran
+
+  // Published web page
+  publishedHtml        String?     @db.Text   // self-contained HTML page
+  publishedSlug        String?     @unique    // e.g. "20260522_AMC_Math_001"
+  publishedAt          DateTime?
 
   // pgvector embedding (768 dims — Google text-embedding-004)
   embedding            Unsupported("vector(768)")?
@@ -164,6 +177,7 @@ model Note {
 
   @@index([userId])
   @@index([createdAt])
+  @@index([publishedSlug])
 }
 
 model NoteReview {

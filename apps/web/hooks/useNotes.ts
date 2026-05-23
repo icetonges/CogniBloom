@@ -2,16 +2,42 @@
 
 import { useCallback, useState } from 'react'
 
+export interface NoteKnowledgePoint {
+  term: string
+  definition: string
+  importance: 'core' | 'supporting' | 'context'
+}
+
+export interface NoteReasoningHint {
+  step: number
+  hint: string
+}
+
+export interface NoteMindMapNode {
+  label: string
+  children?: NoteMindMapNode[]
+}
+
 export interface Note {
   id: string
   title: string
   content: string
+  contentFormat?: string
   tags: string[]
   subject?: string
   isBookmarked: boolean
   hasMath: boolean
   hasCode: boolean
   hasImages: boolean
+  // AI analysis
+  mindMap?: string | null        // JSON string
+  reasoningHints?: string | null // JSON string
+  knowledgePoints?: string | null // JSON string
+  tutorSummary?: string | null
+  aiAnalyzedAt?: string | null
+  // Published page
+  publishedSlug?: string | null
+  publishedAt?: string | null
   createdAt: string
   updatedAt: string
 }
