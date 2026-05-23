@@ -14,7 +14,7 @@ import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 
 const navItems = [
   { href: '/dashboard/notes/new',       icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
-  { href: '/dashboard',                 icon: BarChart3,     label: 'Dashboard',        color: 'text-blue-400'   },
+  { href: '/dashboard/overview',         icon: BarChart3,     label: 'Dashboard',        color: 'text-blue-400'   },
   { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',          color: 'text-violet-400' },
   { href: '/dashboard/flashcards',      icon: Layers,        label: 'Flashcards',        color: 'text-rose-400',   badge: 'flashcards-due' },
   { href: '/dashboard/quiz',            icon: Trophy,        label: 'Quiz',              color: 'text-amber-400'  },
