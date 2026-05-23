@@ -69,7 +69,8 @@ export function DocumentImport({ onImport, compact = false }: DocumentImportProp
           const form = new FormData()
           form.append('image', file)
           const res = await fetch('/api/notes/upload-image', { method: 'POST', body: form })
-          const json = await res.json() as { url?: string; error?: string }
+          let json: { url?: string; error?: string } = {}
+          try { json = await res.json() as typeof json } catch { /* non-JSON response */ }
           if (!json.url) throw new Error(json.error ?? 'Upload failed')
           const alt = file.name.replace(/\.[^.]+$/, '')
           updateDoc(id, { status: 'done', html: `<img src="${json.url}" alt="${alt}" />`, suggestedTitle: alt })
@@ -88,7 +89,13 @@ export function DocumentImport({ onImport, compact = false }: DocumentImportProp
           const form = new FormData()
           form.append('file', file)
           const res = await fetch('/api/notes/import-document', { method: 'POST', body: form })
-          const json = await res.json() as { success?: boolean; html?: string; title?: string; error?: string }
+          // Guard: server may return HTML on a crash — parse JSON safely
+          let json: { success?: boolean; html?: string; title?: string; error?: string } = {}
+          try {
+            json = await res.json() as typeof json
+          } catch {
+            throw new Error(`Server error (HTTP ${res.status}) — please try again`)
+          }
           if (!res.ok || !json.html) throw new Error(json.error ?? 'Processing failed')
           updateDoc(id, { status: 'done', html: json.html, suggestedTitle: json.title })
         }
