@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Brain, GitBranch, Lightbulb, BookOpen, Loader2, Sparkles, ExternalLink, Compass } from 'lucide-react'
+import { Brain, GitBranch, Lightbulb, BookOpen, Loader2, Sparkles, ExternalLink, Compass, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { NoteMindMapNode, NoteReasoningHint, NoteKnowledgePoint } from '@/hooks/useNotes'
+import { MODELS, DEFAULT_MODEL_ID } from '@/lib/ai/models'
+
+const ANALYZE_MODELS = MODELS.filter((m) => ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'llama-3.3-70b-versatile', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'gemini-2.5-pro'].includes(m.id))
 
 interface NoteAnalysisProps {
   noteId: string
@@ -329,6 +332,8 @@ export function NoteAnalysis({
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID)
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(
     publishedSlug ? `/notes/view/${publishedSlug}` : null
   )
@@ -344,7 +349,11 @@ export function NoteAnalysis({
     setIsAnalyzing(true)
     setError(null)
     try {
-      const res = await fetch(`/api/notes/${noteId}/analyze`, { method: 'POST' })
+      const res = await fetch(`/api/notes/${noteId}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selectedModel }),
+      })
       const json = await res.json() as {
         success: boolean
         error?: string
@@ -442,15 +451,65 @@ export function NoteAnalysis({
               {isPublishing ? 'Publishing…' : 'Publish Page'}
             </button>
           )}
-          <button
-            onClick={runAnalysis}
-            disabled={isAnalyzing}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-            style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.25)' }}
-          >
-            {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            {isAnalyzing ? 'Analyzing…' : hasAnalysis ? 'Re-analyze' : 'Analyze Note'}
-          </button>
+          {/* Model picker + Analyze button grouped */}
+          <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid rgba(99,102,241,0.25)' }}>
+            {/* Model selector trigger */}
+            <div className="relative">
+              <button
+                onClick={() => setModelPickerOpen((o) => !o)}
+                disabled={isAnalyzing}
+                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1.5 transition-colors disabled:opacity-50"
+                style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', borderRight: '1px solid rgba(99,102,241,0.2)' }}
+                title="Select model for analysis"
+              >
+                <span className="max-w-[72px] truncate">{ANALYZE_MODELS.find((m) => m.id === selectedModel)?.name ?? 'Model'}</span>
+                <ChevronDown className="w-3 h-3 shrink-0" />
+              </button>
+              {modelPickerOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-2xl min-w-[200px]"
+                  style={{ background: '#0f1629', border: '1px solid rgba(99,102,241,0.3)' }}
+                >
+                  <div className="p-2 space-y-0.5">
+                    {ANALYZE_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => { setSelectedModel(m.id); setModelPickerOpen(false) }}
+                        className={cn(
+                          'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs transition-colors',
+                          selectedModel === m.id
+                            ? 'text-primary'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.05]'
+                        )}
+                        style={selectedModel === m.id ? { background: 'rgba(99,102,241,0.15)' } : {}}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">{m.name}</p>
+                          <p className="text-[10px] opacity-60">{m.providerLabel}</p>
+                        </div>
+                        {m.isFree && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,185,129,0.2)', color: '#10b981' }}>FREE</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="px-3 py-2 text-[9px] text-muted-foreground/50" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    Auto-fallback to next model if this one is unavailable
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Analyze button */}
+            <button
+              onClick={runAnalysis}
+              disabled={isAnalyzing}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 transition-colors disabled:opacity-50"
+              style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}
+            >
+              {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {isAnalyzing ? 'Analyzing…' : hasAnalysis ? 'Re-analyze' : 'Analyze Note'}
+            </button>
+          </div>
         </div>
       </div>
 

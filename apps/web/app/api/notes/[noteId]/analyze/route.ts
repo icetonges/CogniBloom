@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-import { getAIManager } from '@/lib/ai'
+import { chatWithFallback } from '@/lib/ai/fallback'
 import { z } from 'zod'
 
 type RouteParams = { params: Promise<{ noteId: string }> }
@@ -89,8 +89,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Note content too short to analyze' }, { status: 400 })
     }
 
-    // Use gemini-2.5-flash-lite: no thinking overhead, fast, great at structured output
-    const MODEL = 'gemini-2.5-flash-lite'
+    // Accept an optional model override from the request body
+    let preferredModel: string | undefined
+    try {
+      const body = await _request.json() as { model?: string }
+      if (body?.model) preferredModel = body.model
+    } catch { /* no body is fine */ }
 
     const prompt = `You are an expert K-12 tutor. Analyze the student note below and return ONLY a single JSON object — no markdown, no explanation, nothing outside the JSON.
 
@@ -131,12 +135,11 @@ Rules:
 - tutorSummary: helpful teacher-voice paragraph (plain text, no HTML tags needed)
 - Return ONLY the JSON object. No other text.`
 
-    const aiManager = getAIManager()
-    const response = await aiManager.chat(MODEL, {
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.2,
-      maxTokens: 2000,
-    })
+    const response = await chatWithFallback(
+      { messages: [{ role: 'user', content: prompt }], temperature: 0.2, maxTokens: 2000 },
+      preferredModel
+    )
+    console.info(`[analyze] responded via ${response.usedModel}${response.failedModels.length ? ` (skipped: ${response.failedModels.join(', ')})` : ''}`)
 
     const raw = extractJSON(response.content)
 

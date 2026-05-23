@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-import { getAIManager } from '@/lib/ai'
+import { chatWithFallback } from '@/lib/ai/fallback'
 
 // GET /api/flashcards?due=true — list cards (optionally only those due for review)
 export async function GET(request: NextRequest) {
@@ -82,7 +82,6 @@ export async function POST(request: NextRequest) {
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
 
     const count = Math.min(body.count ?? 8, 20)
-    const aiManager = getAIManager()
 
     const prompt = `You are a flashcard generator for a K-12 student. Given the following study note, generate exactly ${count} high-quality flashcards.
 
@@ -97,11 +96,9 @@ Return ONLY a JSON array (no markdown, no explanation) with exactly ${count} obj
 
 Focus on key concepts, definitions, formulas, dates, and important facts. Make the front and back complementary — not copies of each other.`
 
-    const response = await aiManager.chat('gemini-2.5-flash', {
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.4,
-      maxTokens: 2048,
-    })
+    const response = await chatWithFallback(
+      { messages: [{ role: 'user', content: prompt }], temperature: 0.4, maxTokens: 2048 }
+    )
 
     let cards: { front: string; back: string }[] = []
     try {

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-import { getAIManager } from '@/lib/ai'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
+import { streamWithFallback } from '@/lib/ai/fallback'
 
 export const maxDuration = 60
 
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Note not found' }, { status: 404 })
     }
 
-    const body = await request.json() as { message: string; history?: Array<{ role: string; content: string }> }
+    const body = await request.json() as { message: string; history?: Array<{ role: string; content: string }>; model?: string }
     if (!body.message?.trim()) {
       return NextResponse.json({ error: 'Message required' }, { status: 400 })
     }
@@ -75,18 +74,16 @@ Keep answers focused on the note content. If asked something outside the note's 
       { role: 'user', content: body.message },
     ]
 
-    const aiManager = getAIManager()
     const encoder = new TextEncoder()
     const chunks: string[] = []
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of aiManager.stream(DEFAULT_MODEL_ID, {
-            messages,
-            temperature: 0.6,
-            maxTokens: 1500,
-          })) {
+          for await (const chunk of streamWithFallback(
+            { messages, temperature: 0.6, maxTokens: 1500 },
+            body.model
+          )) {
             if (chunk.content) {
               chunks.push(chunk.content)
               controller.enqueue(

@@ -15,8 +15,13 @@ import {
   Target,
   Compass,
   MessageSquare,
+  ChevronUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MODELS, DEFAULT_MODEL_ID } from '@/lib/ai/models'
+
+// Models available in the note chat picker (free/fast first)
+const CHAT_MODELS = MODELS.filter((m) => ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6'].includes(m.id))
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -190,9 +195,23 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPresets, setShowPresets] = useState(true)
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID)
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const modelPickerRef = useRef<HTMLDivElement>(null)
+
+  // Close model picker on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setModelPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -226,7 +245,7 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
       const res = await fetch(`/api/notes/${noteId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, history }),
+        body: JSON.stringify({ message: trimmed, history, model: selectedModel }),
         signal: controller.signal,
       })
 
@@ -290,7 +309,7 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
         prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
       )
     }
-  }, [isLoading, messages, noteId])
+  }, [isLoading, messages, noteId, selectedModel])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -322,34 +341,89 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
     >
       {/* ── Header ── */}
       <div
-        className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+        className="flex items-center justify-between px-4 py-3 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(99,102,241,0.12)', background: 'rgba(99,102,241,0.06)' }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center"
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
             style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 12px rgba(99,102,241,0.4)' }}
           >
             <Bot className="w-4 h-4 text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-bold leading-none">AI Note Assistant</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 leading-none truncate max-w-[160px]">
+            <p className="text-[10px] text-muted-foreground mt-0.5 leading-none truncate max-w-[120px]">
               {noteTitle}
             </p>
           </div>
         </div>
-        {!isEmpty && (
-          <button
-            onClick={clearChat}
-            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-            style={{ border: '1px solid rgba(99,102,241,0.2)' }}
-            title="Clear chat"
-          >
-            <RotateCcw className="w-3 h-3" />
-            Reset
-          </button>
-        )}
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Model picker */}
+          <div ref={modelPickerRef} className="relative">
+            <button
+              onClick={() => setModelPickerOpen((o) => !o)}
+              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1.5 rounded-lg transition-colors"
+              style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc' }}
+              title="Select AI model"
+            >
+              <span className="max-w-[80px] truncate">
+                {CHAT_MODELS.find((m) => m.id === selectedModel)?.name ?? 'Model'}
+              </span>
+              {modelPickerOpen
+                ? <ChevronUp className="w-3 h-3" />
+                : <ChevronDown className="w-3 h-3" />
+              }
+            </button>
+            {modelPickerOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-2xl min-w-[200px]"
+                style={{ background: '#0f1629', border: '1px solid rgba(99,102,241,0.3)' }}
+              >
+                <div className="p-2 space-y-0.5">
+                  {CHAT_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setModelPickerOpen(false) }}
+                      className={cn(
+                        'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs transition-colors',
+                        selectedModel === m.id
+                          ? 'text-primary'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.05]'
+                      )}
+                      style={selectedModel === m.id ? { background: 'rgba(99,102,241,0.15)' } : {}}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate">{m.name}</p>
+                        <p className="text-[10px] opacity-60 truncate">{m.providerLabel} · {m.contextWindow}</p>
+                      </div>
+                      {m.isFree && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,185,129,0.2)', color: '#10b981' }}>
+                          FREE
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="px-3 py-2 text-[9px] text-muted-foreground/50" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  Auto-fallback: if primary fails, next model is tried
+                </div>
+              </div>
+            )}
+          </div>
+
+          {!isEmpty && (
+            <button
+              onClick={clearChat}
+              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+              style={{ border: '1px solid rgba(99,102,241,0.2)' }}
+              title="Clear chat"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Messages area ── */}

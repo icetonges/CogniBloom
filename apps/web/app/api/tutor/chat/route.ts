@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-import { getAIManager } from '@/lib/ai'
+import { streamWithFallback } from '@/lib/ai/fallback'
 import { getRagContext } from '@/lib/ai/rag'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 import { awardXP, XP } from '@/lib/gamification'
@@ -76,18 +76,6 @@ export async function POST(request: NextRequest) {
       ...body.messages.filter((m) => m.role !== 'system'),
     ]
 
-    const aiManager = getAIManager()
-
-    // Validate the provider key EXISTS before opening the stream.
-    // If the env var is missing this throws synchronously and we can return
-    // a clean 400 instead of a 500 with no body.
-    try {
-      aiManager.validateProvider(model)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'API key not configured'
-      return NextResponse.json({ error: msg }, { status: 400 })
-    }
-
     const encoder = new TextEncoder()
     let totalInputTokens = 0
     let totalOutputTokens = 0
@@ -97,7 +85,10 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of aiManager.stream(model, { messages, temperature, maxTokens, useGrounding: useGoogleGrounding })) {
+          for await (const chunk of streamWithFallback(
+            { messages, temperature, maxTokens, useGrounding: useGoogleGrounding },
+            model
+          )) {
             if (chunk.tokensUsed) {
               totalInputTokens = chunk.tokensUsed.input
               totalOutputTokens = chunk.tokensUsed.output

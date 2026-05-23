@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getAIManager } from '@/lib/ai'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
+import { chatWithFallback } from '@/lib/ai/fallback'
 
 const generateSchema = z.object({
   topic: z.string().min(1).max(200),
@@ -24,9 +23,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { topic, subject, difficulty, count, model } = generateSchema.parse(body)
-
-    const aiManager = getAIManager()
-    const modelId = model || DEFAULT_MODEL_ID
 
     const prompt = `Generate a ${difficulty} difficulty quiz about "${topic}"${subject ? ` (subject: ${subject})` : ''} for a K-12 student.
 
@@ -55,11 +51,10 @@ Rules:
 - Vary question types (definitions, application, reasoning)
 - Return ONLY the JSON, no markdown, no extra text`
 
-    const response = await aiManager.chat(modelId, {
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      maxTokens: 2000,
-    })
+    const response = await chatWithFallback(
+      { messages: [{ role: 'user', content: prompt }], temperature: 0.7, maxTokens: 2000 },
+      model // user-selected model goes first in the chain
+    )
 
     // Strip markdown code fences if present
     const raw = response.content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()

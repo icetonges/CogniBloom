@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
-import { getAIManager } from '@/lib/ai'
 import { db } from '@/lib/db'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
+import { chatWithFallback } from '@/lib/ai/fallback'
 
 export const maxDuration = 60
 
@@ -67,12 +66,10 @@ export async function GET(request: NextRequest) {
     )
     const selected = shuffle(weightedTopics).slice(0, 6)
 
-    // Generate fresh feed via AI
-    const aiManager = getAIManager()
-
+    // Generate fresh feed via AI (with fallback across providers)
     const items = await Promise.allSettled(
       selected.map(async (topic) => {
-        const res = await aiManager.chat(DEFAULT_MODEL_ID, {
+        const res = await chatWithFallback({
           messages: [
             {
               role: 'user',
@@ -89,7 +86,6 @@ Return ONLY valid JSON:
           ],
           temperature: 0.85,
           maxTokens: 400,
-          responseMimeType: 'application/json',
         })
 
         const raw = res.content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()

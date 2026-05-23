@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-import { getAIManager } from '@/lib/ai'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
+import { chatWithFallback } from '@/lib/ai/fallback'
 
 export const maxDuration = 60
 
@@ -20,7 +19,6 @@ export async function POST(
       return NextResponse.json({ error: 'Note not found' }, { status: 404 })
     }
 
-    const aiManager = getAIManager()
     const prompt = `You are an expert educational reviewer. Analyse this student's note and return a concise JSON review.
 
 Note title: ${note.title}
@@ -44,12 +42,9 @@ Rules:
 - recommendations: 1–3 actionable suggestions
 - Return ONLY JSON, no markdown fences`
 
-    const res = await aiManager.chat(DEFAULT_MODEL_ID, {
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      maxTokens: 600,
-      responseMimeType: 'application/json',
-    })
+    const res = await chatWithFallback(
+      { messages: [{ role: 'user', content: prompt }], temperature: 0.3, maxTokens: 600 }
+    )
 
     const raw = res.content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
     const parsed = JSON.parse(raw) as {
