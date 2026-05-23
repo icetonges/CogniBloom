@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 120
 
 const MAX_SIZE = 25 * 1024 * 1024 // 25 MB
 
@@ -26,8 +26,29 @@ function textToHtml(text: string): string {
 }
 
 /**
- * Use Gemini 2.5 Flash vision to extract structured HTML from a PDF or image.
- * Preserves text, math, tables, AND geometric figures/diagrams as inline SVG.
+ * Convert inline <svg> elements to base64 data-URI <img> tags.
+ * TipTap's Image extension accepts <img allowBase64> but NOT raw <svg> nodes —
+ * raw SVGs are stripped by TipTap's schema on insertion.
+ */
+function convertSvgToImg(html: string): string {
+  return html.replace(/<svg\b[\s\S]*?<\/svg>/gi, (svg) => {
+    // Ensure the SVG carries its namespace so browsers render it correctly
+    const withNs = svg.includes('xmlns=')
+      ? svg
+      : svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"')
+    const b64 = Buffer.from(withNs).toString('base64')
+    return `<img src="data:image/svg+xml;base64,${b64}" alt="figure" style="max-width:100%;display:block;margin:8px auto;" />`
+  })
+}
+
+/**
+ * Use Gemini 2.0 Flash vision to extract structured, science-compliant HTML.
+ *
+ * Output format is designed for TipTap compatibility:
+ *   • Math (block)  → <div data-math-block data-latex="LaTeX">  (rendered by KaTeX)
+ *   • Math (inline) → <span data-math-inline data-latex="LaTeX"> (rendered by KaTeX)
+ *   • Figures/diagrams → <svg> (post-processed → base64 <img> by convertSvgToImg)
+ *   • Chemistry, physics, geometry all use the above conventions
  */
 async function extractViaGemini(
   buffer: Buffer,
@@ -38,28 +59,46 @@ async function extractViaGemini(
   if (!apiKey) throw new Error('No Google API key configured for vision extraction.')
 
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-  const prompt = `You are a document extraction assistant. Extract ALL content from this document — text AND visual elements — and return it as complete, clean HTML.
+  const prompt = `You are a science-aware document extraction assistant. Extract ALL content from this document and return it as HTML that is compatible with a TipTap rich-text editor.
 
-TEXT RULES:
-- Preserve headings as <h1>, <h2>, <h3>
-- Preserve paragraphs as <p>
-- Preserve lists as <ul>/<ol> with <li> items
-- Preserve tables as <table><tr><th>/<td> structure
-- For math/formulas: write as plain text (e.g. x^2 + y^2 = r^2)
-- For numbered problems/questions: use <ol><li> preserving ALL question numbers and answer choices
+═══ TEXT STRUCTURE ═══
+- Headings → <h1>, <h2>, <h3>
+- Paragraphs → <p>
+- Lists → <ul>/<ol> with <li>
+- Tables → <table><tr><th>/<td>
+- Numbered exam questions → <ol><li> preserving ALL question numbers, sub-parts, and answer choices
 
-VISUAL ELEMENTS — critical, never skip figures or diagrams:
-- For geometric figures, shapes, or diagrams: generate an accurate inline <svg viewBox="0 0 W H"> that faithfully reproduces the visual. Use black fill/stroke for B&W figures, match the original proportions.
-- For charts or graphs: generate an <svg> approximation; if too complex, use <figure><figcaption>[detailed description including all data, labels, axes]</figcaption></figure>
-- For photos or complex images that cannot be represented as SVG: include <figure class="imported-figure"><figcaption>[detailed visual description]</figcaption></figure>
-- Place each figure inline exactly where it appears in the document — NEVER omit it
+═══ MATH & FORMULAS (critical — use EXACTLY these tags) ═══
+- Block equations (standalone line) → <div data-math-block data-latex="LATEX_HERE"></div>
+  Example: <div data-math-block data-latex="x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}"></div>
+- Inline math (within a sentence) → <span data-math-inline data-latex="LATEX_HERE"></span>
+  Example: The area is <span data-math-inline data-latex="A = \\pi r^2"></span> square units.
+- Use standard LaTeX notation inside the data-latex attribute
+- Chemistry formulas: use subscripts/superscripts in LaTeX — e.g. data-latex="H_2O", "CO_2", "Fe^{2+}"
+- Physics equations: E=mc^2 → data-latex="E = mc^2", F=ma → data-latex="F = ma"
+- DO NOT write raw formulas as plain text — always use the data-math tags above
 
-OUTPUT:
-- Do NOT wrap output in <html>/<body>/<!DOCTYPE> tags
+═══ FIGURES & DIAGRAMS (critical — never skip) ═══
+- Geometric figures, shapes, coordinate grids → generate an accurate <svg viewBox="0 0 200 200"> using <rect>, <circle>, <polygon>, <path>, <line>, <text>. Match the original proportions and shading (black fill for shaded regions, white/none for unshaded).
+- Chemistry: Lewis structures, molecular diagrams, reaction arrows → <svg> with bonds as <line> elements
+- Physics: circuit diagrams, free-body diagrams, wave diagrams → <svg>
+- Graphs/charts with data → <svg> with axes, data points, labels
+- If a figure is too complex to represent as SVG, use: <figure><figcaption>[Detailed description of the figure, including all measurements, labels, and visual relationships]</figcaption></figure>
+- Place every figure INLINE at the exact position it appears — NEVER omit it
+
+═══ SCIENCE-SPECIFIC RULES ═══
+- Chemical equations: reactants and products with proper arrow → use LaTeX: data-latex="H_2 + O_2 \\rightarrow H_2O"
+- Subscripts in chemical names (non-LaTeX context): use <sub> and <sup> tags → H<sub>2</sub>O
+- Units: keep units with their values — m/s, kg·m/s², °C, etc.
+- Greek letters in text (non-formula): use Unicode — α β γ δ θ π Σ Δ λ μ ω
+- Significant figures, measurements: preserve exactly as shown
+
+═══ OUTPUT ═══
+- Do NOT wrap in <html>/<body>/<!DOCTYPE> tags
 - Do NOT add any explanation — output ONLY the HTML
-- If this is a test/exam, every question number, figure, and answer choice must appear
+- If this is an exam/problem set: every question number, figure, formula, and answer choice must appear
 
 Document filename: ${fileName}`
 
@@ -69,10 +108,13 @@ Document filename: ${fileName}`
   ])
 
   const raw = result.response.text().trim()
-  const html = raw
+  let html = raw
     .replace(/^```(?:html)?\s*/im, '')
     .replace(/```\s*$/im, '')
     .trim()
+
+  // Convert any <svg> blocks to base64 <img> so TipTap's Image extension accepts them
+  html = convertSvgToImg(html)
 
   const titleMatch = html.match(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/i)
   const title = titleMatch
@@ -89,8 +131,8 @@ Document filename: ${fileName}`
  * Returns: { success: true, html: string, title?: string }
  *
  * PDF pipeline:
- *   Primary  → Gemini vision (preserves text + figures as SVG)
- *   Fallback → pdf-parse plain-text (if Gemini unavailable/fails)
+ *   Primary  → Gemini vision (text + figures as SVG→img + math as KaTeX data-attrs)
+ *   Fallback → pdf-parse plain text (if Gemini unavailable/fails)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -129,7 +171,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, html, title: title ?? rawTitle })
       } catch (err) {
         console.error('Image vision extraction error:', err)
-        // Graceful fallback: embed as base64 image
+        // Fallback: embed as base64 image
         const base64 = buffer.toString('base64')
         const html = `<img src="data:${file.type};base64,${base64}" alt="${escapeHtml(rawTitle)}" />`
         return NextResponse.json({ success: true, html, title: rawTitle })
@@ -138,14 +180,14 @@ export async function POST(request: NextRequest) {
 
     // ---- PDF ----------------------------------------------------------------
     if (lowerName.endsWith('.pdf') || file.type === 'application/pdf') {
-      // Primary: Gemini vision — handles text AND preserves figures/diagrams as SVG
+      // Primary: Gemini vision — text + figures + math, all TipTap-compatible
       try {
         const { html, title } = await extractViaGemini(buffer, 'application/pdf', name)
         return NextResponse.json({ success: true, html, title: title ?? rawTitle })
       } catch (geminiErr) {
         console.error('Gemini PDF vision error:', geminiErr)
 
-        // Fallback: pdf-parse plain text (loses figures, but better than nothing)
+        // Fallback: pdf-parse plain text (loses figures, better than nothing)
         try {
           const { default: pdfParse } = await import('pdf-parse')
           const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>)(buffer)
@@ -154,7 +196,7 @@ export async function POST(request: NextRequest) {
             const html = textToHtml(data.text)
             return NextResponse.json({
               success: true,
-              html: `<p style="color:#f59e0b;font-size:0.8em">⚠ Visual figures could not be extracted (AI vision unavailable). Text only.</p>${html}`,
+              html: `<p style="color:#f59e0b;font-size:0.8em">⚠ Figures and formulas could not be extracted (AI vision unavailable). Text only.</p>${html}`,
               title: rawTitle,
             })
           }
@@ -178,7 +220,7 @@ export async function POST(request: NextRequest) {
       try {
         const mammoth = await import('mammoth')
         const result = await mammoth.convertToHtml({ buffer })
-        const html = result.value || '<p>(empty document)</p>'
+        const html = convertSvgToImg(result.value || '<p>(empty document)</p>')
         return NextResponse.json({ success: true, html, title: rawTitle })
       } catch (err) {
         console.error('DOCX parse error:', err)
