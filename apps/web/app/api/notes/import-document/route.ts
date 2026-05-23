@@ -61,10 +61,8 @@ export async function POST(request: NextRequest) {
     // ── PDF ──────────────────────────────────────────────────────────────────
     if (lowerName.endsWith('.pdf') || file.type === 'application/pdf') {
       try {
-        // pdf-parse has a quirky default export
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string; numpages: number }>
-        const data = await pdfParse(buffer)
+        const { default: pdfParse } = await import('pdf-parse')
+        const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>)(buffer)
         const html = textToHtml(data.text)
         return NextResponse.json({ success: true, html, title: rawTitle, pages: data.numpages })
       } catch (err) {
