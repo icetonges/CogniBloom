@@ -54,7 +54,7 @@ function extractJSON(text: string): string {
   if (!text || !text.trim()) return ''
 
   // 1. Strip markdown fences
-  let s = text
+  const s = text
     .replace(/^```json\s*/im, '')
     .replace(/^```\s*/im, '')
     .replace(/```\s*$/im, '')
