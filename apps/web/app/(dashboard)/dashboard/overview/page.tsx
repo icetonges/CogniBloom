@@ -67,7 +67,7 @@ function StatCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function DashboardPage() {
+export default async function DashboardOverviewPage() {
   const userId = DANIEL_USER_ID
 
   const [noteCount, sessionCount, recentNotes, learningProfile, flashcardsDue] = await Promise.all([
@@ -447,4 +447,23 @@ export default async function DashboardPage() {
                     </p>
                     {note.subject && (
                       <span
-                        className="te
+                        className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-lg"
+                        style={{ background: `${from}25`, color: from }}
+                      >
+                        {note.subject}
+                      </span>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-3 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
