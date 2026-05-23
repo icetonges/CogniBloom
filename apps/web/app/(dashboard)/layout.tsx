@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
-  Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, House,
+  Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -125,7 +125,7 @@ function Sidebar({
           onClick={onClose}
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 dark:hover:bg-white/[0.04] transition-colors group"
         >
-          <House className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+          <Home className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
           <span>Back to Home</span>
         </Link>
 
