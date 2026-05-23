@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Global: disable browser scroll-anchoring so AI-generated content
+      never causes the page or any panel to jump ──────────────────────── */
+* {
+  overflow-anchor: none;
+}
+
+/* Scrollable panels scroll within themselves, never propagate to page */
+.overflow-y-auto,
+.overflow-y-scroll {
+  overscroll-behavior: contain;
+}
+
 /* ── TipTap Editor Styles ─────────────────────────────────────────────────── */
 .tiptap {
   min-height: 400px;

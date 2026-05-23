@@ -197,6 +197,7 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const modelPickerRef = useRef<HTMLDivElement>(null)
@@ -212,9 +213,15 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Auto-scroll to bottom on new messages
+  // Scroll WITHIN the chat panel only — never scroll the page
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = messagesContainerRef.current
+    if (!container) return
+    // Only auto-scroll if user is already near the bottom (within 120px)
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120
+    if (nearBottom) {
+      container.scrollTop = container.scrollHeight
+    }
   }, [messages])
 
   const sendMessage = useCallback(async (text: string) => {
@@ -426,7 +433,7 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
       </div>
 
       {/* ── Messages area ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scroll-smooth">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {/* Welcome state */}
         {isEmpty && (
           <div className="flex flex-col items-center text-center py-4 gap-2">
