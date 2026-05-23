@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createRequire } from 'module'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
 
-// pdf-parse / pdfjs-dist references DOMMatrix (browser-only). Polyfill before any dynamic import.
-if (typeof (globalThis as Record<string, unknown>)['DOMMatrix'] === 'undefined') {
-  const g = globalThis as Record<string, unknown>
-  class _DOMMatrix { constructor(_init?: string | number[]) {} }
-  g['DOMMatrix'] = _DOMMatrix
-}
+// Load pdf-parse via createRequire — avoids the CJS/ESM double-wrap that causes
+// "b is not a function" in minified production builds when using dynamic import().
+const _require = createRequire(import.meta.url)
+type PdfParseFallbackFn = (buf: Buffer) => Promise<{ text: string; numpages: number }>
+const _pdfParse = _require('pdf-parse') as PdfParseFallbackFn
 
 const MAX_SIZE = 25 * 1024 * 1024 // 25 MB
 
@@ -199,8 +199,7 @@ export async function POST(request: NextRequest) {
 
         // Fallback: pdf-parse plain text (loses figures, better than nothing)
         try {
-          const { default: pdfParse } = await import('pdf-parse')
-          const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>)(buffer)
+          const data = await _pdfParse(buffer)
           const cleaned = data.text.replace(/\s+/g, ' ').trim()
           if (cleaned.length >= 50) {
             const html = textToHtml(data.text)

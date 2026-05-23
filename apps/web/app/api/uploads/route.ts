@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse, after } from 'next/server'
+import { createRequire } from 'module'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
 import { chunkText } from '@/lib/content'
 
-// pdfjs-dist (used by pdf-parse) references DOMMatrix which is browser-only.
-// Polyfill it so the server-side PDF text extraction doesn't crash.
-if (typeof (globalThis as Record<string, unknown>)['DOMMatrix'] === 'undefined') {
-  const g = globalThis as Record<string, unknown>
-  class _DOMMatrix { constructor(_init?: string | number[]) {} }
-  g['DOMMatrix'] = _DOMMatrix
-}
+// Load pdf-parse via createRequire so the CJS module is resolved correctly in
+// both dev (ESM interop) and production (Next.js bundler). Dynamic import() of
+// CJS modules wraps the export differently per environment, causing the
+// "b is not a function" TypeError in minified builds.
+const _require = createRequire(import.meta.url)
+type PdfParseFn = (buf: Buffer) => Promise<{ text: string }>
+const pdfParse = _require('pdf-parse') as PdfParseFn
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
@@ -38,9 +39,6 @@ export async function POST(request: NextRequest) {
     let extractedText = ''
 
     if (file.type === 'application/pdf') {
-      type PdfParseFn = (buf: Buffer) => Promise<{ text: string }>
-      const pdfMod = await import('pdf-parse')
-      const pdfParse = ((pdfMod as unknown as { default?: PdfParseFn }).default ?? pdfMod) as PdfParseFn
       const parsed = await pdfParse(buffer)
       extractedText = parsed.text
     } else {
