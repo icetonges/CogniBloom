@@ -123,9 +123,9 @@ function NavQuote() {
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-bold truncate" style={{ color: '#c4b5fd' }}>{q.zh}</p>
-        <p className="text-[10px] truncate" style={{ color: '#64748b', fontStyle: 'italic' }}>&ldquo;{q.en}&rdquo;</p>
+        <p className="text-xs font-semibold truncate" style={{ color: '#f1f5f9' }}>&ldquo;{q.en}&rdquo;</p>
       </div>
-      <span className="text-[9px] flex-shrink-0 hidden lg:block" style={{ color: '#475569', fontWeight: 600 }}>
+      <span className="text-[10px] flex-shrink-0 hidden lg:block" style={{ color: '#64748b', fontWeight: 600 }}>
         &mdash; {q.source}
       </span>
     </div>
@@ -445,7 +445,7 @@ export default async function LandingPage() {
         className="relative z-10 flex items-center"
         style={{ minHeight: 'calc(100vh - 78px)' }}
       >
-        <div className="w-full px-6 sm:px-12 xl:px-20 py-10">
+        <div className="w-full px-6 sm:px-12 xl:px-20 pt-5 pb-0">
           <div className="grid lg:grid-cols-2 gap-10 xl:gap-16 items-center">
 
             {/* ── Left: text content ── */}
