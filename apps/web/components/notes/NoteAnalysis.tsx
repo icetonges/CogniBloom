@@ -426,57 +426,63 @@ export function NoteAnalysis({
 
   return (
     <div
-      className="rounded-2xl overflow-hidden"
+      className="rounded-2xl"
       style={{ background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.18)' }}
     >
-      {/* Header */}
+      {/* Header — row 1: title + publish */}
       <div
-        className="flex items-center justify-between px-5 py-3"
-        style={{ borderBottom: '1px solid rgba(99,102,241,0.12)', background: 'rgba(99,102,241,0.06)' }}
+        className="flex items-center justify-between px-4 py-2.5"
+        style={{ borderBottom: '1px solid rgba(99,102,241,0.08)', background: 'rgba(99,102,241,0.06)' }}
       >
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <span className="font-bold text-sm">AI Expert Tutor Analysis</span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+          <span className="font-bold text-xs truncate">AI Expert Tutor</span>
           {localAnalyzedAt && (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[9px] text-muted-foreground shrink-0">
               · {new Date(localAnalyzedAt).toLocaleDateString()}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {publishedUrl ? (
-            <a
-              href={publishedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-              style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
-            >
-              <ExternalLink className="w-3 h-3" /> View Page
-            </a>
-          ) : (
+        {publishedUrl ? (
+          <a
+            href={publishedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors shrink-0"
+            style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
+          >
+            <ExternalLink className="w-2.5 h-2.5" /> View Page
+          </a>
+        ) : (
+          <button
+            onClick={publishNote}
+            disabled={isPublishing}
+            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+            style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
+          >
+            {isPublishing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <ExternalLink className="w-2.5 h-2.5" />}
+            {isPublishing ? 'Publishing…' : 'Publish'}
+          </button>
+        )}
+      </div>
+
+      {/* Header — row 2: model picker + analyze */}
+      <div
+        className="flex items-center gap-2 px-4 py-2"
+        style={{ borderBottom: '1px solid rgba(99,102,241,0.12)', background: 'rgba(99,102,241,0.04)' }}
+      >
+        {/* Model picker + Analyze button grouped */}
+        <div className="flex items-center flex-1 rounded-lg" style={{ border: '1px solid rgba(99,102,241,0.25)' }}>
+          {/* Model selector trigger */}
+          <div className="relative flex-1" ref={modelPickerRef}>
             <button
-              onClick={publishNote}
-              disabled={isPublishing}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-              style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
+              onClick={() => setModelPickerOpen((o) => !o)}
+              disabled={isAnalyzing}
+              className="w-full flex items-center gap-1 text-[10px] font-semibold px-2 py-1.5 rounded-l-lg transition-colors disabled:opacity-50"
+              style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', borderRight: '1px solid rgba(99,102,241,0.2)' }}
+              title="Select model for analysis"
             >
-              {isPublishing ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
-              {isPublishing ? 'Publishing…' : 'Publish Page'}
-            </button>
-          )}
-          {/* Model picker + Analyze button grouped */}
-          <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid rgba(99,102,241,0.25)' }}>
-            {/* Model selector trigger */}
-            <div className="relative" ref={modelPickerRef}>
-              <button
-                onClick={() => setModelPickerOpen((o) => !o)}
-                disabled={isAnalyzing}
-                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1.5 transition-colors disabled:opacity-50"
-                style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', borderRight: '1px solid rgba(99,102,241,0.2)' }}
-                title="Select model for analysis"
-              >
-                <span className="max-w-[72px] truncate">{ANALYZE_MODELS.find((m) => m.id === selectedModel)?.name ?? 'Model'}</span>
+              <span className="flex-1 truncate text-left">{ANALYZE_MODELS.find((m) => m.id === selectedModel)?.name ?? 'Model'}</span>
                 <ChevronDown
                   className="w-3 h-3 shrink-0 transition-transform duration-150"
                   style={{ transform: modelPickerOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
@@ -484,7 +490,7 @@ export function NoteAnalysis({
               </button>
               {modelPickerOpen && (
                 <div
-                  className="absolute right-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-2xl min-w-[200px]"
+                  className="absolute left-0 top-full mt-1 z-[100] rounded-xl overflow-hidden shadow-2xl min-w-[220px]"
                   style={{ background: '#0f1629', border: '1px solid rgba(99,102,241,0.3)' }}
                 >
                   <div className="p-2 space-y-0.5">
@@ -515,20 +521,19 @@ export function NoteAnalysis({
                   </div>
                 </div>
               )}
-            </div>
+            </div>{/* end relative model picker */}
             {/* Analyze button */}
             <button
               onClick={runAnalysis}
               disabled={isAnalyzing}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-r-lg transition-colors disabled:opacity-50 shrink-0"
               style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}
             >
               {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              {isAnalyzing ? 'Analyzing…' : hasAnalysis ? 'Re-analyze' : 'Analyze Note'}
+              {isAnalyzing ? 'Analyzing…' : hasAnalysis ? 'Re-analyze' : 'Analyze'}
             </button>
-          </div>
-        </div>
-      </div>
+          </div>{/* end model+analyze group */}
+      </div>{/* end header row 2 */}
 
       {error && (
         <div className="mx-5 mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200">
@@ -672,13 +677,16 @@ export function NoteAnalysis({
                   dangerouslySetInnerHTML={{ __html: localSummary }}
                 />
               ) : (
-                <p className="text-sm text-muted-foreground">No tutor summary available.</p>
+                <p className="text-sm text-muted-foreground">Run the analysis to get a tutor summary.</p>
               )
             )}
 
             {/* ── Study Plan ── */}
             {activeTab === 'study' && (
-              <StudyRecommendations concepts={parsedConcepts} hints={parsedHints} />
+              <StudyRecommendations
+                hints={parsedHints}
+                concepts={parsedConcepts}
+              />
             )}
           </div>
         </>

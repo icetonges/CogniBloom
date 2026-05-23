@@ -47,30 +47,45 @@ function htmlToText(html: string): string {
 }
 
 /**
- * Robustly extract JSON from an AI response that may contain markdown fences,
- * preamble text, or thinking tokens mixed in.
+ * Robustly extract the first complete JSON object from an AI response that may
+ * contain markdown fences, preamble, thinking tokens, or trailing text.
+ * Uses brace-depth tracking so it handles nested objects correctly.
  */
 function extractJSON(text: string): string {
   if (!text || !text.trim()) return ''
 
-  // 1. Strip markdown fences
-  const s = text
-    .replace(/^```json\s*/im, '')
-    .replace(/^```\s*/im, '')
-    .replace(/```\s*$/im, '')
-    .trim()
+  // Strip <thinking>...</thinking> blocks (some models emit these)
+  const noThinking = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+  const s = noThinking || text
 
-  // 2. If it already starts with '{', use it directly
-  if (s.startsWith('{')) return s
+  // Walk the string tracking brace depth to find the first complete {...} object
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escape = false
 
-  // 3. Try to find the first '{' ... last '}' block
-  const start = s.indexOf('{')
-  const end = s.lastIndexOf('}')
-  if (start !== -1 && end > start) {
-    return s.slice(start, end + 1)
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0 && start !== -1) {
+        return s.slice(start, i + 1)
+      }
+    }
   }
 
+  // Fallback: strip any markdown fences and return what's left
   return s
+    .replace(/^```(?:json)?\s*/im, '')
+    .replace(/```\s*$/im, '')
+    .trim()
 }
 
 // ── Route handler ──────────────────────────────────────────────────────────────
@@ -153,7 +168,20 @@ Rules:
 
     let parsed: z.infer<typeof analysisSchema>
     try {
-      parsed = analysisSchema.parse(JSON.parse(raw))
+      const jsonObj = JSON.parse(raw)
+      const result = analysisSchema.safeParse(jsonObj)
+      if (result.success) {
+        parsed = result.data
+      } else {
+        // Schema mismatch — try to coerce what we can by using partial parse
+        console.warn('[analyze] Zod schema mismatch, using partial data:', result.error.flatten())
+        parsed = analysisSchema.parse({
+          mindMap: jsonObj.mindMap ?? jsonObj.mind_map ?? { label: note.title, children: [] },
+          reasoningHints: jsonObj.reasoningHints ?? jsonObj.reasoning_hints ?? jsonObj.hints ?? [],
+          knowledgePoints: jsonObj.knowledgePoints ?? jsonObj.knowledge_points ?? jsonObj.concepts ?? [],
+          tutorSummary: jsonObj.tutorSummary ?? jsonObj.tutor_summary ?? jsonObj.summary ?? '',
+        })
+      }
     } catch (parseErr) {
       console.error('[analyze] JSON/Zod parse failed. Raw excerpt:', raw.slice(0, 300), parseErr)
       return NextResponse.json(
