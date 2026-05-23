@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 2048
     const isGemini = model.startsWith('gemini')
+    const useGoogleGrounding =
+      isGemini && process.env['GOOGLE_SEARCH_GROUNDING'] === 'true'
 
     // Get or create session
     let sessionId = body.sessionId
@@ -95,7 +97,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of aiManager.stream(model, { messages, temperature, maxTokens, useGrounding: isGemini })) {
+          for await (const chunk of aiManager.stream(model, { messages, temperature, maxTokens, useGrounding: useGoogleGrounding })) {
             if (chunk.tokensUsed) {
               totalInputTokens = chunk.tokensUsed.input
               totalOutputTokens = chunk.tokensUsed.output
@@ -150,7 +152,11 @@ export async function POST(request: NextRequest) {
           )
           controller.close()
         } catch (error) {
-          controller.error(error)
+          const message = error instanceof Error ? error.message : 'AI response failed'
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'error', error: message })}\n\n`)
+          )
+          controller.close()
         }
       },
     })

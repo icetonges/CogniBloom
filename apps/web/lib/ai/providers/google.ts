@@ -68,10 +68,23 @@ export class GoogleProvider extends AIProvider {
   }
 
   private toGeminiContents(messages: ChatRequest['messages']) {
-    return messages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.role === 'system' ? `System instructions:\n${msg.content}` : msg.content }],
-    }))
+    const systemPrompt = messages
+      .filter((msg) => msg.role === 'system')
+      .map((msg) => msg.content)
+      .join('\n\n')
+      .trim()
+    const conversation = messages.filter((msg) => msg.role !== 'system')
+
+    return conversation.map((msg, index) => {
+      const content = systemPrompt && index === 0 && msg.role === 'user'
+        ? `System instructions:\n${systemPrompt}\n\nStudent message:\n${msg.content}`
+        : msg.content
+
+      return {
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: content }],
+      }
+    })
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {

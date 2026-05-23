@@ -27,8 +27,9 @@ export interface UseChatOptions {
 }
 
 interface StreamChunkData {
-  type: 'content' | 'done'
+  type: 'content' | 'done' | 'error'
   content?: string
+  error?: string
   sessionId?: string
   ragUsed?: boolean
   tokensUsed?: { input: number; output: number; total: number }
@@ -89,7 +90,10 @@ export function useChat(options: UseChatOptions = {}) {
           signal: abortControllerRef.current.signal,
         })
 
-        if (!response.ok) throw new Error(`API error: ${response.statusText}`)
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { error?: string } | null
+          throw new Error(payload?.error ?? `API error: ${response.status} ${response.statusText}`.trim())
+        }
         if (!response.body) throw new Error('No response body')
 
         const reader = response.body.getReader()
@@ -106,6 +110,10 @@ export function useChat(options: UseChatOptions = {}) {
             for (const line of chunk.split('\n')) {
               if (!line.startsWith('data: ')) continue
               const data: StreamChunkData = JSON.parse(line.slice(6))
+
+              if (data.type === 'error') {
+                throw new Error(data.error ?? 'AI response failed')
+              }
 
               if (data.type === 'content' && data.content) {
                 assistantContent += data.content
