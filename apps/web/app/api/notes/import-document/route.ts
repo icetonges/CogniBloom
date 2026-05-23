@@ -5,13 +5,10 @@ export const runtime = 'nodejs'
 export const maxDuration = 120
 
 // pdf-parse / pdfjs-dist references DOMMatrix (browser-only). Polyfill before any dynamic import.
-if (typeof (globalThis as Record<string, unknown>).DOMMatrix === 'undefined') {
-  ;(globalThis as Record<string, unknown>).DOMMatrix = class DOMMatrix {
-    constructor(_init?: string | number[]) {}
-    static fromFloat64Array(_a: Float64Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
-    static fromFloat32Array(_a: Float32Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
-    static fromMatrix(_m?: unknown)           { return new (globalThis as Record<string, unknown>).DOMMatrix() }
-  }
+if (typeof (globalThis as Record<string, unknown>)['DOMMatrix'] === 'undefined') {
+  const g = globalThis as Record<string, unknown>
+  class _DOMMatrix { constructor(_init?: string | number[]) {} }
+  g['DOMMatrix'] = _DOMMatrix
 }
 
 const MAX_SIZE = 25 * 1024 * 1024 // 25 MB

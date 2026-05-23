@@ -6,15 +6,10 @@ import { chunkText } from '@/lib/content'
 
 // pdfjs-dist (used by pdf-parse) references DOMMatrix which is browser-only.
 // Polyfill it so the server-side PDF text extraction doesn't crash.
-if (typeof (globalThis as Record<string, unknown>).DOMMatrix === 'undefined') {
-  // Minimal stub — pdfjs only uses it for transform math during canvas rendering,
-  // which we never do (we only extract text). An empty class is enough.
-  ;(globalThis as Record<string, unknown>).DOMMatrix = class DOMMatrix {
-    constructor(_init?: string | number[]) {}
-    static fromFloat64Array(_a: Float64Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
-    static fromFloat32Array(_a: Float32Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
-    static fromMatrix(_m?: unknown)           { return new (globalThis as Record<string, unknown>).DOMMatrix() }
-  }
+if (typeof (globalThis as Record<string, unknown>)['DOMMatrix'] === 'undefined') {
+  const g = globalThis as Record<string, unknown>
+  class _DOMMatrix { constructor(_init?: string | number[]) {} }
+  g['DOMMatrix'] = _DOMMatrix
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
