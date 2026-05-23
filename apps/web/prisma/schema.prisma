@@ -62,7 +62,7 @@ model UserPreferences {
   user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   preferredTutorMode    TutorMode   @default(GENERAL)
-  preferredModel        String      @default("gemini-2.0-flash")
+  preferredModel        String      @default("gemini-2.5-flash")
   responseLength        String      @default("medium")
   includeExamples       Boolean     @default(true)
   includeVisuals        Boolean     @default(true)

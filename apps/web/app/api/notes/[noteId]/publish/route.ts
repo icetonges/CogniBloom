@@ -12,6 +12,27 @@ function sanitizeSlugPart(str: string): string {
     .slice(0, 40)
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value).replace(/`/g, '&#96;')
+}
+
+function sanitizeRichHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, '')
+    .replace(/\s(?:href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\1/gi, '')
+}
+
 async function generateSlug(subject: string | null, date: Date): Promise<string> {
   const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '')
   const subjectPart = sanitizeSlugPart(subject ?? 'Note') || 'Note'
@@ -47,7 +68,7 @@ function buildPublishedPage(note: {
     const kps = JSON.parse(note.knowledgePoints ?? '[]') as { term: string; definition: string; importance: string }[]
     knowledgePillsHtml = kps.map((kp) => {
       const color = kp.importance === 'core' ? '#6366f1' : kp.importance === 'supporting' ? '#10b981' : '#f59e0b'
-      return `<span title="${kp.definition.replace(/"/g, '&quot;')}" style="display:inline-flex;align-items:center;gap:6px;background:${color}18;border:1px solid ${color}40;color:${color};border-radius:999px;padding:3px 12px;font-size:12px;font-weight:600;cursor:help;margin:3px;">${kp.term}</span>`
+      return `<span title="${escapeAttribute(kp.definition)}" style="display:inline-flex;align-items:center;gap:6px;background:${color}18;border:1px solid ${color}40;color:${color};border-radius:999px;padding:3px 12px;font-size:12px;font-weight:600;cursor:help;margin:3px;">${escapeHtml(kp.term)}</span>`
     }).join('')
   } catch { /* empty */ }
 
@@ -63,7 +84,7 @@ function buildPublishedPage(note: {
       const color = depth === 0 ? '#fff' : 'inherit'
       const padding = depth === 0 ? '6px 16px' : '4px 12px'
       const fontSize = depth === 0 ? '14px' : '13px'
-      return `<li style="margin:4px 0;"><span style="display:inline-block;background:${bg};color:${color};padding:${padding};border-radius:8px;font-size:${fontSize};font-weight:${depth === 0 ? 700 : 500};">${node.label}</span>${children}</li>`
+      return `<li style="margin:4px 0;"><span style="display:inline-block;background:${bg};color:${color};padding:${padding};border-radius:8px;font-size:${fontSize};font-weight:${depth === 0 ? 700 : 500};">${escapeHtml(node.label)}</span>${children}</li>`
     }
     const root = JSON.parse(note.mindMap ?? 'null') as MindNode | null
     if (root) {
@@ -78,18 +99,23 @@ function buildPublishedPage(note: {
     reasoningHtml = hints.map((h) => `
       <div style="display:flex;gap:12px;margin-bottom:10px;align-items:flex-start;">
         <span style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">${h.step}</span>
-        <span style="font-size:14px;line-height:1.5;padding-top:3px;">${h.hint}</span>
+        <span style="font-size:14px;line-height:1.5;padding-top:3px;">${escapeHtml(h.hint)}</span>
       </div>`).join('')
   } catch { /* empty */ }
 
-  const hasAI = knowledgePillsHtml || mindMapHtml || reasoningHtml || note.tutorSummary
+  const safeTitle = escapeHtml(note.title)
+  const safeSubject = note.subject ? escapeHtml(note.subject) : null
+  const safeContent = sanitizeRichHtml(note.content)
+  const safeSummary = note.tutorSummary ? sanitizeRichHtml(note.tutorSummary) : null
+  const safeSlug = escapeHtml(note.publishedSlug)
+  const hasAI = knowledgePillsHtml || mindMapHtml || reasoningHtml || safeSummary
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${note.title} — CogniBloom</title>
+  <title>${safeTitle} - CogniBloom</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -135,17 +161,17 @@ function buildPublishedPage(note: {
 <div class="page">
   <!-- Header -->
   <div class="header">
-    ${note.subject ? `<div class="badge">📚 ${note.subject}</div>` : ''}
-    <h1>${note.title}</h1>
+    ${safeSubject ? `<div class="badge">Subject: ${safeSubject}</div>` : ''}
+    <h1>${safeTitle}</h1>
     <div class="meta">
       <span>📅 ${date}</span>
-      <span>🔖 ${note.publishedSlug}</span>
+      <span>${safeSlug}</span>
     </div>
   </div>
 
   <!-- Note content -->
   <div class="note-content">
-    ${note.content}
+    ${safeContent}
   </div>
 
   ${hasAI ? `
@@ -168,17 +194,17 @@ function buildPublishedPage(note: {
     ${reasoningHtml}
   </div>` : ''}
 
-  ${note.tutorSummary ? `
+  ${safeSummary ? `
   <div class="ai-section">
     <div class="ai-section-title">Tutor Notes</div>
-    <div class="tutor-summary">${note.tutorSummary}</div>
+    <div class="tutor-summary">${safeSummary}</div>
   </div>` : ''}
   ` : ''}
 
   <!-- Footer -->
   <footer>
     <span class="brand">CogniBloom — AI Learning Platform</span>
-    <span class="slug">${note.publishedSlug}</span>
+    <span class="slug">${safeSlug}</span>
   </footer>
 </div>
 </body>

@@ -16,6 +16,8 @@ export interface ChatRequest {
   presencePenalty?: number
   stopSequences?: string[]
   useGrounding?: boolean // enable Google Search Grounding (Gemini only)
+  responseMimeType?: string
+  responseSchema?: unknown
 }
 
 export interface GroundingSource {

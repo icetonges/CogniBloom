@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { getAIManager } from '@/lib/ai'
 import { db } from '@/lib/db'
+import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
+
+export const maxDuration = 60
 
 export interface FeedItem {
   id: string
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     const items = await Promise.allSettled(
       selected.map(async (topic) => {
-        const res = await aiManager.chat('gemini-2.0-flash', {
+        const res = await aiManager.chat(DEFAULT_MODEL_ID, {
           messages: [
             {
               role: 'user',
@@ -86,6 +89,7 @@ Return ONLY valid JSON:
           ],
           temperature: 0.85,
           maxTokens: 400,
+          responseMimeType: 'application/json',
         })
 
         const raw = res.content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()

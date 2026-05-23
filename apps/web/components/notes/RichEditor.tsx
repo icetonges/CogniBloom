@@ -6,9 +6,6 @@ import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { createLowlight } from 'lowlight'
-import javascript from 'highlight.js/lib/languages/javascript'
-import python from 'highlight.js/lib/languages/python'
-import typescript from 'highlight.js/lib/languages/typescript'
 import { useCallback, useRef } from 'react'
 import {
   Bold, Italic, Heading2, Heading3, List, ListOrdered,
@@ -17,9 +14,6 @@ import {
 import { cn } from '@/lib/utils'
 
 const lowlight = createLowlight()
-lowlight.register('javascript', javascript)
-lowlight.register('python', python)
-lowlight.register('typescript', typescript)
 
 interface RichEditorProps {
   content: string

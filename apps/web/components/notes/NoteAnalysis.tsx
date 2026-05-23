@@ -62,6 +62,7 @@ export function NoteAnalysis({
   const [activeTab, setActiveTab] = useState<'mindmap' | 'reasoning' | 'concepts' | 'tutor'>('mindmap')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(
     publishedSlug ? `/notes/view/${publishedSlug}` : null
   )
@@ -75,11 +76,16 @@ export function NoteAnalysis({
 
   const runAnalysis = async () => {
     setIsAnalyzing(true)
+    setError(null)
     try {
       const res = await fetch(`/api/notes/${noteId}/analyze`, { method: 'POST' })
       const json = await res.json() as {
         success: boolean
+        error?: string
         data?: { mindMap: string; reasoningHints: string; knowledgePoints: string; tutorSummary: string; aiAnalyzedAt: string }
+      }
+      if (!res.ok || !json.success) {
+        throw new Error(json.error ?? 'Analysis failed')
       }
       if (json.success && json.data) {
         setLocalMindMap(json.data.mindMap)
@@ -89,6 +95,8 @@ export function NoteAnalysis({
         setLocalAnalyzedAt(json.data.aiAnalyzedAt)
         onAnalyze?.()
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Analysis failed')
     } finally {
       setIsAnalyzing(false)
     }
@@ -96,12 +104,18 @@ export function NoteAnalysis({
 
   const publishNote = async () => {
     setIsPublishing(true)
+    setError(null)
     try {
       const res = await fetch(`/api/notes/${noteId}/publish`, { method: 'POST' })
-      const json = await res.json() as { success: boolean; data?: { url: string } }
+      const json = await res.json() as { success: boolean; error?: string; data?: { url: string } }
+      if (!res.ok || !json.success) {
+        throw new Error(json.error ?? 'Publish failed')
+      }
       if (json.success && json.data) {
         setPublishedUrl(json.data.url)
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Publish failed')
     } finally {
       setIsPublishing(false)
     }
@@ -172,6 +186,12 @@ export function NoteAnalysis({
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="mx-5 mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200">
+          {error}
+        </div>
+      )}
 
       {!hasAnalysis && !isAnalyzing ? (
         <div className="flex flex-col items-center justify-center py-12 gap-3 text-center px-6">

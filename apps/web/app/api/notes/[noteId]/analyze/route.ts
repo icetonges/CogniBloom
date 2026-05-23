@@ -2,8 +2,78 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { getAIManager } from '@/lib/ai'
+import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
+import { SchemaType } from '@google/generative-ai'
+import { z } from 'zod'
 
 type RouteParams = { params: Promise<{ noteId: string }> }
+export const maxDuration = 60
+
+const analysisSchema = z.object({
+  mindMap: z.object({
+    label: z.string().min(1),
+    children: z.array(z.any()).default([]),
+  }),
+  reasoningHints: z.array(z.object({
+    step: z.number(),
+    hint: z.string().min(1),
+  })).default([]),
+  knowledgePoints: z.array(z.object({
+    term: z.string().min(1),
+    definition: z.string().min(1),
+    importance: z.enum(['core', 'supporting', 'context']).catch('supporting'),
+  })).default([]),
+  tutorSummary: z.string().min(1),
+})
+
+const responseSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    mindMap: {
+      type: SchemaType.OBJECT,
+      properties: {
+        label: { type: SchemaType.STRING },
+        children: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              label: { type: SchemaType.STRING },
+              children: { type: SchemaType.ARRAY, items: { type: SchemaType.OBJECT } },
+            },
+            required: ['label'],
+          },
+        },
+      },
+      required: ['label', 'children'],
+    },
+    reasoningHints: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          step: { type: SchemaType.NUMBER },
+          hint: { type: SchemaType.STRING },
+        },
+        required: ['step', 'hint'],
+      },
+    },
+    knowledgePoints: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          term: { type: SchemaType.STRING },
+          definition: { type: SchemaType.STRING },
+          importance: { type: SchemaType.STRING, enum: ['core', 'supporting', 'context'] },
+        },
+        required: ['term', 'definition', 'importance'],
+      },
+    },
+    tutorSummary: { type: SchemaType.STRING },
+  },
+  required: ['mindMap', 'reasoningHints', 'knowledgePoints', 'tutorSummary'],
+}
 
 // Strip HTML tags to get plain text for the AI prompt
 function htmlToText(html: string): string {
@@ -77,10 +147,12 @@ Rules:
 - ONLY return the JSON object. Nothing else.`
 
     const aiManager = getAIManager()
-    const response = await aiManager.chat('gemini-2.5-flash', {
+    const response = await aiManager.chat(DEFAULT_MODEL_ID, {
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
       maxTokens: 2000,
+      responseMimeType: 'application/json',
+      responseSchema,
     })
 
     // Strip markdown fences if present
@@ -90,12 +162,7 @@ Rules:
       .replace(/```\s*$/i, '')
       .trim()
 
-    const parsed = JSON.parse(raw) as {
-      mindMap: object
-      reasoningHints: object[]
-      knowledgePoints: object[]
-      tutorSummary: string
-    }
+    const parsed = analysisSchema.parse(JSON.parse(raw))
 
     const updated = await db.note.update({
       where: { id: noteId },
@@ -119,7 +186,7 @@ Rules:
       },
     })
   } catch (error) {
-    if (error instanceof SyntaxError) {
+    if (error instanceof SyntaxError || error instanceof z.ZodError) {
       return NextResponse.json({ error: 'AI returned invalid response — please retry' }, { status: 502 })
     }
     return NextResponse.json({ error: 'Analysis failed' }, { status: 500 })

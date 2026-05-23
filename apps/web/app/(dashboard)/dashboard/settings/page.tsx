@@ -20,7 +20,7 @@ interface Settings {
 
 const DEFAULT_SETTINGS: Settings = {
   grade: 'Year 9',
-  preferredModel: 'gemini-2.0-flash',
+  preferredModel: 'gemini-2.5-flash',
   subjects: ['Math', 'Science'],
   responseLength: 'medium',
   includeExamples: true,
@@ -29,11 +29,12 @@ const DEFAULT_SETTINGS: Settings = {
 
 const GRADES = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12']
 const MODELS = [
-  { id: 'gemini-2.0-flash', label: 'Gemini Flash', note: 'Fast & smart (recommended)' },
-  { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash', note: 'Most capable Google model' },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku', note: 'Concise & precise' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Fast, smart, and recommended' },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', note: 'Cheaper and quick for simple help' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', note: 'Concise and precise' },
   { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', note: 'Open-source, very fast' },
 ]
+const MODEL_IDS = new Set(MODELS.map((model) => model.id))
 const ALL_SUBJECTS = ['Math', 'Science', 'English', 'History', 'Coding', 'Language', 'Geography', 'Art', 'Music', 'PE']
 const RESPONSE_LENGTHS = [
   { id: 'short', label: 'Concise', desc: 'Quick answers, less detail' },
@@ -66,7 +67,7 @@ export default function SettingsPage() {
         if (data) {
           const merged: Settings = {
             grade: data.grade ?? DEFAULT_SETTINGS.grade,
-            preferredModel: data.preferredModel ?? DEFAULT_SETTINGS.preferredModel,
+            preferredModel: MODEL_IDS.has(data.preferredModel) ? data.preferredModel : DEFAULT_SETTINGS.preferredModel,
             subjects: (data.subjects as string[]).length > 0 ? (data.subjects as string[]) : DEFAULT_SETTINGS.subjects,
             responseLength: data.responseLength ?? DEFAULT_SETTINGS.responseLength,
             includeExamples: data.includeExamples ?? DEFAULT_SETTINGS.includeExamples,

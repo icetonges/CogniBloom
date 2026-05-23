@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
@@ -6,6 +6,7 @@ import { chunkText } from '@/lib/content'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
+export const maxDuration = 60
 
 // POST /api/uploads — accepts multipart form with a file
 export async function POST(request: NextRequest) {
@@ -59,8 +60,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Chunk and embed asynchronously
-    embedUpload(upload.id, extractedText).catch(() => {})
+    // Chunk and embed after the response. On Vercel, `after()` keeps this work
+    // attached to the request lifecycle instead of dropping it when the response ends.
+    after(() => embedUpload(upload.id, extractedText))
 
     return NextResponse.json({
       success: true,

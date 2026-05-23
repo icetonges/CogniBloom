@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { getAIManager } from '@/lib/ai'
+import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
+
+export const maxDuration = 60
 
 // POST /api/notes/[noteId]/review — generate AI review of a note
 export async function POST(
@@ -41,10 +44,11 @@ Rules:
 - recommendations: 1–3 actionable suggestions
 - Return ONLY JSON, no markdown fences`
 
-    const res = await aiManager.chat('gemini-2.0-flash', {
+    const res = await aiManager.chat(DEFAULT_MODEL_ID, {
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
       maxTokens: 600,
+      responseMimeType: 'application/json',
     })
 
     const raw = res.content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
@@ -72,6 +76,9 @@ Rules:
   } catch (error) {
     if (error instanceof SyntaxError) {
       return NextResponse.json({ error: 'AI returned invalid JSON — retry' }, { status: 502 })
+    }
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

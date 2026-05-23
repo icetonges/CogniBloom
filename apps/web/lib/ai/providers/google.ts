@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, DynamicRetrievalMode } from '@google/generative-ai'
+import type { ResponseSchema } from '@google/generative-ai'
 import { AIProvider } from './base'
 import type {
   ChatRequest,
@@ -66,14 +67,18 @@ export class GoogleProvider extends AIProvider {
     this.client = new GoogleGenerativeAI(config.apiKey)
   }
 
+  private toGeminiContents(messages: ChatRequest['messages']) {
+    return messages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.role === 'system' ? `System instructions:\n${msg.content}` : msg.content }],
+    }))
+  }
+
   async chat(request: ChatRequest): Promise<ChatResponse> {
     try {
       const genModel = this.client.getGenerativeModel({ model: this.model })
 
-      const contents = request.messages.map((msg) => ({
-        role: msg.role === 'system' ? 'user' : (msg.role as any),
-        parts: [{ text: msg.content }],
-      }))
+      const contents = this.toGeminiContents(request.messages)
 
       const response = await genModel.generateContent(
         {
@@ -82,6 +87,8 @@ export class GoogleProvider extends AIProvider {
             temperature: request.temperature ?? 0.7,
             maxOutputTokens: request.maxTokens ?? 2048,
             topP: request.topP ?? 1,
+            responseMimeType: request.responseMimeType,
+            responseSchema: request.responseSchema as ResponseSchema | undefined,
           },
         },
         {
@@ -122,10 +129,7 @@ export class GoogleProvider extends AIProvider {
 
       const genModel = this.client.getGenerativeModel({ model: this.model, tools })
 
-      const contents = request.messages.map((msg) => ({
-        role: msg.role === 'system' ? 'user' : (msg.role as any),
-        parts: [{ text: msg.content }],
-      }))
+      const contents = this.toGeminiContents(request.messages)
 
       const stream = await genModel.generateContentStream(
         {
@@ -134,6 +138,8 @@ export class GoogleProvider extends AIProvider {
             temperature: request.temperature ?? 0.7,
             maxOutputTokens: request.maxTokens ?? 2048,
             topP: request.topP ?? 1,
+            responseMimeType: request.responseMimeType,
+            responseSchema: request.responseSchema as ResponseSchema | undefined,
           },
         },
         {
@@ -170,7 +176,7 @@ export class GoogleProvider extends AIProvider {
       if (request.useGrounding && lastChunk) {
         const gm = (lastChunk as any)?.candidates?.[0]?.groundingMetadata
         if (gm) {
-          const sources: GroundingSource[] = (gm.groundingChuncks ?? [])
+          const sources: GroundingSource[] = (gm.groundingChunks ?? [])
             .filter((c: any) => c?.web?.uri)
             .map((c: any) => ({ uri: c.web.uri as string, title: (c.web.title as string) || c.web.uri }))
           if (sources.length > 0) {

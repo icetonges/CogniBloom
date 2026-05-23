@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
+import { DEFAULT_MODEL_ID, MODELS } from '@/lib/ai/models'
+
+const VALID_MODEL_IDS = new Set(MODELS.map((model) => model.id))
+
+function normalizeModelId(modelId: unknown): string {
+  return typeof modelId === 'string' && VALID_MODEL_IDS.has(modelId)
+    ? modelId
+    : DEFAULT_MODEL_ID
+}
 
 // GET /api/settings — returns Daniel's preferences (upserts defaults if missing)
 export async function GET() {
@@ -11,7 +20,7 @@ export async function GET() {
       where: { userId },
       create: {
         userId,
-        preferredModel: 'gemini-2.0-flash',
+        preferredModel: DEFAULT_MODEL_ID,
         responseLength: 'medium',
         includeExamples: true,
         grade: 'Year 9',
@@ -20,6 +29,14 @@ export async function GET() {
       },
       update: {},
     })
+
+    if (!VALID_MODEL_IDS.has(prefs.preferredModel)) {
+      const updated = await db.userPreferences.update({
+        where: { userId },
+        data: { preferredModel: DEFAULT_MODEL_ID },
+      })
+      return NextResponse.json({ success: true, data: updated })
+    }
 
     return NextResponse.json({ success: true, data: prefs })
   } catch {
@@ -51,6 +68,7 @@ export async function PATCH(request: NextRequest) {
     for (const key of allowed) {
       if (key in body) data[key] = body[key]
     }
+    if ('preferredModel' in data) data['preferredModel'] = normalizeModelId(data['preferredModel'])
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })

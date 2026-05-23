@@ -34,14 +34,16 @@ class AIManager {
    */
   private resolveApiKey(provider: 'google' | 'groq' | 'anthropic'): string {
     const keys: Record<string, string | undefined> = {
-      google: process.env['GOOGLE_API_KEY'],
+      google: process.env['GOOGLE_API_KEY'] ?? process.env['GEMINI_API_KEY'],
       groq: process.env['GROQ_API_KEY'],
       anthropic: process.env['ANTHROPIC_API_KEY'],
     }
     const key = keys[provider]
     if (!key) {
       throw new Error(
-        `No API key configured for provider "${provider}". Set the ${provider.toUpperCase()}_API_KEY environment variable.`
+        provider === 'google'
+          ? 'No API key configured for provider "google". Set GOOGLE_API_KEY or GEMINI_API_KEY in Vercel.'
+          : `No API key configured for provider "${provider}". Set the ${provider.toUpperCase()}_API_KEY environment variable.`
       )
     }
     return key
