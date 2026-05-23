@@ -153,6 +153,9 @@ model Note {
   isPublic             Boolean     @default(false)
   isBookmarked         Boolean     @default(false)
 
+  slug                 String?     @unique    // "20260523-amc-math-047" — immutable after creation
+  subjectIndex         Int?                   // sequential per subject: 1, 2, 3...
+
   // AI Expert Tutor analysis (generated async after save)
   mindMap              String?     @db.Text   // JSON: { label, children[] } tree
   reasoningHints       String?     @db.Text   // JSON: { step, hint }[]
@@ -178,6 +181,9 @@ model Note {
   @@index([userId])
   @@index([createdAt])
   @@index([publishedSlug])
+  @@index([slug])
+  @@index([subject])
+  @@index([userId, createdAt])
 }
 
 model NoteReview {

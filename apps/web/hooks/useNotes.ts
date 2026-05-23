@@ -20,24 +20,26 @@ export interface NoteMindMapNode {
 
 export interface Note {
   id: string
+  slug: string | null        // "20260523-amc-math-047"
+  subjectIndex: number | null // sequential per subject
   title: string
   content: string
-  contentFormat?: string
+  contentFormat: string
   tags: string[]
-  subject?: string
+  subject: string | null
   isBookmarked: boolean
   hasMath: boolean
   hasCode: boolean
   hasImages: boolean
   // AI analysis
-  mindMap?: string | null        // JSON string
-  reasoningHints?: string | null // JSON string
-  knowledgePoints?: string | null // JSON string
-  tutorSummary?: string | null
-  aiAnalyzedAt?: string | null
+  mindMap: string | null        // JSON string
+  reasoningHints: string | null // JSON string
+  knowledgePoints: string | null // JSON string
+  tutorSummary: string | null
+  aiAnalyzedAt: string | null
   // Published page
-  publishedSlug?: string | null
-  publishedAt?: string | null
+  publishedSlug: string | null
+  publishedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -62,7 +64,7 @@ export interface UpdateNoteInput {
   title?: string
   content?: string
   tags?: string[]
-  subject?: string
+  subject?: string | null
   isBookmarked?: boolean
 }
 
@@ -198,6 +200,17 @@ export function useNotes(options: NotesOptions = {}) {
       }))
       throw error
     }
+  }, [])
+
+  // Fetch a note by slug
+  const fetchBySlug = useCallback(async (slug: string): Promise<Note> => {
+    const res = await fetch(`/api/notes/by-slug/${encodeURIComponent(slug)}`)
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('Note not found')
+      throw new Error('Failed to fetch note')
+    }
+    const { data } = await res.json()
+    return data
   }, [])
 
   // Update a note
@@ -353,6 +366,7 @@ export function useNotes(options: NotesOptions = {}) {
     createNote,
     getNotes,
     getNote,
+    fetchBySlug,
     updateNote,
     deleteNote,
     searchNotes,

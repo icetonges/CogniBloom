@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -10,6 +10,7 @@ import {
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 
 const navItems = [
   { href: '/dashboard',                 icon: BarChart3,     label: 'Dashboard',       color: 'text-blue-400'   },
@@ -64,35 +65,41 @@ function Sidebar({
           const showBadge = badge === 'flashcards-due' && flashcardsDue > 0
 
           return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onClose}
-              className={cn(
-                'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group',
-                active
-                  ? 'bg-primary/[0.10] dark:bg-primary/[0.12] text-primary shadow-[inset_0_0_0_1px_rgba(99,102,241,0.18)]'
-                  : 'text-muted-foreground hover:bg-muted/50 dark:hover:bg-white/[0.04] hover:text-foreground'
-              )}
-            >
-              {/* Left accent bar */}
-              {active && (
-                <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-              )}
-
-              <Icon
+            <div key={href}>
+              <Link
+                href={href}
+                onClick={onClose}
                 className={cn(
-                  'w-4 h-4 shrink-0 transition-colors',
-                  active ? 'text-primary' : cn(color, 'group-hover:opacity-100 opacity-70')
+                  'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group',
+                  active
+                    ? 'bg-primary/[0.10] dark:bg-primary/[0.12] text-primary shadow-[inset_0_0_0_1px_rgba(99,102,241,0.18)]'
+                    : 'text-muted-foreground hover:bg-muted/50 dark:hover:bg-white/[0.04] hover:text-foreground'
                 )}
-              />
-              <span className="flex-1">{label}</span>
-              {showBadge && (
-                <span className="min-w-[1.25rem] h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center px-1 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
-                  {flashcardsDue > 99 ? '99+' : flashcardsDue}
-                </span>
+              >
+                {/* Left accent bar */}
+                {active && (
+                  <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                )}
+
+                <Icon
+                  className={cn(
+                    'w-4 h-4 shrink-0 transition-colors',
+                    active ? 'text-primary' : cn(color, 'group-hover:opacity-100 opacity-70')
+                  )}
+                />
+                <span className="flex-1">{label}</span>
+                {showBadge && (
+                  <span className="min-w-[1.25rem] h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center px-1 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
+                    {flashcardsDue > 99 ? '99+' : flashcardsDue}
+                  </span>
+                )}
+              </Link>
+              {href === '/dashboard/notes' && (
+                <Suspense fallback={null}>
+                  <SubjectGroupList />
+                </Suspense>
               )}
-            </Link>
+            </div>
           )
         })}
       </nav>

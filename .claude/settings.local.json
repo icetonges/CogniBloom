@@ -6,7 +6,8 @@
       "Bash(pnpm run *)",
       "Bash(git add *)",
       "Bash(npx tsc *)",
-      "Bash(ls /mnt/c/Users/Peter-HP/git/CogniBloom/ 2>/dev/null || echo \"Mount not available\")"
+      "Bash(ls /mnt/c/Users/Peter-HP/git/CogniBloom/ 2>/dev/null || echo \"Mount not available\")",
+      "Bash(mkdir -p \"C:/Users/Peter-HP/git/CogniBloom/apps/web/app/\\(dashboard\\)/dashboard/notes/[slug]\" && mkdir -p \"C:/Users/Peter-HP/git/CogniBloom/apps/web/app/\\(dashboard\\)/dashboard/notes/new\")"
     ]
   }
 }

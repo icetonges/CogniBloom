@@ -8,9 +8,33 @@ const updateNoteSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   content: z.string().min(1).optional(),
   tags: z.array(z.string()).optional(),
-  subject: z.string().optional(),
+  subject: z.string().nullable().optional(),
   isBookmarked: z.boolean().optional(),
 })
+
+const NOTE_SELECT = {
+  id: true,
+  slug: true,
+  subjectIndex: true,
+  title: true,
+  content: true,
+  contentFormat: true,
+  tags: true,
+  subject: true,
+  isBookmarked: true,
+  hasMath: true,
+  hasCode: true,
+  hasImages: true,
+  mindMap: true,
+  reasoningHints: true,
+  knowledgePoints: true,
+  tutorSummary: true,
+  aiAnalyzedAt: true,
+  publishedSlug: true,
+  publishedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
 
 type RouteParams = { params: Promise<{ noteId: string }> }
 
@@ -22,7 +46,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const note = await db.note.findFirst({
       where: { id: noteId, userId },
-      include: { reviews: true },
+      select: NOTE_SELECT,
     })
 
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
@@ -52,7 +76,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       updateData['hasImages'] = /!\[.*\]\(.*\)|<img/.test(validated.content)
     }
 
-    const updated = await db.note.update({ where: { id: noteId }, data: updateData })
+    const updated = await db.note.update({
+      where: { id: noteId },
+      data: updateData,
+      select: NOTE_SELECT,
+    })
 
     // Re-embed if title or content changed — runs after the response is delivered
     if (validated.title || validated.content) {

@@ -66,8 +66,13 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onEdit?.(note)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEdit?.(note) }}
+      onClick={() => note.slug ? router.push(`/dashboard/notes/${note.slug}`) : onEdit?.(note)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (note.slug) router.push(`/dashboard/notes/${note.slug}`)
+          else onEdit?.(note)
+        }
+      }}
       className="group rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:scale-[1.01] hover:-translate-y-0.5 cursor-pointer"
       style={{
         background: color.bg,
@@ -215,8 +220,14 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
           ) : null}
 
           {/* Edit */}
-          <button onClick={(e) => { e.stopPropagation(); onEdit?.(note) }}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (note.slug) router.push(`/dashboard/notes/${note.slug}`)
+              else onEdit?.(note)
+            }}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          >
             <Edit2 className="h-3.5 w-3.5" />
           </button>
 
