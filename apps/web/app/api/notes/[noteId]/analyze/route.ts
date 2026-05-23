@@ -88,6 +88,41 @@ function extractJSON(text: string): string {
     .trim()
 }
 
+/**
+ * Close any unclosed strings/arrays/objects in a token-truncated JSON string
+ * so JSON.parse can still recover whatever the AI managed to produce.
+ */
+function healTruncatedJSON(s: string): string {
+  const stack: string[] = []
+  let inString = false
+  let escape = false
+
+  for (const ch of s) {
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') {
+      inString = !inString
+      if (inString) stack.push('"')
+      else if (stack[stack.length - 1] === '"') stack.pop()
+      continue
+    }
+    if (inString) continue
+    if (ch === '{') stack.push('}')
+    else if (ch === '[') stack.push(']')
+    else if (ch === '}' || ch === ']') stack.pop()
+  }
+
+  // If we're mid-string, close it first
+  let result = s
+  if (inString) result += '"'
+  // Close all open containers in reverse order
+  while (stack.length) {
+    const top = stack.pop()!
+    if (top !== '"') result += top
+  }
+  return result
+}
+
 // ── Route handler ──────────────────────────────────────────────────────────────
 
 // POST /api/notes/[noteId]/analyze
@@ -151,7 +186,7 @@ Rules:
 - Return ONLY the JSON object. No other text.`
 
     const response = await chatWithFallback(
-      { messages: [{ role: 'user', content: prompt }], temperature: 0.2, maxTokens: 2000 },
+      { messages: [{ role: 'user', content: prompt }], temperature: 0.2, maxTokens: 4000 },
       preferredModel
     )
     console.info(`[analyze] responded via ${response.usedModel}${response.failedModels.length ? ` (skipped: ${response.failedModels.join(', ')})` : ''}`)
@@ -168,18 +203,27 @@ Rules:
 
     let parsed: z.infer<typeof analysisSchema>
     try {
-      const jsonObj = JSON.parse(raw)
+      // Attempt 1: direct parse
+      let jsonObj: Record<string, unknown>
+      try {
+        jsonObj = JSON.parse(raw) as Record<string, unknown>
+      } catch {
+        // Attempt 2: response was token-truncated mid-string — heal it
+        const healed = healTruncatedJSON(raw)
+        jsonObj = JSON.parse(healed) as Record<string, unknown>
+      }
+
       const result = analysisSchema.safeParse(jsonObj)
       if (result.success) {
         parsed = result.data
       } else {
-        // Schema mismatch — try to coerce what we can by using partial parse
+        // Schema mismatch — coerce what we can (field-name aliases)
         console.warn('[analyze] Zod schema mismatch, using partial data:', result.error.flatten())
         parsed = analysisSchema.parse({
-          mindMap: jsonObj.mindMap ?? jsonObj.mind_map ?? { label: note.title, children: [] },
-          reasoningHints: jsonObj.reasoningHints ?? jsonObj.reasoning_hints ?? jsonObj.hints ?? [],
-          knowledgePoints: jsonObj.knowledgePoints ?? jsonObj.knowledge_points ?? jsonObj.concepts ?? [],
-          tutorSummary: jsonObj.tutorSummary ?? jsonObj.tutor_summary ?? jsonObj.summary ?? '',
+          mindMap: jsonObj['mindMap'] ?? jsonObj['mind_map'] ?? { label: note.title, children: [] },
+          reasoningHints: jsonObj['reasoningHints'] ?? jsonObj['reasoning_hints'] ?? jsonObj['hints'] ?? [],
+          knowledgePoints: jsonObj['knowledgePoints'] ?? jsonObj['knowledge_points'] ?? jsonObj['concepts'] ?? [],
+          tutorSummary: (jsonObj['tutorSummary'] ?? jsonObj['tutor_summary'] ?? jsonObj['summary'] ?? '') as string,
         })
       }
     } catch (parseErr) {
