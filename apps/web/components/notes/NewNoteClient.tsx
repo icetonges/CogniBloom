@@ -12,10 +12,17 @@ import { cn } from '@/lib/utils'
 import type { Note } from '@/hooks/useNotes'
 
 const SUBJECT_PRESETS = [
+  // Competition math
   'AMC Math', 'AMC 8', 'AMC 10', 'AMC 12', 'AIME',
+  // AP courses
   'AP Calculus', 'AP Physics', 'AP Chemistry', 'AP Biology',
+  // Core subjects
   'Math', 'Physics', 'Chemistry', 'Biology',
-  'English', 'History', 'Coding', 'Language',
+  'English', 'History', 'Coding',
+  // Foreign languages 🌍
+  '中文 (Chinese)', 'Japanese 日本語', 'Korean 한국어',
+  'Spanish', 'French', 'German',
+  'Language (Other)',
 ]
 
 const AI_PREVIEWS = [
@@ -142,12 +149,13 @@ export function NewNoteClient() {
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {/* Import — icon-only on mobile */}
           <button
             type="button"
             onClick={() => setShowImport((v) => !v)}
             className={cn(
-              'flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-all',
+              'flex items-center gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-xl transition-all',
               showImport ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
             )}
             style={
@@ -155,30 +163,36 @@ export function NewNoteClient() {
                 ? { background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)' }
                 : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }
             }
+            title={showImport ? 'Close import' : 'Import file'}
           >
             {showImport ? <X className="h-3.5 w-3.5" /> : <FilePlus className="h-3.5 w-3.5" />}
-            {showImport ? 'Close' : 'Import File'}
+            <span className="hidden sm:inline">{showImport ? 'Close' : 'Import'}</span>
           </button>
+          {/* Save — icon-only on mobile */}
           <button
             onClick={() => handleSave(false)}
             disabled={isSaving}
-            className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs px-2.5 sm:px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50"
             style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}
+            title="Save note"
           >
             {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Save
+            <span className="hidden sm:inline">Save</span>
           </button>
+          {/* Save + AI — abbreviated on mobile */}
           <button
             onClick={() => handleSave(true)}
             disabled={isSaving}
-            className="flex items-center gap-1.5 text-xs px-5 py-2 rounded-xl font-bold text-white transition-all disabled:opacity-50 hover:scale-105"
+            className="flex items-center gap-1.5 text-xs px-3 sm:px-5 py-2 rounded-xl font-bold text-white transition-all disabled:opacity-50 hover:scale-105"
             style={{
               background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
               boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
             }}
+            title="Save and analyze with AI"
           >
             {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            Save + AI Analysis
+            <span className="hidden sm:inline">Save + AI</span>
+            <span className="sm:hidden">AI</span>
           </button>
         </div>
       </div>
@@ -212,7 +226,7 @@ export function NewNoteClient() {
           style={{ borderRight: '1px solid rgba(255,255,255,0.05)' }}
         >
           {/* Title input — large, document-style */}
-          <div className="px-8 pt-8 pb-3">
+          <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-3">
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -228,10 +242,10 @@ export function NewNoteClient() {
           </div>
 
           {/* Divider */}
-          <div className="mx-8 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <div className="mx-4 sm:mx-8 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
 
           {/* Rich editor — full-page feel */}
-          <div className="flex-1 px-4 pb-8">
+          <div className="flex-1 px-2 sm:px-4 pb-4 sm:pb-8">
             <RichEditor
               ref={editorRef}
               content={content}

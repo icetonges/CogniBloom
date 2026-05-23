@@ -15,13 +15,12 @@ import {
   Target,
   Compass,
   MessageSquare,
-  ChevronUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MODELS, DEFAULT_MODEL_ID } from '@/lib/ai/models'
 
-// Models available in the note chat picker (free/fast first)
-const CHAT_MODELS = MODELS.filter((m) => ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6'].includes(m.id))
+// All selectable models for chat (all 10 — auto-fallback handles unavailable ones)
+const CHAT_MODELS = MODELS
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -371,10 +370,10 @@ export function NoteAIAssist({ noteId, noteTitle }: NoteAIAssistProps) {
               <span className="max-w-[80px] truncate">
                 {CHAT_MODELS.find((m) => m.id === selectedModel)?.name ?? 'Model'}
               </span>
-              {modelPickerOpen
-                ? <ChevronUp className="w-3 h-3" />
-                : <ChevronDown className="w-3 h-3" />
-              }
+              <ChevronDown
+                className="w-3 h-3 transition-transform duration-150"
+                style={{ transform: modelPickerOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              />
             </button>
             {modelPickerOpen && (
               <div

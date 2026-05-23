@@ -16,6 +16,145 @@ function getLevelTitle(level: number): string {
   return titles.find(([min]) => level >= min)?.[1] ?? 'Seedling'
 }
 
+// ─── Daily bilingual inspirational quotes ─────────────────────────────────────
+
+const QUOTES = [
+  {
+    zh: '学而不思则罔，思而不学则殆。',
+    en: 'Learning without thought is labor lost; thought without learning is perilous.',
+    source: '孔子 · Confucius',
+  },
+  {
+    zh: '千里之行，始于足下。',
+    en: 'A journey of a thousand miles begins with a single step.',
+    source: '老子 · Lao Tzu',
+  },
+  {
+    zh: '知之者不如好之者，好之者不如乐之者。',
+    en: 'Knowing is not as good as loving it; loving is not as good as delighting in it.',
+    source: '孔子 · Confucius',
+  },
+  {
+    zh: '书山有路勤为径，学海无涯苦作舟。',
+    en: 'On the mountain of knowledge, diligence is the path; in the sea of learning, perseverance is the boat.',
+    source: '韩愈 · Han Yu',
+  },
+  {
+    zh: '温故而知新，可以为师矣。',
+    en: 'Review the old and learn the new — then you may become a teacher.',
+    source: '孔子 · Confucius',
+  },
+  {
+    zh: '不积跬步，无以至千里。',
+    en: 'Without accumulating small steps, one cannot reach a thousand miles.',
+    source: '荀子 · Xunzi',
+  },
+  {
+    zh: '博学之，審问之，慎思之，明辨之，笃行之。',
+    en: 'Learn broadly, question carefully, think deeply, discern clearly, practice faithfully.',
+    source: '《中庸》 · Doctrine of the Mean',
+  },
+  {
+    zh: '读书破万卷，下笔如有神。',
+    en: 'Read ten thousand books, and your pen will move as if guided by the divine.',
+    source: '杜甫 · Du Fu',
+  },
+  {
+    zh: '业精于勤，荒于写；行成于思，毁于随。',
+    en: 'Excellence is born of diligence and lost in play; achievement is born of thought and ruined by carelessness.',
+    source: '韩愈 · Han Yu',
+  },
+  {
+    zh: '三人行，必有我师。',
+    en: 'Among any three people walking, I will find my teacher.',
+    source: '孔子 · Confucius',
+  },
+  {
+    zh: '契而不舍，金石可镂。',
+    en: 'With persistent effort, even metal and stone can be engraved.',
+    source: '荀子 · Xunzi',
+  },
+  {
+    zh: '志当存高远。',
+    en: 'Let your ambitions soar to great heights.',
+    source: '诸葛亮 · Zhuge Liang',
+  },
+  {
+    zh: '有志者，事竟成。',
+    en: 'Where there is a will, there is a way.',
+    source: '《后汉书》 · Book of Later Han',
+  },
+  {
+    zh: '活到老，学到老。',
+    en: 'Live and learn — learning has no end.',
+    source: '中国谚语 · Chinese Proverb',
+  },
+  {
+    zh: '敏而好学，不耗下问。',
+    en: 'Be quick to learn and unashamed to ask those beneath you.',
+    source: '孔子 · Confucius',
+  },
+]
+
+/** Pick a quote by day-of-year so it stays constant for the whole day. */
+function getDailyQuote() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), 0, 0)
+  const diff = now.getTime() - start.getTime()
+  const dayOfYear = Math.floor(diff / 86_400_000)
+  return QUOTES[dayOfYear % QUOTES.length]
+}
+
+function DailyQuote() {
+  const q = getDailyQuote()
+  return (
+    <div
+      className="rounded-2xl px-5 py-4 space-y-2"
+      style={{
+        background: 'rgba(99,102,241,0.07)',
+        border: '1px solid rgba(99,102,241,0.18)',
+        backdropFilter: 'blur(6px)',
+      }}
+    >
+      <div className="flex items-center gap-1.5 mb-1">
+        <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#7c83e6', fontWeight: 700, textTransform: 'uppercase' as const }}>
+          Today&apos;s Inspiration
+        </span>
+      </div>
+      <p
+        style={{
+          fontSize: 'clamp(0.95rem, 2vw, 1.05rem)',
+          fontWeight: 700,
+          color: '#c4b5fd',
+          lineHeight: 1.5,
+          letterSpacing: '0.04em',
+        }}
+      >
+        {q.zh}
+      </p>
+      <p
+        style={{
+          fontSize: '0.83rem',
+          color: '#94a3b8',
+          fontStyle: 'italic',
+          lineHeight: 1.55,
+        }}
+      >
+        &ldquo;{q.en}&rdquo;
+      </p>
+      <p
+        style={{
+          fontSize: '0.72rem',
+          color: '#475569',
+          fontWeight: 600,
+        }}
+      >
+        &mdash; {q.source}
+      </p>
+    </div>
+  )
+}
+
 // ─── CSS 3D Gyroscope Orb ─────────────────────────────────────────────────────
 
 function GyroscopeOrb({ level, title }: { level: number; title: string }) {
@@ -59,27 +198,27 @@ function GyroscopeOrb({ level, title }: { level: number; title: string }) {
           transformStyle: 'preserve-3d',
         }}
       >
-        {/* Outer ring — near-horizontal, slow */}
+        {/* Outer ring */}
         <div
           {...ring('gyro-outer', 340, 'rgba(99,102,241,0.72)', '0 0 28px rgba(99,102,241,0.4), inset 0 0 10px rgba(99,102,241,0.08)')}
         />
 
-        {/* Mid ring — medium tilt */}
+        {/* Mid ring */}
         <div
           {...ring('gyro-mid', 250, 'rgba(139,92,246,0.65)', '0 0 18px rgba(139,92,246,0.32)')}
         />
 
-        {/* Inner ring — near-vertical */}
+        {/* Inner ring */}
         <div
           {...ring('gyro-inner', 168, 'rgba(165,180,252,0.55)', '0 0 14px rgba(165,180,252,0.25)', 1)}
         />
 
-        {/* Vertical ring — spins on Y */}
+        {/* Vertical ring */}
         <div
           {...ring('gyro-vert', 286, 'rgba(99,102,241,0.38)', '0 0 10px rgba(99,102,241,0.15)', 1)}
         />
 
-        {/* Orbit dot — traces the outer ring's plane */}
+        {/* Orbit dot */}
         <div
           className="orbit-dot"
           style={{
@@ -404,6 +543,9 @@ export default async function LandingPage() {
                 ))}
               </div>
 
+              {/* Daily bilingual quote */}
+              <DailyQuote />
+
               {/* XP progress bar */}
               <div style={{ maxWidth: 320 }}>
                 <div
@@ -411,7 +553,7 @@ export default async function LandingPage() {
                   style={{ color: '#475569' }}
                 >
                   <span>
-                    Level {level} → {level + 1}
+                    Level {level} &rarr; {level + 1}
                   </span>
                   <span>{xpPct}%</span>
                 </div>
@@ -538,7 +680,7 @@ export default async function LandingPage() {
         }}
       >
         Built for{' '}
-        <span style={{ color: '#818cf8' }}>Daniel</span> — curiosity is your
+        <span style={{ color: '#818cf8' }}>Daniel</span> &mdash; curiosity is your
         superpower 🌱
       </footer>
     </main>

@@ -121,7 +121,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
         attributes: {
           class: cn(
             'prose prose-sm prose-invert max-w-none focus:outline-none px-5 py-4',
-            fullPage ? 'min-h-[calc(100vh-200px)]' : 'min-h-[320px]'
+            fullPage ? 'min-h-[calc(100vh-200px)]' : 'min-h-[640px]'
           ),
         },
         handleDrop: (_view, event: DragEvent) => {
@@ -190,40 +190,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
       reader.onerror = () => setIsInsertingImage(false)
       reader.readAsDataURL(file)
     }, [editor])
-
-    const insertMath = useCallback((latex: string, display: boolean) => {
-      if (!editor) return
-      if (mathState.pos !== undefined) {
-        // Update existing node
-        editor.chain()
-          .focus()
-          .command(({ tr, editor: ed }) => {
-            const nodeType = display
-              ? ed.schema.nodes['mathBlock']
-              : ed.schema.nodes['mathInline']
-            if (!nodeType || mathState.pos === undefined) return false
-            const newNode = display
-              ? nodeType.create({ latex, display })
-              : nodeType.create({ latex })
-            tr.replaceWith(mathState.pos, mathState.pos + 1, newNode)
-            return true
-          })
-          .run()
-      } else {
-        // Insert new node
-        if (display) {
-          editor.chain().focus().insertContent({
-            type: 'mathBlock' as string,
-            attrs: { latex, display: true },
-          }).run()
-        } else {
-          editor.chain().focus().insertContent({
-            type: 'mathInline' as string,
-            attrs: { latex },
-          }).run()
-        }
-      }
-    }, [editor, mathState.pos])
 
     const insertSymbol = useCallback((symbol: string) => {
       editor?.chain().focus().insertContent(symbol).run()
@@ -385,21 +351,55 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
               className="flex items-center gap-4 px-5 pb-2 pt-1"
               style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
             >
-              <p className="text-[10px] text-muted-foreground/50">
-                Paste or drag images directly · ∑ for LaTeX math · Ω for symbols
-              </p>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  ['Ctrl+B', 'Bold'],
+                  ['Ctrl+I', 'Italic'],
+                  ['Ctrl+K', 'Link'],
+                  ['Tab', 'Indent'],
+                ].map(([key, tip]) => (
+                  <div key={key} className="flex items-center gap-1.5">
+                    <kbd
+                      className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                      style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    >
+                      {key}
+                    </kbd>
+                    <span className="text-[11px] text-muted-foreground">{tip}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        {/* ── Math dialog ── */}
+        {/* ── Math / symbol insert modal ── */}
         <MathDialog
           open={mathState.open}
           initialLatex={mathState.latex}
-          isBlock={mathState.display}
-          onInsert={insertMath}
+          initialDisplay={mathState.display}
           onClose={() => setMathState((s) => ({ ...s, open: false }))}
+          onInsert={(latex, display) => {
+            setMathState((s) => ({ ...s, open: false }))
+            if (!editor) return
+            const pos = mathState.pos
+            if (pos !== undefined) {
+              editor.chain().focus().deleteRange({ from: pos, to: pos + 1 }).run()
+            }
+            if (display) {
+              editor.chain().focus().insertContent({
+                type: 'mathBlock',
+                attrs: { latex },
+              }).run()
+            } else {
+              editor.chain().focus().insertContent({
+                type: 'mathInline',
+                attrs: { latex },
+              }).run()
+            }
+          }}
         />
+
       </>
     )
   }

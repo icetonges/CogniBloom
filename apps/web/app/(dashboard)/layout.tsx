@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
-  Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus,
+  Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, House,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 const navItems = [
   { href: '/dashboard',                 icon: BarChart3,     label: 'Dashboard',       color: 'text-blue-400'   },
   { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',         color: 'text-violet-400' },
-  { href: '/dashboard/notes/new',        icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
+  { href: '/dashboard/notes/new',       icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
   { href: '/dashboard/quiz',            icon: Trophy,        label: 'Quiz',             color: 'text-amber-400'  },
   { href: '/dashboard/feed',            icon: Rss,           label: 'Daily Feed',       color: 'text-sky-400'    },
   { href: '/dashboard/analytics',       icon: Brain,         label: 'Analytics',        color: 'text-pink-400'   },
@@ -117,8 +117,18 @@ function Sidebar({
         })}
       </nav>
 
-      {/* ── Bottom: theme + user widget ── */}
+      {/* ── Bottom: home link + theme + user widget ── */}
       <div className="p-3 border-t border-white/[0.05] dark:border-white/[0.04] space-y-2">
+        {/* Back to landing page */}
+        <Link
+          href="/"
+          onClick={onClose}
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 dark:hover:bg-white/[0.04] transition-colors group"
+        >
+          <House className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+          <span>Back to Home</span>
+        </Link>
+
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-xs font-medium text-muted-foreground">Theme</span>
           <ThemeToggle />

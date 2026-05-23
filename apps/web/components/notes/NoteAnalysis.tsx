@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Brain, GitBranch, Lightbulb, BookOpen, Loader2, Sparkles, ExternalLink, Compass, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { NoteMindMapNode, NoteReasoningHint, NoteKnowledgePoint } from '@/hooks/useNotes'
 import { MODELS, DEFAULT_MODEL_ID } from '@/lib/ai/models'
 
-const ANALYZE_MODELS = MODELS.filter((m) => ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'llama-3.3-70b-versatile', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'gemini-2.5-pro'].includes(m.id))
+// All selectable models for analysis (all 10 — auto-fallback handles unavailable ones)
+const ANALYZE_MODELS = MODELS
 
 interface NoteAnalysisProps {
   noteId: string
@@ -334,6 +335,19 @@ export function NoteAnalysis({
   const [error, setError] = useState<string | null>(null)
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const modelPickerRef = useRef<HTMLDivElement>(null)
+
+  // Close model picker on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setModelPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   const [publishedUrl, setPublishedUrl] = useState<string | null>(
     publishedSlug ? `/notes/view/${publishedSlug}` : null
   )
@@ -454,7 +468,7 @@ export function NoteAnalysis({
           {/* Model picker + Analyze button grouped */}
           <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid rgba(99,102,241,0.25)' }}>
             {/* Model selector trigger */}
-            <div className="relative">
+            <div className="relative" ref={modelPickerRef}>
               <button
                 onClick={() => setModelPickerOpen((o) => !o)}
                 disabled={isAnalyzing}
@@ -463,7 +477,10 @@ export function NoteAnalysis({
                 title="Select model for analysis"
               >
                 <span className="max-w-[72px] truncate">{ANALYZE_MODELS.find((m) => m.id === selectedModel)?.name ?? 'Model'}</span>
-                <ChevronDown className="w-3 h-3 shrink-0" />
+                <ChevronDown
+                  className="w-3 h-3 shrink-0 transition-transform duration-150"
+                  style={{ transform: modelPickerOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                />
               </button>
               {modelPickerOpen && (
                 <div

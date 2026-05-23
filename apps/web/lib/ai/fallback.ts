@@ -2,55 +2,60 @@
  * AI Fallback Utility
  *
  * Provides chatWithFallback() and streamWithFallback() that automatically
- * retry failed AI calls down a priority chain:
- *   1. User-selected model (if provided)
- *   2. gemini-2.5-flash      (primary — fast, free, 1M context)
- *   3. gemini-2.5-flash-lite (Google fallback — lighter, no thinking)
- *   4. llama-3.3-70b-versatile (Groq fallback — ultra-fast, free)
- *   5. claude-haiku-4-5-20251001 (Anthropic fallback — reliable)
+ * retry failed AI calls down a priority chain across all three providers:
  *
- * Each route/component passes its preferred model; the fallback chain
- * automatically drops models whose API key is not configured.
+ *   Google Gemini (free) → Groq (free) → Anthropic Claude (paid)
+ *
+ * All 10 available models are in the chain. Models whose API key is not
+ * configured are skipped automatically.
  */
 
 import { getAIManager } from '@/lib/ai'
 import type { ChatRequest, ChatResponse, StreamChunk } from '@/lib/ai/providers/types'
 
-// ── Default priority chain ────────────────────────────────────────────────────
+// ── Full fallback chain — all 10 models ──────────────────────────────────────
+// Order: free/fast Google first, then free Groq, then paid Anthropic
 
-export const FALLBACK_CHAIN = [
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'llama-3.3-70b-versatile',
-  'claude-haiku-4-5-20251001',
-] as const
+export const FALLBACK_CHAIN: string[] = [
+  // Google Gemini (free tier)
+  'gemini-2.5-flash',               // primary: fast, 1M ctx, free
+  'gemini-2.5-flash-lite',          // lighter, no thinking, free
+  'gemini-2.5-pro',                 // most capable Google, free
 
-export type FallbackModel = (typeof FALLBACK_CHAIN)[number]
+  // Groq (free, ultra-fast inference)
+  'llama-3.3-70b-versatile',        // best Llama 3, 128K, free
+  'meta-llama/llama-4-scout-17b-16e-instruct', // Llama 4, vision, free
+  'llama-3.1-8b-instant',           // fastest, simple tasks, free
+
+  // Anthropic Claude (paid — last resort)
+  'claude-haiku-4-5-20251001',      // cheapest, 200K ctx
+  'claude-sonnet-4-6',              // balanced
+  'claude-opus-4-6',                // most powerful
+]
+
+/** All models shown in UI dropdowns (same order, includes labels) */
+export const ALL_MODELS_FOR_UI = FALLBACK_CHAIN
 
 /**
  * Build the ordered list of models to try.
- * If `preferred` is supplied and is in the chain, it moves to the front.
- * Models whose provider key is not configured are skipped silently.
+ * If `preferred` is supplied it moves to the front.
+ * Models whose provider key is absent are skipped silently.
  */
 export function buildFallbackChain(preferred?: string): string[] {
-  const base = [...FALLBACK_CHAIN] as string[]
-  if (preferred && !base.includes(preferred)) {
-    // user selected a model outside the chain (e.g. gemini-2.5-pro) — prepend it
-    base.unshift(preferred)
-  } else if (preferred && base.includes(preferred)) {
-    // move the preferred model to the front
-    const rest = base.filter((m) => m !== preferred)
-    return [preferred, ...rest]
+  if (!preferred || !FALLBACK_CHAIN.includes(preferred)) {
+    return preferred ? [preferred, ...FALLBACK_CHAIN] : [...FALLBACK_CHAIN]
   }
-  return base
+  return [preferred, ...FALLBACK_CHAIN.filter((m) => m !== preferred)]
 }
 
-/** True for errors we should skip to the next model for (service issues, quota, auth). */
+/** True for errors we should skip to the next model for. */
 function isRetryableError(err: unknown): boolean {
   if (!(err instanceof Error)) return true
   const msg = err.message.toLowerCase()
   return (
     msg.includes('503') ||
+    msg.includes('502') ||
+    msg.includes('500') ||
     msg.includes('service unavailable') ||
     msg.includes('high demand') ||
     msg.includes('overloaded') ||
@@ -59,27 +64,27 @@ function isRetryableError(err: unknown): boolean {
     msg.includes('quota') ||
     msg.includes('401') ||
     msg.includes('unauthorized') ||
-    msg.includes('api key') ||
     msg.includes('not configured') ||
-    msg.includes('502') ||
     msg.includes('timeout') ||
     msg.includes('econnreset') ||
-    msg.includes('socket hang up')
+    msg.includes('socket hang up') ||
+    msg.includes('network') ||
+    msg.includes('fetch') ||
+    msg.includes('unavailable') ||
+    msg.includes('capacity')
   )
 }
 
 // ── Non-streaming fallback ────────────────────────────────────────────────────
 
 export interface FallbackResult extends ChatResponse {
-  /** Which model actually responded */
   usedModel: string
-  /** Models that were tried before this one */
   failedModels: string[]
 }
 
 /**
- * Chat (non-streaming) with automatic fallback.
- * Throws only if every model in the chain fails.
+ * Chat (non-streaming) with automatic fallback across all providers.
+ * Throws only if every configured model fails.
  */
 export async function chatWithFallback(
   request: ChatRequest,
@@ -91,41 +96,44 @@ export async function chatWithFallback(
   let lastError: unknown
 
   for (const modelId of chain) {
-    // Skip models whose provider key is absent
+    // Skip models whose provider API key is absent
     try {
       manager.validateProvider(modelId)
     } catch {
-      failedModels.push(modelId)
+      // Key not configured — silently skip
       continue
     }
 
     try {
       const response = await manager.chat(modelId, request)
+      if (failedModels.length > 0) {
+        console.info(`[fallback] ${modelId} succeeded after skipping: ${failedModels.join(', ')}`)
+      }
       return { ...response, usedModel: modelId, failedModels }
     } catch (err) {
       lastError = err
+      const errMsg = err instanceof Error ? err.message : String(err)
       if (isRetryableError(err)) {
-        console.warn(`[fallback] ${modelId} failed (${(err as Error).message.slice(0, 80)}), trying next…`)
+        console.warn(`[fallback] ${modelId} failed (${errMsg.slice(0, 100)}), trying next…`)
         failedModels.push(modelId)
         continue
       }
-      // Non-retryable error (e.g. bad request) — propagate immediately
+      // Non-retryable (bad request, schema error) — stop immediately
       throw err
     }
   }
 
-  throw lastError ?? new Error('All AI models in the fallback chain failed')
+  const allTried = failedModels.join(', ') || 'none'
+  const baseMsg = lastError instanceof Error ? lastError.message : 'All AI models failed'
+  throw new Error(`${baseMsg} [tried: ${allTried}]`)
 }
 
 // ── Streaming fallback ────────────────────────────────────────────────────────
 
 /**
  * Stream with automatic fallback.
- * Tries each model; if it fails BEFORE yielding any content, moves on.
- * Once content starts flowing, stays on that model.
- *
- * Yields an extra meta chunk `{ type: 'model', model: string }` as the
- * first event so the client knows which model is actually responding.
+ * If a model throws before yielding any content, moves to the next.
+ * Once content starts flowing, stays on that model until done.
  */
 export async function* streamWithFallback(
   request: ChatRequest,
@@ -136,7 +144,6 @@ export async function* streamWithFallback(
   let lastError: unknown
 
   for (const modelId of chain) {
-    // Skip models whose provider key is absent
     try {
       manager.validateProvider(modelId)
     } catch {
@@ -147,18 +154,17 @@ export async function* streamWithFallback(
       let started = false
       for await (const chunk of manager.stream(modelId, request)) {
         if (!started) {
-          // Emit model-info meta chunk first (clients can ignore unknown types)
           yield { id: 'meta', content: '', contentBlockIndex: -1, usedModel: modelId }
           started = true
         }
         yield chunk
       }
-      // Stream completed successfully
-      return
+      return // stream completed successfully
     } catch (err) {
       lastError = err
       if (isRetryableError(err)) {
-        console.warn(`[fallback/stream] ${modelId} failed (${(err as Error).message.slice(0, 80)}), trying next…`)
+        const errMsg = err instanceof Error ? err.message : String(err)
+        console.warn(`[fallback/stream] ${modelId} failed (${errMsg.slice(0, 100)}), trying next…`)
         continue
       }
       throw err
