@@ -377,7 +377,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
         <MathDialog
           open={mathState.open}
           initialLatex={mathState.latex}
-          initialDisplay={mathState.display}
+          isBlock={mathState.display}
           onClose={() => setMathState((s) => ({ ...s, open: false }))}
           onInsert={(latex, display) => {
             setMathState((s) => ({ ...s, open: false }))
