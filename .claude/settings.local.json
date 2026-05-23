@@ -5,7 +5,8 @@
       "Bash(Select-Object Name)",
       "Bash(pnpm run *)",
       "Bash(git add *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(ls /mnt/c/Users/Peter-HP/git/CogniBloom/ 2>/dev/null || echo \"Mount not available\")"
     ]
   }
 }

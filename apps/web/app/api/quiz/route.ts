@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAIManager } from '@/lib/ai'
+import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
 
 const generateSchema = z.object({
   topic: z.string().min(1).max(200),
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     const { topic, subject, difficulty, count, model } = generateSchema.parse(body)
 
     const aiManager = getAIManager()
-    const modelId = model || 'gemini-2.0-flash'
+    const modelId = model || DEFAULT_MODEL_ID
 
     const prompt = `Generate a ${difficulty} difficulty quiz about "${topic}"${subject ? ` (subject: ${subject})` : ''} for a K-12 student.
 

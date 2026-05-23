@@ -6,13 +6,7 @@ import { useChat } from '@/hooks/useChat'
 import { ChatMessage } from './ChatMessage'
 import type { UseChatOptions } from '@/hooks/useChat'
 import { cn } from '@/lib/utils'
-
-const MODELS = [
-  { id: 'gemini-2.0-flash',                  label: 'Gemini Flash',   provider: 'Google'    },
-  { id: 'gemini-2.5-flash-preview-05-20',    label: 'Gemini 2.5',     provider: 'Google'    },
-  { id: 'claude-haiku-4-5',                  label: 'Claude Haiku',   provider: 'Anthropic' },
-  { id: 'llama-3.3-70b-versatile',           label: 'Llama 3.3 70B',  provider: 'Groq'      },
-]
+import { MODELS, DEFAULT_MODEL_ID } from '@/lib/ai/models'
 
 interface ChatWindowProps {
   options?: UseChatOptions
@@ -28,7 +22,7 @@ function getPreferredModel(): string {
       if (MODELS.find((m) => m.id === parsed.preferredModel)) return parsed.preferredModel!
     }
   } catch { /* ignore */ }
-  return MODELS[0].id
+  return DEFAULT_MODEL_ID
 }
 
 const QUICK_PROMPTS = [
@@ -124,7 +118,9 @@ export function ChatWindow({ options, initialMode, resumeSessionId }: ChatWindow
               }}
             >
               {MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.providerLabel}){m.badge ? ` · ${m.badge}` : ''}
+                </option>
               ))}
             </select>
             <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />

@@ -7,7 +7,7 @@ import type {
   TokenCountResponse,
   ProviderConfig,
 } from './providers/types'
-import { getProvider } from './router'
+import { getProvider, detectProvider } from './router'
 import { AIProvider } from './providers/base'
 
 export interface AIUsageMetrics {
@@ -25,18 +25,37 @@ class AIManager {
   private usageMetrics: AIUsageMetrics[] = []
 
   constructor(config: ProviderConfig) {
-    if (!config.apiKey) {
-      throw new Error('API key is required for AI manager')
-    }
     this.config = config
   }
 
   /**
-   * Get or create a provider instance
+   * Resolve the correct API key for a given provider at call time.
+   * This allows a single AIManager instance to serve all three providers.
+   */
+  private resolveApiKey(provider: 'google' | 'groq' | 'anthropic'): string {
+    const keys: Record<string, string | undefined> = {
+      google: process.env['GOOGLE_API_KEY'],
+      groq: process.env['GROQ_API_KEY'],
+      anthropic: process.env['ANTHROPIC_API_KEY'],
+    }
+    const key = keys[provider]
+    if (!key) {
+      throw new Error(
+        `No API key configured for provider "${provider}". Set the ${provider.toUpperCase()}_API_KEY environment variable.`
+      )
+    }
+    return key
+  }
+
+  /**
+   * Get or create a provider instance with the correct per-provider API key.
    */
   private getOrCreateProvider(modelId: string): AIProvider {
     if (!this.providers.has(modelId)) {
-      this.providers.set(modelId, getProvider(modelId, this.config))
+      const provider = detectProvider(modelId)
+      const apiKey = this.resolveApiKey(provider)
+      const config: ProviderConfig = { ...this.config, apiKey }
+      this.providers.set(modelId, getProvider(modelId, config))
     }
     return this.providers.get(modelId)!
   }
@@ -219,20 +238,14 @@ export function initializeAIManager(config: ProviderConfig): AIManager {
 }
 
 /**
- * Get the AI manager instance
+ * Get the AI manager instance.
+ * Per-provider API keys (GOOGLE_API_KEY, GROQ_API_KEY, ANTHROPIC_API_KEY)
+ * are resolved lazily when a model from that provider is first used.
  */
 export function getAIManager(): AIManager {
   if (!aiManager) {
-    const apiKey = process.env['ANTHROPIC_API_KEY'] || process.env['GOOGLE_API_KEY'] || process.env['GROQ_API_KEY']
-
-    if (!apiKey) {
-      throw new Error(
-        'AI manager not initialized. Call initializeAIManager() first or set API key env vars'
-      )
-    }
-
     aiManager = new AIManager({
-      apiKey,
+      apiKey: '', // placeholder — each provider resolves its own key on demand
       timeout: 30000,
       maxRetries: 3,
     })

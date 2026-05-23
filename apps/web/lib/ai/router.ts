@@ -11,18 +11,22 @@ const PROVIDER_ROUTES: Array<{
   factory: ProviderFactory
 }> = [
   {
+    // Google Gemini
     pattern: /^gemini/i,
     factory: (config, modelId) => new GoogleProvider(config, modelId),
   },
   {
-    pattern: /^(llama|compound-beta|gemma)/i,
-    factory: (config, modelId) => new GroqProvider(config, modelId),
-  },
-  {
+    // groq/compound-beta — strip "groq/" prefix before passing to provider
     pattern: /^groq\//i,
+    factory: (config, modelId) => new GroqProvider(config, modelId.replace(/^groq\//, '')),
+  },
+  {
+    // meta-llama/... and plain llama/gemma/compound-beta IDs
+    pattern: /^(meta-llama\/|llama|compound-beta|gemma)/i,
     factory: (config, modelId) => new GroqProvider(config, modelId),
   },
   {
+    // Anthropic Claude
     pattern: /^claude/i,
     factory: (config, modelId) => new AnthropicProvider(config, modelId),
   },
@@ -36,38 +40,38 @@ export function getProvider(
 
   if (!route) {
     throw new Error(
-      `Unknown model provider for "${modelId}". Supported models: gemini-*, llama-*, claude-*, groq/*, compound-beta, gemma*`
+      `Unknown model provider for "${modelId}". Supported prefixes: gemini-*, groq/*, meta-llama/*, llama-*, compound-beta, gemma*, claude-*`
     )
   }
 
   return route.factory(config, modelId)
 }
 
-// Detect provider from model ID string
+// Detect provider from model ID string — used by the manager to pick the right API key
 export function detectProvider(modelId: string): 'google' | 'groq' | 'anthropic' {
   if (/^gemini/i.test(modelId)) return 'google'
-  if (/^(llama|compound-beta|gemma|groq)/i.test(modelId)) return 'groq'
+  if (/^(groq\/|meta-llama\/|llama|compound-beta|gemma)/i.test(modelId)) return 'groq'
   if (/^claude/i.test(modelId)) return 'anthropic'
 
   throw new Error(`Unknown provider for model: ${modelId}`)
 }
 
-// List all available models grouped by provider
+// Canonical list grouped by provider (matches models.ts registry)
 export const AVAILABLE_MODELS = {
   google: [
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
   ],
   groq: [
-    'compound-beta',
-    'llama-4-scout-17b-16e-instruct',
+    'groq/compound-beta',
+    'meta-llama/llama-4-scout-17b-16e-instruct',
     'llama-3.3-70b-versatile',
     'llama-3.1-8b-instant',
     'gemma2-9b-it',
   ],
   anthropic: [
-    'claude-sonnet-4.6',
-    'claude-opus-4.6',
-    'claude-haiku-4.5',
+    'claude-sonnet-4-6',
+    'claude-opus-4-6',
+    'claude-haiku-4-5-20251001',
   ],
 }

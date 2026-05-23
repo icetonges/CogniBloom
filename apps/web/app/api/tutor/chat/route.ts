@@ -5,6 +5,7 @@ import { getAIManager } from '@/lib/ai'
 import { getRagContext } from '@/lib/ai/rag'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 import { awardXP, XP } from '@/lib/gamification'
+import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
 
 interface ChatRequestBody {
   sessionId?: string
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 })
     }
 
-    const model = body.model || 'gemini-2.0-flash'
+    const model = body.model || DEFAULT_MODEL_ID
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 2048
     const isGemini = model.startsWith('gemini')

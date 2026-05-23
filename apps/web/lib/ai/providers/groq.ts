@@ -18,20 +18,21 @@ const GROQ_MODELS: Record<string, ModelInfo> = {
     id: 'compound-beta',
     name: 'Compound Beta (Agentic)',
     provider: 'groq',
-    contextWindow: 65536,
-    costPer1kInputTokens: 0.00006,
-    costPer1kOutputTokens: 0.0003,
+    contextWindow: 131072,
+    costPer1kInputTokens: 0,
+    costPer1kOutputTokens: 0,
     supportsVision: false,
     supportsToolCalling: true,
     supportsStreaming: true,
   },
-  'llama-4-scout-17b-16e-instruct': {
-    id: 'llama-4-scout-17b-16e-instruct',
+  // Full Groq API model ID including namespace prefix
+  'meta-llama/llama-4-scout-17b-16e-instruct': {
+    id: 'meta-llama/llama-4-scout-17b-16e-instruct',
     name: 'Llama 4 Scout (17B Vision)',
     provider: 'groq',
-    contextWindow: 32768,
-    costPer1kInputTokens: 0.00015,
-    costPer1kOutputTokens: 0.0003,
+    contextWindow: 131072,
+    costPer1kInputTokens: 0,
+    costPer1kOutputTokens: 0,
     supportsVision: true,
     supportsToolCalling: false,
     supportsStreaming: true,
@@ -95,22 +96,15 @@ export class GroqProvider extends AIProvider {
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     try {
-      const messages = request.messages
-        .filter((m) => m.role !== 'system')
-        .map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }))
-
-      const systemMessage = request.messages
-        .filter((m) => m.role === 'system')
-        .map((m) => m.content)
-        .join('\n')
+      // Groq is OpenAI-compatible: system messages go IN the messages array
+      const messages = request.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      }))
 
       const response = await (this.client.chat.completions.create as any)({
         model: this.model,
         max_tokens: request.maxTokens ?? 2048,
-        system: systemMessage || undefined,
         messages,
         temperature: request.temperature,
         top_p: request.topP,
@@ -137,17 +131,11 @@ export class GroqProvider extends AIProvider {
 
   async *stream(request: ChatRequest): AsyncGenerator<StreamChunk> {
     try {
-      const messages = request.messages
-        .filter((m) => m.role !== 'system')
-        .map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }))
-
-      const systemMessage = request.messages
-        .filter((m) => m.role === 'system')
-        .map((m) => m.content)
-        .join('\n')
+      // Groq is OpenAI-compatible: system messages go IN the messages array
+      const messages = request.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      }))
 
       let contentBlockIndex = 0
       let inputTokens = 0
@@ -156,7 +144,6 @@ export class GroqProvider extends AIProvider {
       const stream = await (this.client.chat.completions.create as any)({
         model: this.model,
         max_tokens: request.maxTokens ?? 2048,
-        system: systemMessage || undefined,
         messages,
         temperature: request.temperature,
         top_p: request.topP,
