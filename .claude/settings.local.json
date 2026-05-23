@@ -7,7 +7,10 @@
       "Bash(git add *)",
       "Bash(npx tsc *)",
       "Bash(ls /mnt/c/Users/Peter-HP/git/CogniBloom/ 2>/dev/null || echo \"Mount not available\")",
-      "Bash(mkdir -p \"C:/Users/Peter-HP/git/CogniBloom/apps/web/app/\\(dashboard\\)/dashboard/notes/[slug]\" && mkdir -p \"C:/Users/Peter-HP/git/CogniBloom/apps/web/app/\\(dashboard\\)/dashboard/notes/new\")"
+      "Bash(mkdir -p \"C:/Users/Peter-HP/git/CogniBloom/apps/web/app/\\(dashboard\\)/dashboard/notes/[slug]\" && mkdir -p \"C:/Users/Peter-HP/git/CogniBloom/apps/web/app/\\(dashboard\\)/dashboard/notes/new\")",
+      "Bash(pnpm add *)",
+      "Bash(node -e \"const pkgs=['@tiptap/react','@tiptap/starter-kit','@tiptap/core','@tiptap/extension-underline','@tiptap/extension-subscript','@tiptap/extension-superscript','@tiptap/extension-highlight','@tiptap/extension-text-style','@tiptap/extension-image','@tiptap/extension-placeholder','@tiptap/extension-code-block-lowlight']; pkgs.forEach\\(p=>{try{const v=require\\('./node_modules/'+p+'/package.json'\\).version; console.log\\(p,v\\)}catch{console.log\\(p,'NOT FOUND'\\)}}\\)\")",
+      "Bash(node -e \"const pkgs=['@tiptap/core','@tiptap/extension-underline','@tiptap/extension-subscript','@tiptap/extension-superscript','@tiptap/extension-highlight','@tiptap/extension-text-style']; pkgs.forEach\\(p=>{try{const v=require\\('./node_modules/'+p+'/package.json'\\).version; console.log\\(p,v\\)}catch{console.log\\(p,'NOT FOUND'\\)}}\\)\")"
     ]
   }
 }

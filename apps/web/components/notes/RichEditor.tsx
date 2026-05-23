@@ -1,195 +1,388 @@
 'use client'
 
-import { useEditor, EditorContent } from '@tiptap/react'
+import {
+  useEditor, EditorContent,
+} from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Image from '@tiptap/extension-image'
+import ImageExtension from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import Underline from '@tiptap/extension-underline'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
+import Highlight from '@tiptap/extension-highlight'
 import { createLowlight } from 'lowlight'
-import { useCallback, useRef } from 'react'
 import {
-  Bold, Italic, Heading2, Heading3, List, ListOrdered,
-  Code, Image as ImageIcon, Minus, Undo, Redo,
+  useCallback, useRef, useEffect, useState,
+  forwardRef, useImperativeHandle,
+} from 'react'
+import {
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
+  Heading1, Heading2, Heading3,
+  List, ListOrdered, Quote,
+  Code, Terminal,
+  Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
+  Image as ImageIcon, Minus,
+  Undo, Redo, Highlighter,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MathExtension, MathInlineExtension } from '@/lib/tiptap/math-extension'
+import { MathDialog } from '@/components/notes/MathDialog'
+import { SymbolPicker } from '@/components/notes/SymbolPicker'
+
+// Load KaTeX CSS once
+import 'katex/dist/katex.min.css'
 
 const lowlight = createLowlight()
+
+export interface RichEditorRef {
+  setContent: (html: string) => void
+  appendContent: (html: string) => void
+  getContent: () => string
+}
 
 interface RichEditorProps {
   content: string
   onChange: (html: string) => void
   disabled?: boolean
   placeholder?: string
-  noteId?: string // if provided, images upload linked to note
+  noteId?: string
 }
 
-export function RichEditor({ content, onChange, disabled, placeholder, noteId }: RichEditorProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const uploadingRef = useRef(false)
+interface MathEditState {
+  open: boolean
+  latex: string
+  display: boolean
+  pos?: number
+}
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        codeBlock: false, // replaced by CodeBlockLowlight
-      }),
-      CodeBlockLowlight.configure({ lowlight }),
-      Image.configure({ inline: false, allowBase64: true }),
-      Placeholder.configure({
-        placeholder: placeholder ?? 'Start writing your note… paste or drag images directly in.',
-      }),
-    ],
-    content: content || '',
-    editable: !disabled,
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML())
-    },
-    editorProps: {
-      attributes: {
-        class: 'prose prose-sm prose-invert max-w-none focus:outline-none min-h-[260px] px-4 py-3',
-      },
-      handleDrop: (_view: unknown, event: DragEvent) => {
-        const files = Array.from(event.dataTransfer?.files ?? []) as File[]
-        const imageFiles = files.filter((f: File) => f.type.startsWith('image/'))
-        if (imageFiles.length === 0) return false
-        event.preventDefault()
-        imageFiles.forEach((file: File) => uploadImage(file))
-        return true
-      },
-      handlePaste: (_view: unknown, event: ClipboardEvent) => {
-        const items = Array.from(event.clipboardData?.items ?? []) as DataTransferItem[]
-        const imageItems = items.filter((i: DataTransferItem) => i.type.startsWith('image/'))
-        if (imageItems.length === 0) return false
-        imageItems.forEach((item: DataTransferItem) => {
-          const file = item.getAsFile()
-          if (file) uploadImage(file)
-        })
-        return true
-      },
-    },
-  })
-
-  const uploadImage = useCallback(async (file: File) => {
-    if (uploadingRef.current) return
-    uploadingRef.current = true
-    try {
-      const formData = new FormData()
-      formData.append('image', file)
-      if (noteId) formData.append('noteId', noteId)
-
-      const res = await fetch('/api/notes/upload-image', { method: 'POST', body: formData })
-      const json = await res.json() as { url?: string; error?: string }
-      if (json.url && editor) {
-        editor.chain().focus().setImage({ src: json.url, alt: file.name }).run()
-      }
-    } catch {
-      // silent — image upload failed, user sees nothing inserted
-    } finally {
-      uploadingRef.current = false
-    }
-  }, [editor, noteId])
-
-  if (!editor) return null
-
-  const ToolbarBtn = ({
-    onClick, active, title, children,
-  }: { onClick: () => void; active?: boolean; title: string; children: React.ReactNode }) => (
+// ── Toolbar button ──────────────────────────────────────────────────────────
+function ToolBtn({
+  onClick, active, title, disabled: btnDisabled, children,
+}: {
+  onClick: () => void
+  active?: boolean
+  title: string
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  return (
     <button
       type="button"
-      onClick={onClick}
+      onMouseDown={(e) => { e.preventDefault(); onClick() }}
       title={title}
+      disabled={btnDisabled}
       className={cn(
         'p-1.5 rounded transition-colors',
         active
           ? 'bg-primary/20 text-primary'
           : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06]',
-        disabled && 'opacity-40 pointer-events-none'
+        btnDisabled && 'opacity-30 pointer-events-none'
       )}
     >
       {children}
     </button>
   )
-
-  return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.09)' }}
-    >
-      {/* Toolbar */}
-      <div
-        className="flex items-center gap-0.5 px-2 py-1.5 flex-wrap"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}
-      >
-        <ToolbarBtn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Bold">
-          <Bold className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-        <ToolbarBtn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} title="Italic">
-          <Italic className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-
-        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.1)' }} />
-
-        <ToolbarBtn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })} title="Heading 2">
-          <Heading2 className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-        <ToolbarBtn onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive('heading', { level: 3 })} title="Heading 3">
-          <Heading3 className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-
-        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.1)' }} />
-
-        <ToolbarBtn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} title="Bullet list">
-          <List className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-        <ToolbarBtn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} title="Numbered list">
-          <ListOrdered className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-
-        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.1)' }} />
-
-        <ToolbarBtn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')} title="Code block">
-          <Code className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-        <ToolbarBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divider">
-          <Minus className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-
-        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.1)' }} />
-
-        {/* Image upload */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) uploadImage(file)
-            e.target.value = ''
-          }}
-        />
-        <ToolbarBtn onClick={() => fileInputRef.current?.click()} title="Insert image">
-          <ImageIcon className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-
-        <div className="w-px h-4 mx-1 ml-auto" style={{ background: 'rgba(255,255,255,0.1)' }} />
-
-        <ToolbarBtn onClick={() => editor.chain().focus().undo().run()} title="Undo">
-          <Undo className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-        <ToolbarBtn onClick={() => editor.chain().focus().redo().run()} title="Redo">
-          <Redo className="w-3.5 h-3.5" />
-        </ToolbarBtn>
-      </div>
-
-      {/* Editor body */}
-      <EditorContent editor={editor} />
-
-      {/* Drop hint */}
-      {!disabled && (
-        <p className="px-4 pb-2 text-[10px] text-muted-foreground/50">
-          Drag & drop or paste images directly into the editor
-        </p>
-      )}
-    </div>
-  )
 }
+
+function Divider() {
+  return <div className="w-px h-4 mx-0.5" style={{ background: 'rgba(255,255,255,0.09)' }} />
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
+  ({ content, onChange, disabled, placeholder, noteId }, ref) => {
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const uploadingRef = useRef(false)
+    const [mathState, setMathState] = useState<MathEditState>({ open: false, latex: '', display: true })
+
+    const editor = useEditor({
+      extensions: [
+        StarterKit.configure({ codeBlock: false }),
+        CodeBlockLowlight.configure({ lowlight }),
+        ImageExtension.configure({ inline: false, allowBase64: true }),
+        Placeholder.configure({
+          placeholder: placeholder ?? 'Start writing… paste or drag images, type LaTeX formulas.',
+        }),
+        Underline,
+        Subscript,
+        Superscript,
+        Highlight.configure({ multicolor: false }),
+        MathExtension,
+        MathInlineExtension,
+      ],
+      content: content || '',
+      editable: !disabled,
+      onUpdate: ({ editor: ed }) => onChange(ed.getHTML()),
+
+      editorProps: {
+        attributes: {
+          class: 'prose prose-sm prose-invert max-w-none focus:outline-none min-h-[320px] px-5 py-4',
+        },
+        handleDrop: (_view, event: DragEvent) => {
+          const files = Array.from(event.dataTransfer?.files ?? [])
+          const images = files.filter((f) => f.type.startsWith('image/'))
+          if (!images.length) return false
+          event.preventDefault()
+          images.forEach((f) => uploadImage(f))
+          return true
+        },
+        handlePaste: (_view, event: ClipboardEvent) => {
+          const items = Array.from(event.clipboardData?.items ?? [])
+          const imageItems = items.filter((i) => i.type.startsWith('image/'))
+          if (!imageItems.length) return false
+          imageItems.forEach((item) => {
+            const f = item.getAsFile()
+            if (f) uploadImage(f)
+          })
+          return true
+        },
+      },
+    })
+
+    // Expose imperative handle
+    useImperativeHandle(ref, () => ({
+      setContent: (html: string) => {
+        editor?.commands.setContent(html, false)
+        onChange(html)
+      },
+      appendContent: (html: string) => {
+        editor?.chain().focus().insertContent(html).run()
+        onChange(editor?.getHTML() ?? '')
+      },
+      getContent: () => editor?.getHTML() ?? '',
+    }))
+
+    // Listen for math-click events from NodeView
+    useEffect(() => {
+      const handler = (e: Event) => {
+        const { latex, display, pos } = (e as CustomEvent).detail as { latex: string; display: boolean; pos?: number }
+        setMathState({ open: true, latex, display, pos })
+      }
+      document.addEventListener('tiptap:math-click', handler)
+      return () => document.removeEventListener('tiptap:math-click', handler)
+    }, [])
+
+    const uploadImage = useCallback(async (file: File) => {
+      if (uploadingRef.current) return
+      uploadingRef.current = true
+      try {
+        const form = new FormData()
+        form.append('image', file)
+        if (noteId) form.append('noteId', noteId)
+        const res = await fetch('/api/notes/upload-image', { method: 'POST', body: form })
+        const json = await res.json() as { url?: string }
+        if (json.url && editor) {
+          editor.chain().focus().setImage({ src: json.url, alt: file.name }).run()
+        }
+      } finally {
+        uploadingRef.current = false
+      }
+    }, [editor, noteId])
+
+    const insertMath = useCallback((latex: string, display: boolean) => {
+      if (!editor) return
+      if (mathState.pos !== undefined) {
+        // Update existing node
+        editor.chain()
+          .focus()
+          .command(({ tr, editor: ed }) => {
+            const nodeType = display
+              ? ed.schema.nodes['mathBlock']
+              : ed.schema.nodes['mathInline']
+            if (!nodeType || mathState.pos === undefined) return false
+            const newNode = display
+              ? nodeType.create({ latex, display })
+              : nodeType.create({ latex })
+            tr.replaceWith(mathState.pos, mathState.pos + 1, newNode)
+            return true
+          })
+          .run()
+      } else {
+        // Insert new node
+        if (display) {
+          editor.chain().focus().insertContent({
+            type: 'mathBlock' as string,
+            attrs: { latex, display: true },
+          }).run()
+        } else {
+          editor.chain().focus().insertContent({
+            type: 'mathInline' as string,
+            attrs: { latex },
+          }).run()
+        }
+      }
+    }, [editor, mathState.pos])
+
+    const insertSymbol = useCallback((symbol: string) => {
+      editor?.chain().focus().insertContent(symbol).run()
+    }, [editor])
+
+    if (!editor) return null
+
+    const isDisabled = !!disabled
+
+    return (
+      <>
+        <div
+          className="rounded-xl overflow-hidden"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.09)' }}
+        >
+          {/* ── Toolbar ── */}
+          <div
+            className="flex items-center gap-0.5 px-2 py-1.5 flex-wrap"
+            style={{
+              borderBottom: '1px solid rgba(255,255,255,0.07)',
+              background: 'rgba(255,255,255,0.02)',
+            }}
+          >
+            {/* Text style */}
+            <ToolBtn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Bold (Ctrl+B)" disabled={isDisabled}>
+              <Bold className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} title="Italic (Ctrl+I)" disabled={isDisabled}>
+              <Italic className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')} title="Underline (Ctrl+U)" disabled={isDisabled}>
+              <UnderlineIcon className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')} title="Strikethrough" disabled={isDisabled}>
+              <Strikethrough className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleHighlight().run()} active={editor.isActive('highlight')} title="Highlight" disabled={isDisabled}>
+              <Highlighter className="w-3.5 h-3.5" />
+            </ToolBtn>
+
+            <Divider />
+
+            {/* Headings */}
+            <ToolBtn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })} title="Heading 1" disabled={isDisabled}>
+              <Heading1 className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })} title="Heading 2" disabled={isDisabled}>
+              <Heading2 className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive('heading', { level: 3 })} title="Heading 3" disabled={isDisabled}>
+              <Heading3 className="w-3.5 h-3.5" />
+            </ToolBtn>
+
+            <Divider />
+
+            {/* Lists */}
+            <ToolBtn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} title="Bullet list" disabled={isDisabled}>
+              <List className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} title="Numbered list" disabled={isDisabled}>
+              <ListOrdered className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')} title="Blockquote" disabled={isDisabled}>
+              <Quote className="w-3.5 h-3.5" />
+            </ToolBtn>
+
+            <Divider />
+
+            {/* Code */}
+            <ToolBtn onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive('code')} title="Inline code" disabled={isDisabled}>
+              <Code className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')} title="Code block" disabled={isDisabled}>
+              <Terminal className="w-3.5 h-3.5" />
+            </ToolBtn>
+
+            <Divider />
+
+            {/* Scripts */}
+            <ToolBtn onClick={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive('subscript')} title="Subscript (x₂)" disabled={isDisabled}>
+              <SubscriptIcon className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive('superscript')} title="Superscript (x²)" disabled={isDisabled}>
+              <SuperscriptIcon className="w-3.5 h-3.5" />
+            </ToolBtn>
+
+            <Divider />
+
+            {/* Math formula */}
+            {!isDisabled && (
+              <ToolBtn
+                onClick={() => setMathState({ open: true, latex: '', display: true, pos: undefined })}
+                active={false}
+                title="Insert math formula (LaTeX)"
+                disabled={isDisabled}
+              >
+                <span className="text-sm font-serif leading-none">∑</span>
+              </ToolBtn>
+            )}
+
+            {/* Symbol picker */}
+            {!isDisabled && (
+              <SymbolPicker onInsert={insertSymbol} />
+            )}
+
+            <Divider />
+
+            {/* Image */}
+            {!isDisabled && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) uploadImage(f)
+                    e.target.value = ''
+                  }}
+                />
+                <ToolBtn onClick={() => fileInputRef.current?.click()} title="Insert image" disabled={isDisabled}>
+                  <ImageIcon className="w-3.5 h-3.5" />
+                </ToolBtn>
+              </>
+            )}
+
+            <ToolBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule" disabled={isDisabled}>
+              <Minus className="w-3.5 h-3.5" />
+            </ToolBtn>
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Undo / Redo */}
+            <ToolBtn onClick={() => editor.chain().focus().undo().run()} title="Undo" disabled={isDisabled || !editor.can().undo()}>
+              <Undo className="w-3.5 h-3.5" />
+            </ToolBtn>
+            <ToolBtn onClick={() => editor.chain().focus().redo().run()} title="Redo" disabled={isDisabled || !editor.can().redo()}>
+              <Redo className="w-3.5 h-3.5" />
+            </ToolBtn>
+          </div>
+
+          {/* ── Editor area ── */}
+          <EditorContent editor={editor} />
+
+          {/* ── Hints ── */}
+          {!isDisabled && (
+            <div
+              className="flex items-center gap-4 px-5 pb-2 pt-1"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+            >
+              <p className="text-[10px] text-muted-foreground/50">
+                Paste or drag images directly · ∑ for LaTeX math · Ω for symbols
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Math dialog ── */}
+        <MathDialog
+          open={mathState.open}
+          initialLatex={mathState.latex}
+          isBlock={mathState.display}
+          onInsert={insertMath}
+          onClose={() => setMathState((s) => ({ ...s, open: false }))}
+        />
+      </>
+    )
+  }
+)
+
+RichEditor.displayName = 'RichEditor'

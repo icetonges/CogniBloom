@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Save, Sparkles, ArrowLeft } from 'lucide-react'
-import { RichEditor } from '@/components/notes/RichEditor'
+import { Loader2, Save, Sparkles, ArrowLeft, FilePlus, X } from 'lucide-react'
+import { RichEditor, type RichEditorRef } from '@/components/notes/RichEditor'
+import { DocumentImport } from '@/components/notes/DocumentImport'
 import { cn } from '@/lib/utils'
 import type { Note } from '@/hooks/useNotes'
 
@@ -16,6 +17,8 @@ const SUBJECT_PRESETS = [
 
 export function NewNoteClient() {
   const router = useRouter()
+  const editorRef = useRef<RichEditorRef>(null)
+
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [subject, setSubject] = useState('')
@@ -23,6 +26,7 @@ export function NewNoteClient() {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [existingSubjects, setExistingSubjects] = useState<string[]>([])
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     fetch('/api/notes/subjects')
@@ -38,14 +42,31 @@ export function NewNoteClient() {
   const allSubjects = Array.from(new Set([...SUBJECT_PRESETS, ...existingSubjects])).sort()
   const wordCount = content.replace(/<[^>]+>/g, '').trim().split(/\s+/).filter(Boolean).length
 
+  const handleImport = (html: string, suggestedTitle?: string, mode: 'append' | 'replace' = 'append') => {
+    if (mode === 'replace') {
+      editorRef.current?.setContent(html)
+      setContent(html)
+    } else {
+      editorRef.current?.appendContent(html)
+      // Get updated content from editor
+      setContent(editorRef.current?.getContent() ?? content + html)
+    }
+    if (suggestedTitle && !title) {
+      setTitle(suggestedTitle)
+    }
+    setShowImport(false)
+  }
+
   const handleSave = async (andAnalyze = false) => {
     if (!title.trim()) { setError('Title is required'); return }
-    if (!content.replace(/<[^>]+>/g, '').trim()) { setError('Content is required'); return }
+    const plainText = content.replace(/<[^>]+>/g, '').trim()
+    if (!plainText) { setError('Content is required'); return }
+
     setIsSaving(true)
     setError(null)
 
     try {
-      const hasMath = /\$.*?\$|\\[.*?\\]|\\\(.*?\\\)/.test(content)
+      const hasMath = /\$.*?\$|\\[.*?\\]|\\\(.*?\\\)|data-math/.test(content)
       const hasCode = /<code|<pre/.test(content)
       const hasImages = /<img/.test(content)
 
@@ -68,7 +89,6 @@ export function NewNoteClient() {
       const { data } = await res.json() as { data: Note }
 
       if (andAnalyze && data.id) {
-        // Fire-and-forget analysis — don't await
         fetch(`/api/notes/${data.id}/analyze`, { method: 'POST' }).catch(() => {})
       }
 
@@ -81,7 +101,7 @@ export function NewNoteClient() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push('/dashboard/notes')}
@@ -95,22 +115,44 @@ export function NewNoteClient() {
             New Note
           </span>
         </h2>
+
+        {/* Import toggle */}
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => setShowImport((v) => !v)}
+            className={cn(
+              'flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-all',
+              showImport ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            )}
+            style={
+              showImport
+                ? { background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)' }
+                : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }
+            }
+          >
+            {showImport ? <X className="h-3.5 w-3.5" /> : <FilePlus className="h-3.5 w-3.5" />}
+            {showImport ? 'Close Import' : 'Import File'}
+          </button>
+        </div>
       </div>
 
+      {/* ── Error ── */}
       {error && (
         <div
           className="rounded-xl p-3 text-sm flex items-center gap-2"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.2)',
-            color: '#f87171',
-          }}
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}
         >
           ⚠ {error}
         </div>
       )}
 
-      {/* Metadata card */}
+      {/* ── Document Import panel ── */}
+      {showImport && (
+        <DocumentImport onImport={handleImport} />
+      )}
+
+      {/* ── Metadata card ── */}
       <div
         className="rounded-2xl p-5 space-y-4"
         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
@@ -139,7 +181,7 @@ export function NewNoteClient() {
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 block">
-              Subject <span className="font-normal normal-case">(free text)</span>
+              Subject <span className="font-normal normal-case">(free text or pick below)</span>
             </label>
             <input
               list="subject-list"
@@ -179,7 +221,7 @@ export function NewNoteClient() {
 
         {/* Subject quick-pick chips */}
         <div className="flex flex-wrap gap-1.5">
-          {SUBJECT_PRESETS.slice(0, 10).map((s) => (
+          {SUBJECT_PRESETS.slice(0, 12).map((s) => (
             <button
               key={s}
               type="button"
@@ -190,14 +232,8 @@ export function NewNoteClient() {
               )}
               style={
                 subject === s
-                  ? {
-                      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                      boxShadow: '0 2px 10px rgba(99,102,241,0.35)',
-                    }
-                  : {
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                    }
+                  ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 2px 10px rgba(99,102,241,0.35)' }
+                  : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }
               }
             >
               {s}
@@ -206,7 +242,7 @@ export function NewNoteClient() {
         </div>
       </div>
 
-      {/* Editor */}
+      {/* ── Editor ── */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -214,45 +250,56 @@ export function NewNoteClient() {
           </label>
           <span className="text-xs text-muted-foreground">{wordCount} words</span>
         </div>
-        <RichEditor content={content} onChange={setContent} disabled={isSaving} />
+        <RichEditor
+          ref={editorRef}
+          content={content}
+          onChange={setContent}
+          disabled={isSaving}
+        />
       </div>
 
-      {/* Action bar */}
+      {/* ── Action bar ── */}
       <div
-        className="rounded-2xl p-4 flex items-center justify-end gap-2"
+        className="rounded-2xl p-4 flex items-center justify-between gap-2"
         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
       >
-        <button
-          onClick={() => router.push('/dashboard/notes')}
-          disabled={isSaving}
-          className="text-xs px-4 py-2.5 rounded-xl font-semibold text-muted-foreground hover:text-foreground transition-colors"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => handleSave(false)}
-          disabled={isSaving}
-          className="flex items-center gap-1.5 text-xs px-5 py-2.5 rounded-xl font-bold text-white transition-all disabled:opacity-50"
-          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
-        >
-          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Save
-        </button>
-        <button
-          onClick={() => handleSave(true)}
-          disabled={isSaving}
-          className="flex items-center gap-1.5 text-xs px-5 py-2.5 rounded-xl font-bold text-white transition-all disabled:opacity-50 hover:scale-105"
-          style={{
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
-          }}
-        >
-          {isSaving
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            : <Sparkles className="h-3.5 w-3.5" />}
-          Save + AI Analysis
-        </button>
+        <p className="text-xs text-muted-foreground hidden sm:block">
+          Keyboard: <kbd className="px-1 py-0.5 rounded text-[10px]" style={{ background: 'rgba(255,255,255,0.08)' }}>∑</kbd> math ·{' '}
+          <kbd className="px-1 py-0.5 rounded text-[10px]" style={{ background: 'rgba(255,255,255,0.08)' }}>Ω</kbd> symbols ·{' '}
+          paste images
+        </p>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => router.push('/dashboard/notes')}
+            disabled={isSaving}
+            className="text-xs px-4 py-2.5 rounded-xl font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => handleSave(false)}
+            disabled={isSaving}
+            className="flex items-center gap-1.5 text-xs px-5 py-2.5 rounded-xl font-bold text-white transition-all disabled:opacity-50"
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
+          >
+            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Save
+          </button>
+          <button
+            onClick={() => handleSave(true)}
+            disabled={isSaving}
+            className="flex items-center gap-1.5 text-xs px-5 py-2.5 rounded-xl font-bold text-white transition-all disabled:opacity-50 hover:scale-105"
+            style={{
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
+            }}
+          >
+            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            Save + AI Analysis
+          </button>
+        </div>
       </div>
     </div>
   )
