@@ -105,57 +105,7 @@ function getDailyQuote() {
   return QUOTES[dayOfYear % QUOTES.length]
 }
 
-function DailyQuote() {
-  const q = getDailyQuote()
-  return (
-    <div
-      className="rounded-2xl px-5 py-4 space-y-2"
-      style={{
-        background: 'rgba(99,102,241,0.07)',
-        border: '1px solid rgba(99,102,241,0.18)',
-        backdropFilter: 'blur(6px)',
-      }}
-    >
-      <div className="flex items-center gap-1.5 mb-1">
-        <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#7c83e6', fontWeight: 700, textTransform: 'uppercase' as const }}>
-          Today&apos;s Inspiration
-        </span>
-      </div>
-      <p
-        style={{
-          fontSize: 'clamp(0.95rem, 2vw, 1.05rem)',
-          fontWeight: 700,
-          color: '#c4b5fd',
-          lineHeight: 1.5,
-          letterSpacing: '0.04em',
-        }}
-      >
-        {q.zh}
-      </p>
-      <p
-        style={{
-          fontSize: '0.83rem',
-          color: '#94a3b8',
-          fontStyle: 'italic',
-          lineHeight: 1.55,
-        }}
-      >
-        &ldquo;{q.en}&rdquo;
-      </p>
-      <p
-        style={{
-          fontSize: '0.72rem',
-          color: '#475569',
-          fontWeight: 600,
-        }}
-      >
-        &mdash; {q.source}
-      </p>
-    </div>
-  )
-}
-
-/** Compact horizontal quote for the nav bar — wider and shorter than the full DailyQuote. */
+/** Compact horizontal quote — sits in the nav bar between the logo and the Enter App button. */
 function NavQuote() {
   const q = getDailyQuote()
   return (
