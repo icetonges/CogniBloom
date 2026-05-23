@@ -31,9 +31,9 @@ describe('detectProvider', () => {
   })
 
   it.each([
-    ['claude-sonnet-4.6', 'anthropic'],
-    ['claude-opus-4.6', 'anthropic'],
-    ['claude-haiku-4.5', 'anthropic'],
+    ['claude-sonnet-4-6', 'anthropic'],
+    ['claude-opus-4-6', 'anthropic'],
+    ['claude-haiku-4-5-20251001', 'anthropic'],
     ['CLAUDE-3-haiku', 'anthropic'],
   ])('%s → anthropic', (model, expected) => {
     expect(detectProvider(model)).toBe(expected)
@@ -77,7 +77,7 @@ describe('getProvider', () => {
   })
 
   it('returns AnthropicProvider for claude models', () => {
-    const provider = getProvider('claude-sonnet-4.6', mockConfig)
+    const provider = getProvider('claude-sonnet-4-6', mockConfig)
     expect(provider).toBeInstanceOf(AnthropicProvider)
   })
 
@@ -111,7 +111,7 @@ describe('AVAILABLE_MODELS', () => {
 
   it('groq models match groq patterns', () => {
     AVAILABLE_MODELS.groq.forEach((m) => {
-      const valid = /^(llama|compound|gemma|groq)/i.test(m)
+      const valid = /^(llama|compound|gemma|groq|meta-llama)/i.test(m)
       expect(valid).toBe(true)
     })
   })
