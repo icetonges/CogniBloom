@@ -313,11 +313,11 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
       </div>
 
       {/* ── Two-column body ── */}
-      <div ref={splitContainerRef} className="flex flex-1 overflow-hidden">
+      <div ref={splitContainerRef} className="flex">
 
         {/* ════ LEFT: Note content column ════ */}
         <div
-          className="flex flex-col min-w-0 overflow-y-auto"
+          className="flex flex-col min-w-0"
           style={{ width: showSidebar ? `${leftPct}%` : '100%', flexShrink: 0 }}
         >
           {/* Title area */}
@@ -472,7 +472,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
             </div>
 
             {/* Sidebar content */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="p-4">
               {sidebarTab === 'chat' ? (
                 <NoteAIAssist noteId={note.id} noteTitle={displayTitle} />
               ) : (
