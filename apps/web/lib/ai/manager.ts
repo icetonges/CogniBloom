@@ -61,6 +61,16 @@ class AIManager {
   }
 
   /**
+   * Validate that the API key for the model's provider is configured.
+   * Throws with a clear message if not — call this before opening a stream
+   * so the route can return a clean error response.
+   */
+  validateProvider(modelId: string): void {
+    const provider = detectProvider(modelId)
+    this.resolveApiKey(provider) // throws if key is absent
+  }
+
+  /**
    * Send a chat message and get response
    */
   async chat(modelId: string, request: ChatRequest): Promise<ChatResponse> {

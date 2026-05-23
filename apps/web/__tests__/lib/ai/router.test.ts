@@ -23,7 +23,6 @@ describe('detectProvider', () => {
     ['llama-4-scout-17b-16e-instruct', 'groq'],
     ['llama-3.3-70b-versatile', 'groq'],
     ['llama-3.1-8b-instant', 'groq'],
-    ['gemma2-9b-it', 'groq'],
     ['compound-beta', 'groq'],
     ['groq/custom-model', 'groq'],
   ])('%s → groq', (model, expected) => {
@@ -59,11 +58,6 @@ describe('getProvider', () => {
 
   it('returns GroqProvider for compound-beta', () => {
     const provider = getProvider('compound-beta', mockConfig)
-    expect(provider).toBeInstanceOf(GroqProvider)
-  })
-
-  it('returns GroqProvider for gemma models', () => {
-    const provider = getProvider('gemma2-9b-it', mockConfig)
     expect(provider).toBeInstanceOf(GroqProvider)
   })
 
@@ -111,7 +105,7 @@ describe('AVAILABLE_MODELS', () => {
 
   it('groq models match groq patterns', () => {
     AVAILABLE_MODELS.groq.forEach((m) => {
-      const valid = /^(llama|compound|gemma|groq|meta-llama)/i.test(m)
+      const valid = /^(llama|compound|groq|meta-llama)/i.test(m)
       expect(valid).toBe(true)
     })
   })

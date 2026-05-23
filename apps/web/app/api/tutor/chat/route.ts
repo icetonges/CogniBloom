@@ -75,6 +75,17 @@ export async function POST(request: NextRequest) {
     ]
 
     const aiManager = getAIManager()
+
+    // Validate the provider key EXISTS before opening the stream.
+    // If the env var is missing this throws synchronously and we can return
+    // a clean 400 instead of a 500 with no body.
+    try {
+      aiManager.validateProvider(model)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'API key not configured'
+      return NextResponse.json({ error: msg }, { status: 400 })
+    }
+
     const encoder = new TextEncoder()
     let totalInputTokens = 0
     let totalOutputTokens = 0
