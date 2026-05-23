@@ -201,11 +201,9 @@ export async function POST(request: NextRequest) {
         console.error('Gemini PDF vision error:', geminiErr)
 
         // Fallback: pdf-parse plain text (loses figures, better than nothing)
-        // Use the internal module path to avoid test-file init that triggers DOMMatrix browser APIs.
         try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string; numpages: number }>
-          const data = await pdfParse(buffer)
+          const { default: pdfParse } = await import('pdf-parse')
+          const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>)(buffer)
           const cleaned = data.text.replace(/\s+/g, ' ').trim()
           if (cleaned.length >= 50) {
             const html = textToHtml(data.text)

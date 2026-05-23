@@ -43,12 +43,10 @@ export async function POST(request: NextRequest) {
     let extractedText = ''
 
     if (file.type === 'application/pdf') {
-      // Import the internal module directly — avoids the test-file initialization
-      // in the package entry point that triggers canvas/DOMMatrix browser APIs.
-      type PdfParseFn = (buf: Buffer, options?: Record<string, unknown>) => Promise<{ text: string }>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require('pdf-parse/lib/pdf-parse.js') as PdfParseFn
-      const parsed = await pdfParse(buffer, { max: 0 }) // max:0 = no page limit
+      type PdfParseFn = (buf: Buffer) => Promise<{ text: string }>
+      const pdfMod = await import('pdf-parse')
+      const pdfParse = ((pdfMod as unknown as { default?: PdfParseFn }).default ?? pdfMod) as PdfParseFn
+      const parsed = await pdfParse(buffer)
       extractedText = parsed.text
     } else {
       extractedText = buffer.toString('utf-8')
