@@ -155,6 +155,33 @@ function DailyQuote() {
   )
 }
 
+/** Compact horizontal quote for the nav bar — wider and shorter than the full DailyQuote. */
+function NavQuote() {
+  const q = getDailyQuote()
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-2 rounded-xl w-full"
+      style={{
+        background: 'rgba(99,102,241,0.07)',
+        border: '1px solid rgba(99,102,241,0.16)',
+        backdropFilter: 'blur(8px)',
+        minWidth: 0,
+      }}
+    >
+      <span style={{ fontSize: '0.58rem', letterSpacing: '0.12em', color: '#7c83e6', fontWeight: 700, textTransform: 'uppercase' as const, flexShrink: 0 }}>
+        ✨ Today
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold truncate" style={{ color: '#c4b5fd' }}>{q.zh}</p>
+        <p className="text-[10px] truncate" style={{ color: '#64748b', fontStyle: 'italic' }}>&ldquo;{q.en}&rdquo;</p>
+      </div>
+      <span className="text-[9px] flex-shrink-0 hidden lg:block" style={{ color: '#475569', fontWeight: 600 }}>
+        &mdash; {q.source}
+      </span>
+    </div>
+  )
+}
+
 // ─── CSS 3D Gyroscope Orb ─────────────────────────────────────────────────────
 
 function GyroscopeOrb({ level, title }: { level: number; title: string }) {
@@ -296,6 +323,7 @@ function FloatingCard({
   delay,
   colorFrom,
   colorTo,
+  href,
 }: {
   title: string
   subject?: string | null
@@ -303,10 +331,11 @@ function FloatingCard({
   delay: string
   colorFrom: string
   colorTo: string
+  href?: string
 }) {
-  return (
+  const card = (
     <div
-      className="animate-float w-44 rounded-2xl p-4 select-none pointer-events-none"
+      className="animate-float w-44 rounded-2xl p-4 select-none"
       style={
         {
           '--card-rotate': rotate,
@@ -314,22 +343,22 @@ function FloatingCard({
           animationDelay: delay,
           background: `linear-gradient(135deg, ${colorFrom}f0, ${colorTo}cc)`,
           border: '1px solid rgba(255,255,255,0.14)',
-          boxShadow:
-            '0 24px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+          boxShadow: '0 24px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+          cursor: href ? 'pointer' : 'default',
+          transition: 'box-shadow 0.2s, transform 0.2s',
         } as React.CSSProperties
       }
     >
       <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center mb-2.5">
         <Sparkles className="w-3 h-3 text-white" />
       </div>
-      <p className="text-white font-bold text-xs leading-snug line-clamp-2 mb-1.5">
-        {title}
-      </p>
-      {subject && (
-        <p className="text-white/55 text-[10px] font-semibold">{subject}</p>
-      )}
+      <p className="text-white font-bold text-xs leading-snug line-clamp-2 mb-1.5">{title}</p>
+      {subject && <p className="text-white/55 text-[10px] font-semibold">{subject}</p>}
+      {href && <p className="text-white/40 text-[9px] mt-1.5 font-semibold">Open note →</p>}
     </div>
   )
+  if (href) return <Link href={href}>{card}</Link>
+  return card
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -433,33 +462,30 @@ export default async function LandingPage() {
       </div>
 
       {/* ── Nav ────────────────────────────────────────────────────── */}
-      <nav
-        className="relative z-50 flex items-center justify-between px-6 sm:px-12 py-5"
-      >
-        <div className="flex items-center gap-2.5">
+      <nav className="relative z-50 flex items-center gap-4 px-6 sm:px-10 py-4">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
           <div
             className="w-8 h-8 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              boxShadow: '0 0 16px rgba(99,102,241,0.5)',
-            }}
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 16px rgba(99,102,241,0.5)' }}
           >
             <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <span className="text-lg font-black tracking-tight text-white">
-            CogniBloom
-          </span>
+          <span className="text-lg font-black tracking-tight text-white">CogniBloom</span>
         </div>
-        <Link href="/dashboard">
+
+        {/* Daily inspiration — wide, short, between logo and button */}
+        <div className="flex-1 hidden sm:block">
+          <NavQuote />
+        </div>
+
+        {/* Enter App */}
+        <Link href="/dashboard" className="flex-shrink-0">
           <button
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-105 active:scale-95"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              boxShadow: '0 0 20px rgba(99,102,241,0.4)',
-              color: 'white',
-            }}
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)', color: 'white' }}
           >
-            Enter App <ArrowRight className="w-4 h-4" />
+            Open App <ArrowRight className="w-4 h-4" />
           </button>
         </Link>
       </nav>
@@ -493,10 +519,10 @@ export default async function LandingPage() {
               {/* Headline */}
               <div>
                 <h1
-                  className="font-black leading-[1.05] tracking-tight"
-                  style={{ fontSize: 'clamp(2.8rem, 5.5vw, 5rem)' }}
+                  className="font-black leading-[1.1] tracking-tight whitespace-nowrap"
+                  style={{ fontSize: 'clamp(1.7rem, 3.2vw, 2.6rem)' }}
                 >
-                  <span className="text-white block">Keep Learning,</span>
+                  <span className="text-white">Keep Learning, </span>
                   <span className="text-shimmer">Daniel.</span>
                 </h1>
                 <p
@@ -508,43 +534,28 @@ export default async function LandingPage() {
                 </p>
               </div>
 
-              {/* Stat chips */}
+              {/* Stat chips — each links to the relevant section */}
               <div className="flex flex-wrap gap-3">
                 {[
-                  { value: totalNotes,          label: 'Notes written', icon: '📝', color: '#818cf8' },
-                  { value: sessions,             label: 'AI sessions',   icon: '🤖', color: '#a78bfa' },
-                  { value: earnedBadges.length,  label: 'Badges earned', icon: '🏆', color: '#fbbf24' },
-                  { value: `Lv ${level}`,        label: title,           icon: '⭐', color: '#34d399' },
-                ].map(({ value, label, icon, color }) => (
-                  <div
-                    key={label}
-                    className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl"
-                    style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.07)',
-                    }}
-                  >
-                    <span className="text-base leading-none">{icon}</span>
-                    <div>
-                      <p
-                        className="text-sm font-black leading-none"
-                        style={{ color }}
-                      >
-                        {value}
-                      </p>
-                      <p
-                        className="text-[10px] mt-0.5 font-medium"
-                        style={{ color: '#475569' }}
-                      >
-                        {label}
-                      </p>
+                  { value: totalNotes,          label: 'Notes written', icon: '📝', color: '#818cf8', href: '/dashboard/notes' },
+                  { value: sessions,             label: 'AI sessions',   icon: '🤖', color: '#a78bfa', href: '/dashboard/chat' },
+                  { value: earnedBadges.length,  label: 'Badges earned', icon: '🏆', color: '#fbbf24', href: '/dashboard/achievements' },
+                  { value: `Lv ${level}`,        label: title,           icon: '⭐', color: '#34d399', href: '/dashboard/achievements' },
+                ].map(({ value, label, icon, color, href }) => (
+                  <Link key={label} href={href}>
+                    <div
+                      className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl cursor-pointer transition-all duration-200 hover:scale-105"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+                    >
+                      <span className="text-base leading-none">{icon}</span>
+                      <div>
+                        <p className="text-sm font-black leading-none" style={{ color }}>{value}</p>
+                        <p className="text-[10px] mt-0.5 font-medium" style={{ color: '#475569' }}>{label}</p>
+                      </div>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
-
-              {/* Daily bilingual quote */}
-              <DailyQuote />
 
               {/* XP progress bar */}
               <div style={{ maxWidth: 320 }}>
@@ -615,10 +626,7 @@ export default async function LandingPage() {
             >
               {/* Top-left floating card */}
               {recentNotes[0] && (
-                <div
-                  className="absolute"
-                  style={{ left: '0%', top: '2%', zIndex: 4 }}
-                >
+                <div className="absolute" style={{ left: '0%', top: '2%', zIndex: 4 }}>
                   <FloatingCard
                     title={recentNotes[0].title}
                     subject={recentNotes[0].subject}
@@ -626,16 +634,14 @@ export default async function LandingPage() {
                     delay="0s"
                     colorFrom="#6366f1"
                     colorTo="#8b5cf6"
+                    href={`/dashboard/notes/${recentNotes[0].id}`}
                   />
                 </div>
               )}
 
               {/* Bottom-left floating card */}
               {recentNotes[1] && (
-                <div
-                  className="absolute"
-                  style={{ left: '2%', bottom: '5%', zIndex: 4 }}
-                >
+                <div className="absolute" style={{ left: '2%', bottom: '5%', zIndex: 4 }}>
                   <FloatingCard
                     title={recentNotes[1].title}
                     subject={recentNotes[1].subject}
@@ -643,6 +649,7 @@ export default async function LandingPage() {
                     delay="1.5s"
                     colorFrom="#10b981"
                     colorTo="#0ea5e9"
+                    href={`/dashboard/notes/${recentNotes[1].id}`}
                   />
                 </div>
               )}
@@ -652,10 +659,7 @@ export default async function LandingPage() {
 
               {/* Top-right floating card */}
               {recentNotes[2] && (
-                <div
-                  className="absolute"
-                  style={{ right: '0%', top: '8%', zIndex: 4 }}
-                >
+                <div className="absolute" style={{ right: '0%', top: '8%', zIndex: 4 }}>
                   <FloatingCard
                     title={recentNotes[2].title}
                     subject={recentNotes[2].subject}
@@ -663,6 +667,7 @@ export default async function LandingPage() {
                     delay="0.9s"
                     colorFrom="#f59e0b"
                     colorTo="#ef4444"
+                    href={`/dashboard/notes/${recentNotes[2].id}`}
                   />
                 </div>
               )}
@@ -673,15 +678,14 @@ export default async function LandingPage() {
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <footer
-        className="relative z-10 text-center py-6 px-6 border-t text-xs"
-        style={{
-          color: '#1e293b',
-          borderColor: 'rgba(255,255,255,0.04)',
-        }}
+        className="relative z-10 text-center py-8 px-6 border-t"
+        style={{ borderColor: 'rgba(255,255,255,0.06)' }}
       >
-        Built for{' '}
-        <span style={{ color: '#818cf8' }}>Daniel</span> &mdash; curiosity is your
-        superpower 🌱
+        <p className="text-sm font-semibold" style={{ color: '#64748b' }}>
+          Built for{' '}
+          <span style={{ color: '#a5b4fc', fontWeight: 800 }}>Daniel</span>
+          {' '}&mdash; curiosity is your superpower 🌱
+        </p>
       </footer>
     </main>
   )
