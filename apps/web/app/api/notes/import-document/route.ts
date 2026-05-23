@@ -42,7 +42,9 @@ function convertSvgToImg(html: string): string {
 }
 
 /**
- * Use Gemini 2.0 Flash vision to extract structured, science-compliant HTML.
+ * Use Gemini 2.5 Flash-Lite vision to extract structured, science-compliant HTML.
+ * Flash-Lite is the fastest/lightest model in the app — no heavy thinking overhead,
+ * vision-capable, and already registered in the model registry.
  *
  * Output format is designed for TipTap compatibility:
  *   • Math (block)  → <div data-math-block data-latex="LaTeX">  (rendered by KaTeX)
@@ -59,7 +61,8 @@ async function extractViaGemini(
   if (!apiKey) throw new Error('No Google API key configured for vision extraction.')
 
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  // gemini-2.5-flash-lite: lightest/fastest model in the app registry — vision-capable, no deep thinking
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
 
   const prompt = `You are a science-aware document extraction assistant. Extract ALL content from this document and return it as HTML that is compatible with a TipTap rich-text editor.
 
