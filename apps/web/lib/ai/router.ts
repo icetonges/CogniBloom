@@ -40,7 +40,7 @@ export function getProvider(
 
   if (!route) {
     throw new Error(
-      `Unknown model provider for "${modelId}". Supported prefixes: gemini-*, groq/*, meta-llama/*, llama-*, compound-beta, claude-*`
+      `Unknown model provider for "${modelId}". Supported prefixes: gemini-*, groq/*, meta-llama/*, llama-*, compound-beta, claude-*. All gemini-2.x and gemini-3.x IDs are valid.`
     )
   }
 
@@ -61,6 +61,7 @@ export const AVAILABLE_MODELS = {
   google: [
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
   ],
   groq: [
     'groq/compound-beta',

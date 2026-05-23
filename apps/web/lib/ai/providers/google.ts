@@ -15,26 +15,38 @@ import type {
 import { AuthenticationError, RateLimitError, ContextLengthError } from './types'
 
 const GOOGLE_MODELS: Record<string, ModelInfo> = {
+  // ── Gemini 2.5 series ────────────────────────────────────────────────────
   'gemini-2.5-flash': {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     provider: 'google',
     contextWindow: 1000000,
-    costPer1kInputTokens: 0.000075,
-    costPer1kOutputTokens: 0.0003,
+    costPer1kInputTokens: 0.0003,    // $0.30/1M
+    costPer1kOutputTokens: 0.0025,   // $2.50/1M
     supportsVision: true,
     supportsToolCalling: true,
     supportsStreaming: true,
   },
   'gemini-2.5-flash-lite': {
     id: 'gemini-2.5-flash-lite',
-    name: 'Gemini 2.5 Flash Lite',
+    name: 'Gemini 2.5 Flash-Lite',
     provider: 'google',
     contextWindow: 1000000,
-    costPer1kInputTokens: 0.0000375,
-    costPer1kOutputTokens: 0.00015,
+    costPer1kInputTokens: 0.0001,    // $0.10/1M — cheapest
+    costPer1kOutputTokens: 0.0004,   // $0.40/1M
     supportsVision: true,
     supportsToolCalling: false,
+    supportsStreaming: true,
+  },
+  'gemini-2.5-pro': {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    provider: 'google',
+    contextWindow: 1000000,
+    costPer1kInputTokens: 0.00125,   // $1.25/1M
+    costPer1kOutputTokens: 0.01,     // $10.00/1M
+    supportsVision: true,
+    supportsToolCalling: true,
     supportsStreaming: true,
   },
 }

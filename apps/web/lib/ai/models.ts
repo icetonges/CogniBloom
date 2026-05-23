@@ -20,16 +20,16 @@ export interface ModelRegistryEntry {
 export type ModelId = string
 
 export const MODELS: ModelRegistryEntry[] = [
-  // ── Google Gemini (free via Google AI Studio) ─────────────────────────────
+  // ── Google Gemini ─────────────────────────────────────────────────────────
   {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     provider: 'google',
     providerLabel: 'Google',
     providerColor: '#4285f4',
-    inputPricePer1M: 0,
-    outputPricePer1M: 0,
-    description: 'Best free model · 1M context · thinking mode',
+    inputPricePer1M: 0.30,
+    outputPricePer1M: 2.50,
+    description: 'Best balance · 1M context · thinking mode · free tier',
     contextWindow: '1M',
     isFree: true,
     supportsVision: true,
@@ -42,13 +42,27 @@ export const MODELS: ModelRegistryEntry[] = [
     provider: 'google',
     providerLabel: 'Google',
     providerColor: '#4285f4',
-    inputPricePer1M: 0,
-    outputPricePer1M: 0,
-    description: 'Fastest and most budget-friendly · 1M context',
+    inputPricePer1M: 0.10,
+    outputPricePer1M: 0.40,
+    description: 'Cheapest Google model · 1M context · free tier',
     contextWindow: '1M',
     isFree: true,
     supportsVision: true,
-    badge: 'Fastest',
+    badge: 'Cheapest',
+  },
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    provider: 'google',
+    providerLabel: 'Google',
+    providerColor: '#4285f4',
+    inputPricePer1M: 1.25,
+    outputPricePer1M: 10.00,
+    description: 'Most capable Google model · 1M context · free tier',
+    contextWindow: '1M',
+    isFree: true,
+    supportsVision: true,
+    badge: 'Most Capable',
   },
 
   // ── Groq (free, ultra-fast inference) ────────────────────────────────────
