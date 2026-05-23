@@ -92,7 +92,7 @@ export function NotesList({ onNewNote, onEditNote }: NotesListProps) {
           <p className="text-sm text-muted-foreground mt-0.5">
             {isSearching
               ? `${notes.total} result${notes.total !== 1 ? 's' : ''} found`
-              : `${notes.total} note${notes.total !== 1 ? 's' : ''} total`}
+              : `${notes.total} note${notes.total !== 1 ? 's' : ''} total · click any note to open the rich editor`}
           </p>
         </div>
         <button

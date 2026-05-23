@@ -64,7 +64,11 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
 
   return (
     <div
-      className="group rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:scale-[1.01] hover:-translate-y-0.5"
+      role="button"
+      tabIndex={0}
+      onClick={() => onEdit?.(note)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEdit?.(note) }}
+      className="group rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:scale-[1.01] hover:-translate-y-0.5 cursor-pointer"
       style={{
         background: color.bg,
         border: `1px solid ${color.border}`,
@@ -93,7 +97,7 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
         </div>
 
         <button
-          onClick={() => onToggleBookmark?.(note.id)}
+          onClick={(e) => { e.stopPropagation(); onToggleBookmark?.(note.id) }}
           className="shrink-0 p-1 rounded-lg transition-colors text-muted-foreground hover:text-foreground"
         >
           {note.isBookmarked
@@ -211,13 +215,13 @@ export function NoteCard({ note, onEdit, onDelete, onToggleBookmark }: NoteCardP
           ) : null}
 
           {/* Edit */}
-          <button onClick={() => onEdit?.(note)}
+          <button onClick={(e) => { e.stopPropagation(); onEdit?.(note) }}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
             <Edit2 className="h-3.5 w-3.5" />
           </button>
 
           {/* Delete */}
-          <button onClick={() => onDelete?.(note.id)}
+          <button onClick={(e) => { e.stopPropagation(); onDelete?.(note.id) }}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
