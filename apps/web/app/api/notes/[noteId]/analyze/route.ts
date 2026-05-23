@@ -2,18 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { getAIManager } from '@/lib/ai'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
-import { SchemaType } from '@google/generative-ai'
 import { z } from 'zod'
 
 type RouteParams = { params: Promise<{ noteId: string }> }
 export const maxDuration = 60
 
+// ── Zod schema ─────────────────────────────────────────────────────────────────
+const mindMapNodeSchema: z.ZodType<{ label: string; children?: unknown[] }> = z.object({
+  label: z.string().min(1),
+  children: z.array(z.any()).default([]),
+})
+
 const analysisSchema = z.object({
-  mindMap: z.object({
-    label: z.string().min(1),
-    children: z.array(z.any()).default([]),
-  }),
+  mindMap: mindMapNodeSchema,
   reasoningHints: z.array(z.object({
     step: z.number(),
     hint: z.string().min(1),
@@ -23,59 +24,12 @@ const analysisSchema = z.object({
     definition: z.string().min(1),
     importance: z.enum(['core', 'supporting', 'context']).catch('supporting'),
   })).default([]),
-  tutorSummary: z.string().min(1),
+  tutorSummary: z.string().default(''),
 })
 
-const responseSchema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    mindMap: {
-      type: SchemaType.OBJECT,
-      properties: {
-        label: { type: SchemaType.STRING },
-        children: {
-          type: SchemaType.ARRAY,
-          items: {
-            type: SchemaType.OBJECT,
-            properties: {
-              label: { type: SchemaType.STRING },
-              children: { type: SchemaType.ARRAY, items: { type: SchemaType.OBJECT } },
-            },
-            required: ['label'],
-          },
-        },
-      },
-      required: ['label', 'children'],
-    },
-    reasoningHints: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          step: { type: SchemaType.NUMBER },
-          hint: { type: SchemaType.STRING },
-        },
-        required: ['step', 'hint'],
-      },
-    },
-    knowledgePoints: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          term: { type: SchemaType.STRING },
-          definition: { type: SchemaType.STRING },
-          importance: { type: SchemaType.STRING, enum: ['core', 'supporting', 'context'] },
-        },
-        required: ['term', 'definition', 'importance'],
-      },
-    },
-    tutorSummary: { type: SchemaType.STRING },
-  },
-  required: ['mindMap', 'reasoningHints', 'knowledgePoints', 'tutorSummary'],
-}
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-// Strip HTML tags to get plain text for the AI prompt
+/** Strip HTML tags to plain text for the AI prompt */
 function htmlToText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -92,8 +46,36 @@ function htmlToText(html: string): string {
     .trim()
 }
 
+/**
+ * Robustly extract JSON from an AI response that may contain markdown fences,
+ * preamble text, or thinking tokens mixed in.
+ */
+function extractJSON(text: string): string {
+  if (!text || !text.trim()) return ''
+
+  // 1. Strip markdown fences
+  let s = text
+    .replace(/^```json\s*/im, '')
+    .replace(/^```\s*/im, '')
+    .replace(/```\s*$/im, '')
+    .trim()
+
+  // 2. If it already starts with '{', use it directly
+  if (s.startsWith('{')) return s
+
+  // 3. Try to find the first '{' ... last '}' block
+  const start = s.indexOf('{')
+  const end = s.lastIndexOf('}')
+  if (start !== -1 && end > start) {
+    return s.slice(start, end + 1)
+  }
+
+  return s
+}
+
+// ── Route handler ──────────────────────────────────────────────────────────────
+
 // POST /api/notes/[noteId]/analyze
-// Runs AI expert-tutor analysis and saves results back to the note.
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
@@ -107,7 +89,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Note content too short to analyze' }, { status: 400 })
     }
 
-    const prompt = `You are an expert K-12 tutor. Analyze the following student note and respond with ONLY valid JSON — no markdown, no explanation outside the JSON.
+    // Use gemini-2.5-flash-lite: no thinking overhead, fast, great at structured output
+    const MODEL = 'gemini-2.5-flash-lite'
+
+    const prompt = `You are an expert K-12 tutor. Analyze the student note below and return ONLY a single JSON object — no markdown, no explanation, nothing outside the JSON.
 
 STUDENT NOTE TITLE: ${note.title}
 SUBJECT: ${note.subject ?? 'General'}
@@ -115,10 +100,10 @@ SUBJECT: ${note.subject ?? 'General'}
 CONTENT:
 ${plainText.slice(0, 4000)}
 
-Return this exact JSON shape:
+Return exactly this JSON shape (fill in real values, keep the exact field names):
 {
   "mindMap": {
-    "label": "<root topic>",
+    "label": "<root topic name>",
     "children": [
       {
         "label": "<subtopic>",
@@ -129,40 +114,50 @@ Return this exact JSON shape:
     ]
   },
   "reasoningHints": [
-    { "step": 1, "hint": "<actionable reasoning step>" },
+    { "step": 1, "hint": "<actionable reasoning step for the student>" },
     { "step": 2, "hint": "<next step>" }
   ],
   "knowledgePoints": [
-    { "term": "<key term>", "definition": "<clear definition>", "importance": "core" },
+    { "term": "<key term>", "definition": "<clear one-sentence definition>", "importance": "core" },
     { "term": "<supporting term>", "definition": "<definition>", "importance": "supporting" }
   ],
-  "tutorSummary": "<HTML string: 2-3 paragraphs of expert teacher notes. Use <strong> for emphasis. No block-level elements like h1/h2.>"
+  "tutorSummary": "<2-3 sentences of expert teacher observations as plain text. Mention common mistakes and connections to broader concepts.>"
 }
 
 Rules:
-- mindMap: 1 root, 3-6 main branches, each with 1-3 sub-nodes
+- mindMap: 1 root node, 3-6 main branches, each branch 1-3 child nodes
 - reasoningHints: 3-6 steps that scaffold the student's logical thinking
-- knowledgePoints: 4-8 terms; importance is exactly one of: core, supporting, context
-- tutorSummary: insightful teacher observations, common mistakes to watch for, connections to broader concepts
-- ONLY return the JSON object. Nothing else.`
+- knowledgePoints: 4-8 terms; importance must be exactly one of: core, supporting, context
+- tutorSummary: helpful teacher-voice paragraph (plain text, no HTML tags needed)
+- Return ONLY the JSON object. No other text.`
 
     const aiManager = getAIManager()
-    const response = await aiManager.chat(DEFAULT_MODEL_ID, {
+    const response = await aiManager.chat(MODEL, {
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
+      temperature: 0.2,
       maxTokens: 2000,
-      responseMimeType: 'application/json',
-      responseSchema,
     })
 
-    // Strip markdown fences if present
-    const raw = response.content
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim()
+    const raw = extractJSON(response.content)
 
-    const parsed = analysisSchema.parse(JSON.parse(raw))
+    if (!raw) {
+      console.error('[analyze] Empty response from AI. Raw:', JSON.stringify(response.content).slice(0, 200))
+      return NextResponse.json(
+        { error: 'AI returned an empty response — please retry' },
+        { status: 502 }
+      )
+    }
+
+    let parsed: z.infer<typeof analysisSchema>
+    try {
+      parsed = analysisSchema.parse(JSON.parse(raw))
+    } catch (parseErr) {
+      console.error('[analyze] JSON/Zod parse failed. Raw excerpt:', raw.slice(0, 300), parseErr)
+      return NextResponse.json(
+        { error: 'AI returned invalid response — please retry' },
+        { status: 502 }
+      )
+    }
 
     const updated = await db.note.update({
       where: { id: noteId },
@@ -186,9 +181,10 @@ Rules:
       },
     })
   } catch (error) {
-    if (error instanceof SyntaxError || error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'AI returned invalid response — please retry' }, { status: 502 })
-    }
-    return NextResponse.json({ error: 'Analysis failed' }, { status: 500 })
+    console.error('[analyze] Unexpected error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Analysis failed' },
+      { status: 500 }
+    )
   }
 }
