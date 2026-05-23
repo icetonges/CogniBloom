@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { db } from '@/lib/db'
 import { formatDistanceToNow } from 'date-fns'
 import { xpToLevel, xpForLevel } from '@/lib/gamification'
+import { easternMidnight } from '@/lib/timezone'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,18 +86,18 @@ export default async function DashboardPage() {
     db.flashcard.count({ where: { userId, nextReviewAt: { lte: new Date() } } }),
   ])
 
-  // Streak
+  // Streak — Eastern calendar dates so midnight rolls at Eastern time
   const allActivity = await db.$queryRaw<{ day: Date }[]>`
-    SELECT DISTINCT DATE("createdAt") AS day FROM "TutorSession" WHERE "userId" = ${userId}
+    SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') AS day FROM "TutorSession" WHERE "userId" = ${userId}
     UNION
-    SELECT DISTINCT DATE("createdAt") AS day FROM "Note" WHERE "userId" = ${userId}
+    SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') AS day FROM "Note" WHERE "userId" = ${userId}
     ORDER BY day DESC LIMIT 60
   `
   let streak = 0
-  const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0)
+  const todayDate = easternMidnight()
   for (let i = 0; i < allActivity.length; i++) {
     const exp = new Date(todayDate); exp.setDate(todayDate.getDate() - i)
-    if (new Date(allActivity[i].day).toDateString() === exp.toDateString()) streak++
+    if (easternMidnight(new Date(allActivity[i].day)).getTime() === exp.getTime()) streak++
     else break
   }
 
@@ -104,7 +105,8 @@ export default async function DashboardPage() {
     (learningProfile?.masteryScores as Record<string, number>) ?? {}
   ).sort(([, a], [, b]) => b - a).slice(0, 4)
 
-  const hour = new Date().getHours()
+  // Use Eastern hour so the greeting reflects Daniel's local time of day
+  const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10)
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const greetEmoji = hour < 12 ? '🌅' : hour < 18 ? '☀️' : '🌙'
 
@@ -119,7 +121,7 @@ export default async function DashboardPage() {
   // Focus tasks
   const masteryScores = (learningProfile?.masteryScores as Record<string, number>) ?? {}
   const activityToday = allActivity.length > 0 &&
-    new Date(allActivity[0].day).toDateString() === todayDate.toDateString()
+    easternMidnight(new Date(allActivity[0].day)).getTime() === todayDate.getTime()
 
   const focusTasks: { emoji: string; text: string; href: string; urgent?: boolean }[] = []
   if (flashcardsDue > 0) {

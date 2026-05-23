@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sendDailySummary } from '@/lib/email'
 import { DANIEL_USER_ID, APP_USER, ALL_SUMMARY_RECIPIENTS } from '@/lib/user'
+import { easternDateBoundaries, easternMidnight } from '@/lib/timezone'
 
 // POST /api/email/daily-summary
 // Called by GitHub Actions cron daily. Protected by CRON_SECRET.
@@ -14,9 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = DANIEL_USER_ID
-    const today = new Date()
-    const startOfDay = new Date(today); startOfDay.setHours(0, 0, 0, 0)
-    const startOfWeek = new Date(today); startOfWeek.setDate(today.getDate() - 6); startOfWeek.setHours(0, 0, 0, 0)
+    const { now: today, startOfDay, startOfWeek } = easternDateBoundaries()
 
     const [
       notesCreated,
@@ -68,22 +67,21 @@ export async function POST(request: NextRequest) {
       }),
     ])
 
-    // Streak calculation
+    // Streak calculation — Eastern calendar dates
     const allActivity = await db.$queryRaw<{ day: Date }[]>`
-      SELECT DISTINCT DATE("createdAt") as day
+      SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') as day
       FROM "TutorSession" WHERE "userId" = ${userId}
       UNION
-      SELECT DISTINCT DATE("createdAt") as day
+      SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') as day
       FROM "Note" WHERE "userId" = ${userId}
       ORDER BY day DESC LIMIT 60
     `
     let streak = 0
-    const todayStart = new Date(startOfDay)
     for (let i = 0; i < allActivity.length; i++) {
-      const expected = new Date(todayStart)
-      expected.setDate(todayStart.getDate() - i)
-      const actual = new Date(allActivity[i].day)
-      if (actual.toDateString() === expected.toDateString()) streak++
+      const expected = new Date(startOfDay)
+      expected.setDate(startOfDay.getDate() - i)
+      const actual = easternMidnight(new Date(allActivity[i].day))
+      if (actual.getTime() === expected.getTime()) streak++
       else break
     }
 

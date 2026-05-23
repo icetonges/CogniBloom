@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { chatWithFallback } from '@/lib/ai/fallback'
+import { easternMidnight } from '@/lib/timezone'
 
 export const maxDuration = 60
 
@@ -37,8 +38,7 @@ export async function GET(request: NextRequest) {
 
     // Try to serve from DB cache (generated today)
     if (!refresh) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      const today = easternMidnight()
       const cached = await db.dailyFeedItem.findMany({
         where: { createdAt: { gte: today } },
         take: 8,

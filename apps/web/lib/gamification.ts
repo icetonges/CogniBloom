@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { easternMidnight } from '@/lib/timezone'
 
 // ─── XP award amounts ─────────────────────────────────────────────────────────
 
@@ -205,19 +206,22 @@ export async function awardXP(
 
 export async function updateStreak(userId: string): Promise<number> {
   const activity = await db.$queryRaw<{ day: Date }[]>`
-    SELECT DISTINCT DATE("createdAt") AS day
+    SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') AS day
     FROM "TutorSession" WHERE "userId" = ${userId}
     UNION
-    SELECT DISTINCT DATE("createdAt") AS day
+    SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') AS day
     FROM "Note" WHERE "userId" = ${userId}
     ORDER BY day DESC LIMIT 60
   `
 
   let streak = 0
-  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const today = easternMidnight()
   for (let i = 0; i < activity.length; i++) {
-    const expected = new Date(today); expected.setDate(today.getDate() - i)
-    if (new Date(activity[i].day).toDateString() === expected.toDateString()) streak++
+    const expected = new Date(today)
+    expected.setDate(today.getDate() - i)
+    // activity[i].day is a DATE value from Postgres — compare as Eastern midnight
+    const activityDay = easternMidnight(new Date(activity[i].day))
+    if (activityDay.getTime() === expected.getTime()) streak++
     else break
   }
 

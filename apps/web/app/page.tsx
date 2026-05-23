@@ -96,10 +96,13 @@ const QUOTES = [
   },
 ]
 
-/** Pick a quote by day-of-year so it stays constant for the whole day. */
+/** Pick a quote by day-of-year (US Eastern time) so it stays constant for the whole day. */
 function getDailyQuote() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), 0, 0)
+  // Use Eastern time so the quote advances at Eastern midnight, not UTC midnight
+  const easternDateStr = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
+  const [month, day, year] = easternDateStr.split('/').map(Number)
+  const start = new Date(year!, 0, 0)
+  const now = new Date(year!, month! - 1, day!)
   const diff = now.getTime() - start.getTime()
   const dayOfYear = Math.floor(diff / 86_400_000)
   return QUOTES[dayOfYear % QUOTES.length]
@@ -445,7 +448,7 @@ export default async function LandingPage() {
         className="relative z-10 flex items-center"
         style={{ minHeight: 'calc(100vh - 78px)' }}
       >
-        <div className="w-full px-6 sm:px-12 xl:px-20 pt-5 pb-0">
+        <div className="w-full px-6 sm:px-12 xl:px-20 pb-0">
           <div className="grid lg:grid-cols-2 gap-10 xl:gap-16 items-center">
 
             {/* ── Left: text content ── */}

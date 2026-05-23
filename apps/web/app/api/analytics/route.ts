@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
+import { easternDateBoundaries, easternMidnight } from '@/lib/timezone'
 
 // GET /api/analytics — return learning stats for the authenticated user
 export async function GET() {
   try {
     const userId = DANIEL_USER_ID
 
-    const now = new Date()
-    const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0)
-    const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - 6); startOfWeek.setHours(0, 0, 0, 0)
-    const startOfMonth = new Date(now); startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0)
+    const { now, startOfDay, startOfWeek, startOfMonth } = easternDateBoundaries()
 
     const [
       totalNotes,
@@ -75,15 +73,19 @@ export async function GET() {
       }),
     ])
 
-    // Build day-by-day activity (last 7 days)
+    // Build day-by-day activity (last 7 days) — keys are Eastern calendar dates YYYY-MM-DD
     const activityMap: Record<string, { sessions: number; messages: number }> = {}
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(now)
-      d.setDate(d.getDate() - i)
-      activityMap[d.toISOString().slice(0, 10)] = { sessions: 0, messages: 0 }
+      const d = new Date(startOfDay)
+      d.setDate(startOfDay.getDate() - i)
+      // Format as YYYY-MM-DD using Eastern midnight date
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      activityMap[key] = { sessions: 0, messages: 0 }
     }
     for (const s of recentSessions) {
-      const key = s.createdAt.toISOString().slice(0, 10)
+      // Convert session's UTC createdAt to Eastern date key
+      const eastern = easternMidnight(s.createdAt)
+      const key = `${eastern.getFullYear()}-${String(eastern.getMonth() + 1).padStart(2, '0')}-${String(eastern.getDate()).padStart(2, '0')}`
       if (activityMap[key]) {
         activityMap[key].sessions += 1
         activityMap[key].messages += s.messageCount
@@ -97,13 +99,13 @@ export async function GET() {
       modeCounts[s.mode] = (modeCounts[s.mode] || 0) + 1
     }
 
-    // Streak calculation (consecutive days with at least 1 session or note)
+    // Streak calculation — use Eastern calendar dates so midnight rolls at Eastern time
     const allActivity = await db.$queryRaw<{ day: Date }[]>`
-      SELECT DISTINCT DATE("createdAt") as day
+      SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') as day
       FROM "TutorSession"
       WHERE "userId" = ${userId}
       UNION
-      SELECT DISTINCT DATE("createdAt") as day
+      SELECT DISTINCT DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York') as day
       FROM "Note"
       WHERE "userId" = ${userId}
       ORDER BY day DESC
@@ -114,8 +116,8 @@ export async function GET() {
     for (let i = 0; i < allActivity.length; i++) {
       const expected = new Date(today)
       expected.setDate(today.getDate() - i)
-      const actual = new Date(allActivity[i].day)
-      if (actual.toDateString() === expected.toDateString()) {
+      const actual = easternMidnight(new Date(allActivity[i].day))
+      if (actual.getTime() === expected.getTime()) {
         streak++
       } else {
         break
