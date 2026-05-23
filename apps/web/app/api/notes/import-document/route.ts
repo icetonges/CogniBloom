@@ -27,7 +27,7 @@ function textToHtml(text: string): string {
 
 /**
  * Use Gemini 2.5 Flash vision to extract structured HTML from a PDF or image.
- * Handles scanned / image-only PDFs, math exams, diagrams, handwritten notes.
+ * Preserves text, math, tables, AND geometric figures/diagrams as inline SVG.
  */
 async function extractViaGemini(
   buffer: Buffer,
@@ -40,18 +40,26 @@ async function extractViaGemini(
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-  const prompt = `You are a document extraction assistant. Extract ALL text content from this document and return it as clean HTML.
+  const prompt = `You are a document extraction assistant. Extract ALL content from this document — text AND visual elements — and return it as complete, clean HTML.
 
-Rules:
+TEXT RULES:
 - Preserve headings as <h1>, <h2>, <h3>
 - Preserve paragraphs as <p>
 - Preserve lists as <ul>/<ol> with <li> items
 - Preserve tables as <table><tr><th>/<td> structure
 - For math/formulas: write as plain text (e.g. x^2 + y^2 = r^2)
-- For numbered problems/questions: use <ol><li> for the question list
-- Do NOT wrap in <html>/<body>/<!DOCTYPE> tags
-- Do NOT include any explanation -- output ONLY the HTML content
-- If the document is a test/exam, preserve all question numbers and answer choices
+- For numbered problems/questions: use <ol><li> preserving ALL question numbers and answer choices
+
+VISUAL ELEMENTS — critical, never skip figures or diagrams:
+- For geometric figures, shapes, or diagrams: generate an accurate inline <svg viewBox="0 0 W H"> that faithfully reproduces the visual. Use black fill/stroke for B&W figures, match the original proportions.
+- For charts or graphs: generate an <svg> approximation; if too complex, use <figure><figcaption>[detailed description including all data, labels, axes]</figcaption></figure>
+- For photos or complex images that cannot be represented as SVG: include <figure class="imported-figure"><figcaption>[detailed visual description]</figcaption></figure>
+- Place each figure inline exactly where it appears in the document — NEVER omit it
+
+OUTPUT:
+- Do NOT wrap output in <html>/<body>/<!DOCTYPE> tags
+- Do NOT add any explanation — output ONLY the HTML
+- If this is a test/exam, every question number, figure, and answer choice must appear
 
 Document filename: ${fileName}`
 
@@ -79,6 +87,10 @@ Document filename: ${fileName}`
  * Accepts multipart/form-data with a single `file` field.
  * Supports: .txt, .pdf, .docx, images
  * Returns: { success: true, html: string, title?: string }
+ *
+ * PDF pipeline:
+ *   Primary  → Gemini vision (preserves text + figures as SVG)
+ *   Fallback → pdf-parse plain-text (if Gemini unavailable/fails)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -126,30 +138,31 @@ export async function POST(request: NextRequest) {
 
     // ---- PDF ----------------------------------------------------------------
     if (lowerName.endsWith('.pdf') || file.type === 'application/pdf') {
-      // Stage 1: fast text extraction (works for PDFs with a text layer)
-      let textHtml = ''
-      try {
-        const { default: pdfParse } = await import('pdf-parse')
-        const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>)(buffer)
-        const cleaned = data.text.replace(/\s+/g, ' ').trim()
-        if (cleaned.length >= 100) {
-          textHtml = textToHtml(data.text)
-        }
-      } catch {
-        // pdf-parse failed -- fall through to Gemini vision
-      }
-
-      if (textHtml) {
-        return NextResponse.json({ success: true, html: textHtml, title: rawTitle })
-      }
-
-      // Stage 2: image-based / scanned / encrypted PDF -> Gemini vision
+      // Primary: Gemini vision — handles text AND preserves figures/diagrams as SVG
       try {
         const { html, title } = await extractViaGemini(buffer, 'application/pdf', name)
         return NextResponse.json({ success: true, html, title: title ?? rawTitle })
-      } catch (err) {
-        console.error('Gemini PDF vision error:', err)
-        const msg = err instanceof Error ? err.message : 'Unknown error'
+      } catch (geminiErr) {
+        console.error('Gemini PDF vision error:', geminiErr)
+
+        // Fallback: pdf-parse plain text (loses figures, but better than nothing)
+        try {
+          const { default: pdfParse } = await import('pdf-parse')
+          const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>)(buffer)
+          const cleaned = data.text.replace(/\s+/g, ' ').trim()
+          if (cleaned.length >= 50) {
+            const html = textToHtml(data.text)
+            return NextResponse.json({
+              success: true,
+              html: `<p style="color:#f59e0b;font-size:0.8em">⚠ Visual figures could not be extracted (AI vision unavailable). Text only.</p>${html}`,
+              title: rawTitle,
+            })
+          }
+        } catch {
+          // pdf-parse also failed
+        }
+
+        const msg = geminiErr instanceof Error ? geminiErr.message : 'Unknown error'
         return NextResponse.json(
           { error: `Could not extract PDF content. ${msg}` },
           { status: 422 }
