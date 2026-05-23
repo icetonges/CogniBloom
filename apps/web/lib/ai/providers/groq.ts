@@ -59,17 +59,6 @@ const GROQ_MODELS: Record<string, ModelInfo> = {
     supportsToolCalling: false,
     supportsStreaming: true,
   },
-  'gemma2-9b-it': {
-    id: 'gemma2-9b-it',
-    name: 'Gemma 2 9B Instruct',
-    provider: 'groq',
-    contextWindow: 8192,
-    costPer1kInputTokens: 0.0002,
-    costPer1kOutputTokens: 0.0003,
-    supportsVision: false,
-    supportsToolCalling: false,
-    supportsStreaming: true,
-  },
 }
 
 export class GroqProvider extends AIProvider {
