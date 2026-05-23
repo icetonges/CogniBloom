@@ -325,7 +325,7 @@ export default async function LandingPage() {
         where: { userId },
         orderBy: { createdAt: 'desc' },
         take: 3,
-        select: { id: true, title: true, subject: true },
+        select: { id: true, slug: true, title: true, subject: true },
       }),
       db.note.count({ where: { userId } }),
       db.learningProfile.findUnique({
@@ -587,7 +587,7 @@ export default async function LandingPage() {
                     delay="0s"
                     colorFrom="#6366f1"
                     colorTo="#8b5cf6"
-                    href={`/dashboard/notes/${recentNotes[0].id}`}
+                    href={`/dashboard/notes/${recentNotes[0].slug ?? recentNotes[0].id}`}
                   />
                 </div>
               )}
@@ -602,7 +602,7 @@ export default async function LandingPage() {
                     delay="1.5s"
                     colorFrom="#10b981"
                     colorTo="#0ea5e9"
-                    href={`/dashboard/notes/${recentNotes[1].id}`}
+                    href={`/dashboard/notes/${recentNotes[1].slug ?? recentNotes[1].id}`}
                   />
                 </div>
               )}
@@ -620,7 +620,7 @@ export default async function LandingPage() {
                     delay="0.9s"
                     colorFrom="#f59e0b"
                     colorTo="#ef4444"
-                    href={`/dashboard/notes/${recentNotes[2].id}`}
+                    href={`/dashboard/notes/${recentNotes[2].slug ?? recentNotes[2].id}`}
                   />
                 </div>
               )}

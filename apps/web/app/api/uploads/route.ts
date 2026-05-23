@@ -4,6 +4,19 @@ import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
 import { chunkText } from '@/lib/content'
 
+// pdfjs-dist (used by pdf-parse) references DOMMatrix which is browser-only.
+// Polyfill it so the server-side PDF text extraction doesn't crash.
+if (typeof (globalThis as Record<string, unknown>).DOMMatrix === 'undefined') {
+  // Minimal stub — pdfjs only uses it for transform math during canvas rendering,
+  // which we never do (we only extract text). An empty class is enough.
+  ;(globalThis as Record<string, unknown>).DOMMatrix = class DOMMatrix {
+    constructor(_init?: string | number[]) {}
+    static fromFloat64Array(_a: Float64Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
+    static fromFloat32Array(_a: Float32Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
+    static fromMatrix(_m?: unknown)           { return new (globalThis as Record<string, unknown>).DOMMatrix() }
+  }
+}
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
 export const maxDuration = 60
@@ -30,12 +43,12 @@ export async function POST(request: NextRequest) {
     let extractedText = ''
 
     if (file.type === 'application/pdf') {
-      // pdf-parse is CJS — dynamic import returns the module object; the actual
-      // callable may sit on .default or directly on the module export.
-      type PdfParseFn = (buf: Buffer) => Promise<{ text: string }>
-      const pdfMod = await import('pdf-parse')
-      const pdfParse = ((pdfMod as unknown as { default?: PdfParseFn }).default ?? pdfMod) as PdfParseFn
-      const parsed = await pdfParse(buffer)
+      // Import the internal module directly — avoids the test-file initialization
+      // in the package entry point that triggers canvas/DOMMatrix browser APIs.
+      type PdfParseFn = (buf: Buffer, options?: Record<string, unknown>) => Promise<{ text: string }>
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js') as PdfParseFn
+      const parsed = await pdfParse(buffer, { max: 0 }) // max:0 = no page limit
       extractedText = parsed.text
     } else {
       extractedText = buffer.toString('utf-8')

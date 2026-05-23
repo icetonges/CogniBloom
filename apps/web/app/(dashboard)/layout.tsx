@@ -13,17 +13,17 @@ import { cn } from '@/lib/utils'
 import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 
 const navItems = [
-  { href: '/dashboard',                 icon: BarChart3,     label: 'Dashboard',       color: 'text-blue-400'   },
-  { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',         color: 'text-violet-400' },
   { href: '/dashboard/notes/new',       icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
-  { href: '/dashboard/quiz',            icon: Trophy,        label: 'Quiz',             color: 'text-amber-400'  },
-  { href: '/dashboard/feed',            icon: Rss,           label: 'Daily Feed',       color: 'text-sky-400'    },
-  { href: '/dashboard/analytics',       icon: Brain,         label: 'Analytics',        color: 'text-pink-400'   },
-  { href: '/dashboard/knowledge-graph', icon: GitBranch,     label: 'Knowledge Graph',  color: 'text-teal-400'   },
-  { href: '/dashboard/achievements',    icon: Medal,         label: 'Achievements',     color: 'text-yellow-400' },
-  { href: '/dashboard/flashcards',      icon: Layers,        label: 'Flashcards',       color: 'text-rose-400',   badge: 'flashcards-due' },
-  { href: '/dashboard/uploads',         icon: Upload,        label: 'Uploads',          color: 'text-orange-400' },
-  { href: '/dashboard/settings',        icon: Settings,      label: 'Settings',         color: 'text-slate-400'  },
+  { href: '/dashboard',                 icon: BarChart3,     label: 'Dashboard',        color: 'text-blue-400'   },
+  { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',          color: 'text-violet-400' },
+  { href: '/dashboard/flashcards',      icon: Layers,        label: 'Flashcards',        color: 'text-rose-400',   badge: 'flashcards-due' },
+  { href: '/dashboard/quiz',            icon: Trophy,        label: 'Quiz',              color: 'text-amber-400'  },
+  { href: '/dashboard/feed',            icon: Rss,           label: 'Daily Feed',        color: 'text-sky-400'    },
+  { href: '/dashboard/analytics',       icon: Brain,         label: 'Analytics',         color: 'text-pink-400'   },
+  { href: '/dashboard/knowledge-graph', icon: GitBranch,     label: 'Knowledge Graph',   color: 'text-teal-400'   },
+  { href: '/dashboard/achievements',    icon: Medal,         label: 'Achievements',      color: 'text-yellow-400' },
+  { href: '/dashboard/uploads',         icon: Upload,        label: 'Uploads',           color: 'text-orange-400' },
+  { href: '/dashboard/settings',        icon: Settings,      label: 'Settings',          color: 'text-slate-400'  },
 ]
 
 interface UserStats { level: number; pct: number; streak: number }

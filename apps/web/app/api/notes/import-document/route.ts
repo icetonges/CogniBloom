@@ -4,6 +4,16 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 export const runtime = 'nodejs'
 export const maxDuration = 120
 
+// pdf-parse / pdfjs-dist references DOMMatrix (browser-only). Polyfill before any dynamic import.
+if (typeof (globalThis as Record<string, unknown>).DOMMatrix === 'undefined') {
+  ;(globalThis as Record<string, unknown>).DOMMatrix = class DOMMatrix {
+    constructor(_init?: string | number[]) {}
+    static fromFloat64Array(_a: Float64Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
+    static fromFloat32Array(_a: Float32Array) { return new (globalThis as Record<string, unknown>).DOMMatrix() }
+    static fromMatrix(_m?: unknown)           { return new (globalThis as Record<string, unknown>).DOMMatrix() }
+  }
+}
+
 const MAX_SIZE = 25 * 1024 * 1024 // 25 MB
 
 function escapeHtml(text: string): string {
@@ -191,9 +201,11 @@ export async function POST(request: NextRequest) {
         console.error('Gemini PDF vision error:', geminiErr)
 
         // Fallback: pdf-parse plain text (loses figures, better than nothing)
+        // Use the internal module path to avoid test-file init that triggers DOMMatrix browser APIs.
         try {
-          const { default: pdfParse } = await import('pdf-parse')
-          const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>)(buffer)
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string; numpages: number }>
+          const data = await pdfParse(buffer)
           const cleaned = data.text.replace(/\s+/g, ' ').trim()
           if (cleaned.length >= 50) {
             const html = textToHtml(data.text)
