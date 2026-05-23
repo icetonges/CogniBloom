@@ -93,7 +93,7 @@ function Divider() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
-  ({ content, onChange, disabled, placeholder, noteId, fullPage }, ref) => {
+  ({ content, onChange, disabled, placeholder, fullPage }, ref) => {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isInsertingImage, setIsInsertingImage] = useState(false)
     const [mathState, setMathState] = useState<MathEditState>({ open: false, latex: '', display: true })
