@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
-  Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame,
+  Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 const navItems = [
   { href: '/dashboard',                 icon: BarChart3,     label: 'Dashboard',       color: 'text-blue-400'   },
   { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',         color: 'text-violet-400' },
-  { href: '/dashboard/notes',           icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
+  { href: '/dashboard/notes/new',        icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
   { href: '/dashboard/quiz',            icon: Trophy,        label: 'Quiz',             color: 'text-amber-400'  },
   { href: '/dashboard/feed',            icon: Rss,           label: 'Daily Feed',       color: 'text-sky-400'    },
   { href: '/dashboard/analytics',       icon: Brain,         label: 'Analytics',        color: 'text-pink-400'   },
@@ -61,7 +61,11 @@ function Sidebar({
       {/* ── Navigation ── */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ href, icon: Icon, label, badge, color }) => {
-          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+          // Notes nav item is special: active whenever pathname is under /dashboard/notes
+          const notesItem = href === '/dashboard/notes/new'
+          const active = notesItem
+            ? pathname.startsWith('/dashboard/notes')
+            : pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           const showBadge = badge === 'flashcards-due' && flashcardsDue > 0
 
           return (
@@ -88,13 +92,22 @@ function Sidebar({
                   )}
                 />
                 <span className="flex-1">{label}</span>
+                {/* Notes: show inline + button so label click = new note, + = new note too */}
+                {notesItem && (
+                  <span
+                    className="w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20"
+                    title="New note"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </span>
+                )}
                 {showBadge && (
                   <span className="min-w-[1.25rem] h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center px-1 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
                     {flashcardsDue > 99 ? '99+' : flashcardsDue}
                   </span>
                 )}
               </Link>
-              {href === '/dashboard/notes' && (
+              {href === '/dashboard/notes/new' && (
                 <Suspense fallback={null}>
                   <SubjectGroupList />
                 </Suspense>

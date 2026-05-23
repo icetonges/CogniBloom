@@ -23,7 +23,7 @@ import {
   Code, Terminal,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
   Image as ImageIcon, Minus,
-  Undo, Redo, Highlighter,
+  Undo, Redo, Highlighter, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MathExtension, MathInlineExtension } from '@/lib/tiptap/math-extension'
@@ -95,7 +95,7 @@ function Divider() {
 export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
   ({ content, onChange, disabled, placeholder, noteId, fullPage }, ref) => {
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const uploadingRef = useRef(false)
+    const [isInsertingImage, setIsInsertingImage] = useState(false)
     const [mathState, setMathState] = useState<MathEditState>({ open: false, latex: '', display: true })
 
     const editor = useEditor({
@@ -133,14 +133,19 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
           return true
         },
         handlePaste: (_view, event: ClipboardEvent) => {
+          // 1. Image files in clipboard (screenshot paste, Ctrl+C from an image)
           const items = Array.from(event.clipboardData?.items ?? [])
           const imageItems = items.filter((i) => i.type.startsWith('image/'))
-          if (!imageItems.length) return false
-          imageItems.forEach((item) => {
-            const f = item.getAsFile()
-            if (f) uploadImage(f)
-          })
-          return true
+          if (imageItems.length > 0) {
+            event.preventDefault()
+            imageItems.forEach((item) => {
+              const f = item.getAsFile()
+              if (f) uploadImage(f)
+            })
+            return true
+          }
+          // Let TipTap handle everything else (text, HTML, etc.)
+          return false
         },
       },
     })
@@ -168,22 +173,23 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
       return () => document.removeEventListener('tiptap:math-click', handler)
     }, [])
 
-    const uploadImage = useCallback(async (file: File) => {
-      if (uploadingRef.current) return
-      uploadingRef.current = true
-      try {
-        const form = new FormData()
-        form.append('image', file)
-        if (noteId) form.append('noteId', noteId)
-        const res = await fetch('/api/notes/upload-image', { method: 'POST', body: form })
-        const json = await res.json() as { url?: string }
-        if (json.url && editor) {
-          editor.chain().focus().setImage({ src: json.url, alt: file.name }).run()
+    // Convert image file → base64 data URL and insert directly into editor.
+    // Works on local dev AND Vercel (no filesystem write needed).
+    // TipTap already has allowBase64: true.
+    const uploadImage = useCallback((file: File) => {
+      if (!editor) return
+      setIsInsertingImage(true)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const src = e.target?.result as string | null
+        if (src) {
+          editor.chain().focus().setImage({ src, alt: file.name }).run()
         }
-      } finally {
-        uploadingRef.current = false
+        setIsInsertingImage(false)
       }
-    }, [editor, noteId])
+      reader.onerror = () => setIsInsertingImage(false)
+      reader.readAsDataURL(file)
+    }, [editor])
 
     const insertMath = useCallback((latex: string, display: boolean) => {
       if (!editor) return
@@ -334,15 +340,22 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
                   onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) uploadImage(f)
+                    Array.from(e.target.files ?? []).forEach((f) => uploadImage(f))
                     e.target.value = ''
                   }}
                 />
-                <ToolBtn onClick={() => fileInputRef.current?.click()} title="Insert image" disabled={isDisabled}>
-                  <ImageIcon className="w-3.5 h-3.5" />
+                <ToolBtn
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Insert image (or paste / drag-drop)"
+                  disabled={isDisabled || isInsertingImage}
+                >
+                  {isInsertingImage
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <ImageIcon className="w-3.5 h-3.5" />
+                  }
                 </ToolBtn>
               </>
             )}
