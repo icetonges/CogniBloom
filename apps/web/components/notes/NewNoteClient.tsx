@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Loader2, Save, Sparkles, ArrowLeft, FilePlus, X,
-  Tag, BookOpen, Bot, ChevronDown, ChevronRight,
+  Tag, BookOpen, Bot, ChevronDown, ChevronRight, Clock,
 } from 'lucide-react'
 import { RichEditor, type RichEditorRef } from '@/components/notes/RichEditor'
 import { DocumentImport } from '@/components/notes/DocumentImport'
@@ -33,6 +33,9 @@ const AI_PREVIEWS = [
   { emoji: '🔭', text: 'Suggested next topics to study' },
 ]
 
+const DRAFT_KEY = 'cognibloom:new-note-draft'
+interface NoteDraft { title: string; content: string; subject: string; tags: string; savedAt: number }
+
 export function NewNoteClient() {
   const router = useRouter()
   const editorRef = useRef<RichEditorRef>(null)
@@ -46,6 +49,50 @@ export function NewNoteClient() {
   const [existingSubjects, setExistingSubjects] = useState<string[]>([])
   const [showImport, setShowImport] = useState(false)
   const [showAllSubjects, setShowAllSubjects] = useState(false)
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null)
+  const [draftRestored, setDraftRestored] = useState(false)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Restore draft on first mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (raw) {
+        const draft: NoteDraft = JSON.parse(raw)
+        if (draft.title || draft.content) {
+          setTitle(draft.title || '')
+          setContent(draft.content || '')
+          setSubject(draft.subject || '')
+          setTags(draft.tags || '')
+          if (draft.content) {
+            setTimeout(() => editorRef.current?.setContent(draft.content), 100)
+          }
+          setDraftSavedAt(new Date(draft.savedAt))
+          setDraftRestored(true)
+        }
+      }
+    } catch { /* ignore corrupt draft */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Auto-save draft — debounced 1.5 s after any field change
+  const saveDraft = useCallback(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, content, subject, tags, savedAt: Date.now() }))
+        setDraftSavedAt(new Date())
+      } catch { /* storage quota */ }
+    }, 1500)
+  }, [title, content, subject, tags])
+
+  useEffect(() => { saveDraft() }, [saveDraft])
+
+  const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
+    setDraftSavedAt(null)
+    setDraftRestored(false)
+  }
 
   useEffect(() => {
     fetch('/api/notes/subjects')
@@ -108,6 +155,8 @@ export function NewNoteClient() {
       if (!res.ok) throw new Error('Failed to create note')
       const { data } = await res.json() as { data: Note }
 
+      clearDraft()
+
       if (andAnalyze && data.id) {
         fetch(`/api/notes/${data.id}/analyze`, { method: 'POST' }).catch(() => {})
       }
@@ -135,16 +184,23 @@ export function NewNoteClient() {
           <ArrowLeft className="h-3.5 w-3.5" /> Notes
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className="text-base font-black tracking-tight">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-base font-black tracking-tight shrink-0">
             <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               New Note
             </span>
           </span>
           {wordCount > 0 && (
-            <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-full"
+            <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-full shrink-0"
               style={{ background: 'rgba(255,255,255,0.05)' }}>
               {wordCount}w · {charCount}c
+            </span>
+          )}
+          {draftSavedAt && (
+            <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <Clock className="h-2.5 w-2.5 shrink-0" />
+              {draftRestored ? 'Draft restored' : 'Draft saved'}
             </span>
           )}
         </div>
