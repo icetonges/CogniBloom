@@ -22,7 +22,6 @@ const nextConfig: NextConfig = {
   },
 
   experimental: {
-    after: true,        // enable next/server `after()` for background embedding
     serverActions: {
       bodySizeLimit: '10mb',
     },
