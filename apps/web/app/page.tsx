@@ -427,7 +427,7 @@ export default async function LandingPage() {
           <span className="text-lg font-black tracking-tight text-white">CogniBloom</span>
         </div>
 
-        {/* Daily inspiration — wide, short, between logo and button */}
+        {/* Daily inspiration — wide, short, between logo and button (desktop only) */}
         <div className="flex-1 hidden sm:block">
           <NavQuote />
         </div>
@@ -443,13 +443,18 @@ export default async function LandingPage() {
         </Link>
       </nav>
 
+      {/* ── Mobile daily quote (below nav, hidden on sm+) ─────────── */}
+      <div className="relative z-10 block sm:hidden px-4 pb-3">
+        <NavQuote />
+      </div>
+
       {/* ── Hero ───────────────────────────────────────────────────── */}
       <section
         className="relative z-10 flex items-center"
         style={{ minHeight: 'calc(100vh - 78px)' }}
       >
-        <div className="w-full px-6 sm:px-12 xl:px-20 pb-0">
-          <div className="grid lg:grid-cols-2 gap-10 xl:gap-16 items-center">
+        <div className="w-full px-4 sm:px-12 xl:px-20 pb-4 sm:pb-0">
+          <div className="grid lg:grid-cols-2 gap-6 sm:gap-10 xl:gap-16 items-center">
 
             {/* ── Left: text content ── */}
             <div className="space-y-8 max-w-xl">
@@ -472,8 +477,8 @@ export default async function LandingPage() {
               {/* Headline */}
               <div>
                 <h1
-                  className="font-black leading-[1.1] tracking-tight whitespace-nowrap"
-                  style={{ fontSize: 'clamp(1.7rem, 3.2vw, 2.6rem)' }}
+                  className="font-black leading-[1.1] tracking-tight sm:whitespace-nowrap"
+                  style={{ fontSize: 'clamp(2rem, 6vw, 2.6rem)' }}
                 >
                   <span className="text-white">Keep Learning, </span>
                   <span className="text-shimmer">Daniel.</span>
@@ -573,57 +578,61 @@ export default async function LandingPage() {
             </div>
 
             {/* ── Right: 3D Gyroscope + floating note cards ── */}
-            <div
-              className="relative flex items-center justify-center"
-              style={{ height: 520 }}
-            >
-              {/* Top-left floating card */}
-              {recentNotes[0] && (
-                <div className="absolute" style={{ left: '0%', top: '2%', zIndex: 4 }}>
-                  <FloatingCard
-                    title={recentNotes[0].title}
-                    subject={recentNotes[0].subject}
-                    rotate="-8deg"
-                    delay="0s"
-                    colorFrom="#6366f1"
-                    colorTo="#8b5cf6"
-                    href={`/dashboard/notes/${recentNotes[0].slug ?? recentNotes[0].id}`}
-                  />
-                </div>
-              )}
+            {/* overflow-hidden clips the orb on narrow viewports;
+                scale wrapper shrinks the whole scene on mobile/tablet */}
+            <div className="relative flex items-center justify-center overflow-hidden h-64 sm:h-96 lg:h-[520px]">
+              <div
+                className="absolute scale-[0.56] sm:scale-[0.78] lg:scale-100 origin-center"
+                style={{ width: '100%', height: 520, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                {/* Top-left floating card */}
+                {recentNotes[0] && (
+                  <div className="absolute" style={{ left: '0%', top: '2%', zIndex: 4 }}>
+                    <FloatingCard
+                      title={recentNotes[0].title}
+                      subject={recentNotes[0].subject}
+                      rotate="-8deg"
+                      delay="0s"
+                      colorFrom="#6366f1"
+                      colorTo="#8b5cf6"
+                      href={`/dashboard/notes/${recentNotes[0].slug ?? recentNotes[0].id}`}
+                    />
+                  </div>
+                )}
 
-              {/* Bottom-left floating card */}
-              {recentNotes[1] && (
-                <div className="absolute" style={{ left: '2%', bottom: '5%', zIndex: 4 }}>
-                  <FloatingCard
-                    title={recentNotes[1].title}
-                    subject={recentNotes[1].subject}
-                    rotate="5deg"
-                    delay="1.5s"
-                    colorFrom="#10b981"
-                    colorTo="#0ea5e9"
-                    href={`/dashboard/notes/${recentNotes[1].slug ?? recentNotes[1].id}`}
-                  />
-                </div>
-              )}
+                {/* Bottom-left floating card */}
+                {recentNotes[1] && (
+                  <div className="absolute" style={{ left: '2%', bottom: '5%', zIndex: 4 }}>
+                    <FloatingCard
+                      title={recentNotes[1].title}
+                      subject={recentNotes[1].subject}
+                      rotate="5deg"
+                      delay="1.5s"
+                      colorFrom="#10b981"
+                      colorTo="#0ea5e9"
+                      href={`/dashboard/notes/${recentNotes[1].slug ?? recentNotes[1].id}`}
+                    />
+                  </div>
+                )}
 
-              {/* Gyroscope orb */}
-              <GyroscopeOrb level={level} title={title} />
+                {/* Gyroscope orb */}
+                <GyroscopeOrb level={level} title={title} />
 
-              {/* Top-right floating card */}
-              {recentNotes[2] && (
-                <div className="absolute" style={{ right: '0%', top: '8%', zIndex: 4 }}>
-                  <FloatingCard
-                    title={recentNotes[2].title}
-                    subject={recentNotes[2].subject}
-                    rotate="6deg"
-                    delay="0.9s"
-                    colorFrom="#f59e0b"
-                    colorTo="#ef4444"
-                    href={`/dashboard/notes/${recentNotes[2].slug ?? recentNotes[2].id}`}
-                  />
-                </div>
-              )}
+                {/* Top-right floating card */}
+                {recentNotes[2] && (
+                  <div className="absolute" style={{ right: '0%', top: '8%', zIndex: 4 }}>
+                    <FloatingCard
+                      title={recentNotes[2].title}
+                      subject={recentNotes[2].subject}
+                      rotate="6deg"
+                      delay="0.9s"
+                      colorFrom="#f59e0b"
+                      colorTo="#ef4444"
+                      href={`/dashboard/notes/${recentNotes[2].slug ?? recentNotes[2].id}`}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
