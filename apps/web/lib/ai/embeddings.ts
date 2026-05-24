@@ -1,18 +1,20 @@
 /**
- * Google text-embedding-004 via the v1 (stable) REST API.
+ * Google embedding-001 via the Generative AI SDK (v1beta endpoint).
  *
- * ROOT CAUSE OF PRIOR FAILURES:
- * The @google/generative-ai SDK calls embedContent via v1beta by default.
- * But text-embedding-004 is a stable model — it only exists on v1 (not v1beta).
- * Every embedding call was returning 404 "model not found for API version v1beta".
+ * WHY embedding-001, not text-embedding-004:
+ * Both models produce 768-dimensional vectors and work identically for
+ * RAG retrieval. However, text-embedding-004 returns HTTP 404 for this
+ * project's API key on BOTH v1 and v1beta — it is not enabled in this
+ * Google Cloud project. embedding-001 works correctly with the same key.
  *
- * Fix: call the v1 REST endpoint directly with fetch(), bypassing the SDK.
- * The SDK is still used elsewhere (rag.ts, uploads/route.ts) for generative calls.
+ * Switching requires no DB schema changes (vectors are still 768 dims).
+ * All previously failed chunks will be re-embedded via admin/content/embed.
  */
 
-const EMBEDDING_MODEL = 'text-embedding-004'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
+const EMBEDDING_MODEL = 'embedding-001'
 const EMBEDDING_DIMS = 768
-const GEMINI_V1_BASE = 'https://generativelanguage.googleapis.com/v1'
 
 export type EmbeddingTaskType =
   | 'RETRIEVAL_DOCUMENT'
@@ -28,7 +30,7 @@ function getApiKey(): string {
 }
 
 /**
- * Generate a single embedding vector using text-embedding-004 on the v1 API.
+ * Generate a single embedding vector using embedding-001.
  * Truncates input to 8 000 chars to stay within the model's token limit.
  */
 export async function generateEmbedding(
@@ -38,28 +40,16 @@ export async function generateEmbedding(
   const apiKey = getApiKey()
   const truncated = text.slice(0, 8000)
 
-  const url = `${GEMINI_V1_BASE}/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL })
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: `models/${EMBEDDING_MODEL}`,
-      content: {
-        role: 'user',
-        parts: [{ text: truncated }],
-      },
-      taskType,
-    }),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await model.embedContent({
+    content: { parts: [{ text: truncated }] },
+    taskType: taskType as any,
   })
 
-  if (!response.ok) {
-    const errText = await response.text()
-    throw new Error(`Embedding API [${response.status} ${response.statusText}]: ${errText}`)
-  }
-
-  const data = await response.json() as { embedding?: { values?: number[] } }
-  const values = data?.embedding?.values
+  const values = result.embedding.values
 
   if (!values || values.length !== EMBEDDING_DIMS) {
     throw new Error(
