@@ -14,9 +14,9 @@ import type {
 import { AuthenticationError, RateLimitError, ContextLengthError } from './types'
 
 const ANTHROPIC_MODELS: Record<string, ModelInfo> = {
-  'claude-sonnet-4-6': {
-    id: 'claude-sonnet-4-6',
-    name: 'Claude Sonnet 4.6',
+  'claude-sonnet-4-20250514': {
+    id: 'claude-sonnet-4-20250514',
+    name: 'Claude Sonnet 4',
     provider: 'anthropic',
     contextWindow: 200000,
     costPer1kInputTokens: 0.003,
@@ -25,9 +25,9 @@ const ANTHROPIC_MODELS: Record<string, ModelInfo> = {
     supportsToolCalling: true,
     supportsStreaming: true,
   },
-  'claude-opus-4-6': {
-    id: 'claude-opus-4-6',
-    name: 'Claude Opus 4.6',
+  'claude-opus-4-1-20250805': {
+    id: 'claude-opus-4-1-20250805',
+    name: 'Claude Opus 4.1',
     provider: 'anthropic',
     contextWindow: 200000,
     costPer1kInputTokens: 0.015,
@@ -36,9 +36,9 @@ const ANTHROPIC_MODELS: Record<string, ModelInfo> = {
     supportsToolCalling: true,
     supportsStreaming: true,
   },
-  'claude-haiku-4-5-20251001': {
-    id: 'claude-haiku-4-5-20251001',
-    name: 'Claude Haiku 4.5',
+  'claude-3-5-haiku-20241022': {
+    id: 'claude-3-5-haiku-20241022',
+    name: 'Claude Haiku 3.5',
     provider: 'anthropic',
     contextWindow: 200000,
     costPer1kInputTokens: 0.0008,
@@ -55,7 +55,7 @@ export class AnthropicProvider extends AIProvider {
 
   constructor(
     config: ProviderConfig,
-    modelId: string = 'claude-sonnet-4-6'
+    modelId: string = 'claude-sonnet-4-20250514'
   ) {
     const modelInfo = ANTHROPIC_MODELS[modelId]
     if (!modelInfo) {

@@ -31,7 +31,7 @@ const GRADES = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12']
 const MODELS = [
   { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Fast, smart, and recommended' },
   { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', note: 'Cheaper and quick for simple help' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', note: 'Concise and precise' },
+  { id: 'claude-3-5-haiku-20241022', label: 'Claude Haiku 3.5', note: 'Concise and precise' },
   { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', note: 'Open-source, very fast' },
 ]
 const MODEL_IDS = new Set(MODELS.map((model) => model.id))

@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         topic: validated.topic,
         difficulty: validated.difficulty || 'adaptive',
         aiProvider: 'anthropic',
-        aiModel: 'claude-sonnet-4.6',
+        aiModel: 'claude-sonnet-4-20250514',
       },
     })
 

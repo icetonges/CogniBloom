@@ -11,6 +11,7 @@
  */
 
 import { getAIManager } from '@/lib/ai'
+import { MODELS } from '@/lib/ai/models'
 import type { ChatRequest, ChatResponse, StreamChunk } from '@/lib/ai/providers/types'
 
 // ── Full fallback chain — all 10 models ──────────────────────────────────────
@@ -26,15 +27,17 @@ export const FALLBACK_CHAIN: string[] = [
   'llama-3.3-70b-versatile',        // best Llama 3, 128K, free
   'meta-llama/llama-4-scout-17b-16e-instruct', // Llama 4, vision, free
   'llama-3.1-8b-instant',           // fastest, simple tasks, free
+  'groq/compound-beta',             // agentic Groq system
 
   // Anthropic Claude (paid — last resort)
-  'claude-haiku-4-5-20251001',      // cheapest, 200K ctx
-  'claude-sonnet-4-6',              // balanced
-  'claude-opus-4-6',                // most powerful
+  'claude-3-5-haiku-20241022',      // cheapest, 200K ctx
+  'claude-sonnet-4-20250514',       // balanced
+  'claude-opus-4-1-20250805',       // most powerful
 ]
 
 /** All models shown in UI dropdowns (same order, includes labels) */
 export const ALL_MODELS_FOR_UI = FALLBACK_CHAIN
+const KNOWN_MODEL_IDS = new Set(MODELS.map((model) => model.id))
 
 /**
  * Build the ordered list of models to try.
@@ -42,8 +45,11 @@ export const ALL_MODELS_FOR_UI = FALLBACK_CHAIN
  * Models whose provider key is absent are skipped silently.
  */
 export function buildFallbackChain(preferred?: string): string[] {
-  if (!preferred || !FALLBACK_CHAIN.includes(preferred)) {
-    return preferred ? [preferred, ...FALLBACK_CHAIN] : [...FALLBACK_CHAIN]
+  if (!preferred || !KNOWN_MODEL_IDS.has(preferred)) {
+    return [...FALLBACK_CHAIN]
+  }
+  if (!FALLBACK_CHAIN.includes(preferred)) {
+    return [preferred, ...FALLBACK_CHAIN]
   }
   return [preferred, ...FALLBACK_CHAIN.filter((m) => m !== preferred)]
 }

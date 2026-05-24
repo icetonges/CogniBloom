@@ -30,9 +30,9 @@ describe('detectProvider', () => {
   })
 
   it.each([
-    ['claude-sonnet-4-6', 'anthropic'],
-    ['claude-opus-4-6', 'anthropic'],
-    ['claude-haiku-4-5-20251001', 'anthropic'],
+    ['claude-sonnet-4-20250514', 'anthropic'],
+    ['claude-opus-4-1-20250805', 'anthropic'],
+    ['claude-3-5-haiku-20241022', 'anthropic'],
     ['CLAUDE-3-haiku', 'anthropic'],
   ])('%s → anthropic', (model, expected) => {
     expect(detectProvider(model)).toBe(expected)
@@ -71,7 +71,7 @@ describe('getProvider', () => {
   })
 
   it('returns AnthropicProvider for claude models', () => {
-    const provider = getProvider('claude-sonnet-4-6', mockConfig)
+    const provider = getProvider('claude-sonnet-4-20250514', mockConfig)
     expect(provider).toBeInstanceOf(AnthropicProvider)
   })
 

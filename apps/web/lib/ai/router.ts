@@ -70,8 +70,8 @@ export const AVAILABLE_MODELS = {
     'llama-3.1-8b-instant',
   ],
   anthropic: [
-    'claude-sonnet-4-6',
-    'claude-opus-4-6',
-    'claude-haiku-4-5-20251001',
+    'claude-sonnet-4-20250514',
+    'claude-opus-4-1-20250805',
+    'claude-3-5-haiku-20241022',
   ],
 }

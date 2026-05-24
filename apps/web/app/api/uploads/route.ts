@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
+import { MODELS } from '@/lib/ai/models'
 import { chunkTextWithWindows } from '@/lib/content'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -13,15 +14,13 @@ export const maxDuration = 60
  * Extract plain text from a PDF using Gemini vision.
  * This avoids all pdf-parse / pdfjs-dist / DOMMatrix / CJS bundler issues.
  */
-// Retry + model fallback chain for PDF extraction.
-// Pattern: the first call often gets a transient 503 but the same model
-// works immediately on retry — so we retry the primary model once with a
-// short delay before falling through to backup models.
-const PDF_MODELS = [
-  'gemini-2.5-flash-lite',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',
-]
+// PDF extraction needs native PDF input, so only use Gemini models from the
+// central registry. Llama and Claude remain in the chat fallback chain, but
+// they do not receive raw PDF bytes here.
+const PDF_MODEL_PRIORITY = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro']
+const PDF_MODELS = PDF_MODEL_PRIORITY.filter((modelId) =>
+  MODELS.some((model) => model.id === modelId && model.provider === 'google' && model.supportsVision)
+)
 
 const PDF_PROMPT = `Extract ALL text from this document verbatim. Preserve headings, paragraphs, lists, tables, and numbered items. Include all math formulas, chemical equations, and captions exactly as written.
 Output ONLY the extracted text — no commentary, no formatting instructions, no markdown wrappers.`
@@ -31,6 +30,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 function isTransientError(err: unknown): boolean {
   const msg = String(err)
   return msg.includes('503') || msg.includes('429') || msg.includes('overload') || msg.includes('unavailable')
+}
+
+function isModelUnavailableError(err: unknown): boolean {
+  const msg = String(err).toLowerCase()
+  return msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
@@ -52,6 +56,11 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
         const text = result.response.text().trim()
         if (text) return text
       } catch (err) {
+        if (isModelUnavailableError(err)) {
+          lastError = err
+          console.warn(`[extractPdfText] ${modelId} is unavailable, trying next PDF-capable model...`)
+          break
+        }
         if (!isTransientError(err)) throw err  // auth/quota errors bubble up immediately
         lastError = err
         if (attempt < attempts) {
