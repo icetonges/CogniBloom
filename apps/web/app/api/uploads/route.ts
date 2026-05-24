@@ -184,9 +184,11 @@ async function embedUpload(uploadId: string, text: string) {
       try {
         const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
         const vectorStr = embeddingToSql(embedding)
+        const { randomUUID } = await import('crypto')
+        const chunkId = randomUUID()
         await db.$executeRaw`
           INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
-          VALUES (gen_random_uuid()::text, ${uploadId}, ${i}, ${content}, ${windowContent})
+          VALUES (${chunkId}, ${uploadId}, ${i}, ${content}, ${windowContent})
           ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
             "content" = EXCLUDED."content",
             "windowContent" = EXCLUDED."windowContent"

@@ -106,14 +106,18 @@ export async function POST(request: NextRequest) {
       await db.$executeRaw`DELETE FROM "Chunk" WHERE "uploadId" = ${upload.id}`
 
       let embeddedCount = 0
+      let firstChunkError: string | null = null
       for (let i = 0; i < chunks.length; i++) {
         const { content, windowContent } = chunks[i]
         try {
           const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
           const vectorStr = embeddingToSql(embedding)
+          // Use TypeScript-generated UUID to avoid gen_random_uuid() availability issues
+          const { randomUUID } = await import('crypto')
+          const chunkId = randomUUID()
           await db.$executeRaw`
             INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
-            VALUES (gen_random_uuid()::text, ${upload.id}, ${i}, ${content}, ${windowContent})
+            VALUES (${chunkId}, ${upload.id}, ${i}, ${content}, ${windowContent})
             ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
               "content" = EXCLUDED."content",
               "windowContent" = EXCLUDED."windowContent"
@@ -124,11 +128,13 @@ export async function POST(request: NextRequest) {
           `
           embeddedCount++
         } catch (chunkErr) {
+          const errMsg = String(chunkErr)
+          if (!firstChunkError) firstChunkError = errMsg
           console.error(`[admin/embed] chunk ${i} failed for ${upload.filename}:`, chunkErr)
         }
       }
 
-      if (embeddedCount === 0) throw new Error(`All ${chunks.length} chunk inserts failed`)
+      if (embeddedCount === 0) throw new Error(`All ${chunks.length} chunk inserts failed. First error: ${firstChunkError ?? 'unknown'}`)
 
       await db.upload.update({ where: { id: upload.id }, data: { status: 'ready' } })
       console.log(`[admin/embed] ${upload.filename}: ${embeddedCount}/${chunks.length} chunks done`)
