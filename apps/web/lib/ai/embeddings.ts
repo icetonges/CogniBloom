@@ -1,20 +1,25 @@
 /**
- * Google embedding-001 via the Generative AI SDK (v1beta endpoint).
+ * Embeddings via HuggingFace Inference API — BAAI/bge-base-en-v1.5
  *
- * WHY embedding-001, not text-embedding-004:
- * Both models produce 768-dimensional vectors and work identically for
- * RAG retrieval. However, text-embedding-004 returns HTTP 404 for this
- * project's API key on BOTH v1 and v1beta — it is not enabled in this
- * Google Cloud project. embedding-001 works correctly with the same key.
+ * This mirrors the LlamaIndex notebooks exactly:
+ *   embed_model="local:BAAI/bge-small-en-v1.5"  (notebooks run it locally in Python)
+ *   → here we call it via HF Inference API        (serverless-compatible for Next.js)
  *
- * Switching requires no DB schema changes (vectors are still 768 dims).
- * All previously failed chunks will be re-embedded via admin/content/embed.
+ * WHY BGE instead of Google embeddings:
+ *   Google embedding-001 and text-embedding-004 both return 404 for this
+ *   project's API key — the embedding models are not enabled in this GCP project.
+ *   BAAI/bge-base-en-v1.5 is free, reliable, and produces 768-dim vectors
+ *   (same as the current pgvector schema — no DB migration needed).
+ *
+ * Setup: add HF_TOKEN to Vercel environment variables.
+ *   Get a free token at https://huggingface.co/settings/tokens
  */
 
-import { GoogleGenerativeAI, type TaskType } from '@google/generative-ai'
+const HF_MODEL = 'BAAI/bge-base-en-v1.5'
+export const EMBEDDING_DIMS = 768
 
-const EMBEDDING_MODEL = 'embedding-001'
-const EMBEDDING_DIMS = 768
+// BGE models perform better with this prefix on the query side (not documents)
+const BGE_QUERY_PREFIX = 'Represent this sentence for searching relevant passages: '
 
 export type EmbeddingTaskType =
   | 'RETRIEVAL_DOCUMENT'
@@ -24,35 +29,62 @@ export type EmbeddingTaskType =
   | 'CLUSTERING'
 
 function getApiKey(): string {
-  const apiKey = process.env['GOOGLE_API_KEY'] ?? process.env['GEMINI_API_KEY']
-  if (!apiKey) throw new Error('GOOGLE_API_KEY or GEMINI_API_KEY environment variable is not set')
-  return apiKey
+  const token = process.env['HF_TOKEN'] ?? process.env['HUGGINGFACE_API_KEY']
+  if (!token) {
+    throw new Error(
+      'HF_TOKEN is not set. Add a free HuggingFace token at https://huggingface.co/settings/tokens'
+    )
+  }
+  return token
 }
 
 /**
- * Generate a single embedding vector using embedding-001.
- * Truncates input to 8 000 chars to stay within the model's token limit.
+ * Generate a single 768-dim embedding using BAAI/bge-base-en-v1.5.
+ * Automatically applies the BGE query prefix for retrieval queries.
  */
 export async function generateEmbedding(
   text: string,
   taskType: EmbeddingTaskType = 'RETRIEVAL_QUERY',
 ): Promise<number[]> {
-  const apiKey = getApiKey()
-  const truncated = text.slice(0, 8000)
+  const token = getApiKey()
 
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL })
+  // BGE convention: prepend prefix for query-side embeddings only
+  const input = taskType === 'RETRIEVAL_QUERY'
+    ? BGE_QUERY_PREFIX + text.slice(0, 7900)
+    : text.slice(0, 8000)
 
-  const result = await model.embedContent({
-    content: { role: 'user', parts: [{ text: truncated }] },
-    taskType: taskType as TaskType,
-  })
+  const response = await fetch(
+    `https://api-inference.huggingface.co/models/${HF_MODEL}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: input,
+        options: { wait_for_model: true },
+      }),
+    }
+  )
 
-  const values = result.embedding.values
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '')
+    throw new Error(
+      `HuggingFace Embedding API [${response.status} ${response.statusText}]: ${errText}`
+    )
+  }
+
+  const data = await response.json() as number[] | number[][]
+
+  // HF feature-extraction returns [[...]] (2D array) for single string input
+  const values: number[] = Array.isArray(data[0])
+    ? (data as number[][])[0]
+    : (data as number[])
 
   if (!values || values.length !== EMBEDDING_DIMS) {
     throw new Error(
-      `Unexpected embedding response: got ${values?.length ?? 0} dims, expected ${EMBEDDING_DIMS}`
+      `Unexpected embedding dimensions: got ${values?.length ?? 0}, expected ${EMBEDDING_DIMS}`
     )
   }
 
@@ -69,5 +101,3 @@ export async function generateEmbeddings(
 export function embeddingToSql(embedding: number[]): string {
   return `[${embedding.join(',')}]`
 }
-
-export { EMBEDDING_DIMS }
