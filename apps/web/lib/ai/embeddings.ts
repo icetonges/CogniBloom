@@ -11,7 +11,7 @@
  * All previously failed chunks will be re-embedded via admin/content/embed.
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, type TaskType } from '@google/generative-ai'
 
 const EMBEDDING_MODEL = 'embedding-001'
 const EMBEDDING_DIMS = 768
@@ -43,10 +43,9 @@ export async function generateEmbedding(
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await model.embedContent({
-    content: { parts: [{ text: truncated }] },
-    taskType: taskType as any,
+    content: { role: 'user', parts: [{ text: truncated }] },
+    taskType: taskType as TaskType,
   })
 
   const values = result.embedding.values
