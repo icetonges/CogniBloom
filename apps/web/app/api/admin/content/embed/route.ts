@@ -12,26 +12,65 @@ function verifyAdmin(request: NextRequest): boolean {
   return auth === `Bearer ${secret}`
 }
 
+// ─── Ensure schema is up to date ──────────────────────────────────────────────
+// Runs idempotent DDL so this endpoint works even if the Prisma migration
+// hasn't been applied to the production database yet.
+
+async function ensureSchema() {
+  await db.$executeRawUnsafe(
+    `ALTER TABLE "Chunk" ADD COLUMN IF NOT EXISTS "windowContent" TEXT`
+  )
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "RagEvaluation" (
+      "id"               TEXT NOT NULL,
+      "userId"           TEXT NOT NULL,
+      "sessionId"        TEXT NOT NULL,
+      "query"            TEXT NOT NULL,
+      "response"         TEXT NOT NULL,
+      "faithfulness"     DOUBLE PRECISION,
+      "answerRelevancy"  DOUBLE PRECISION,
+      "contextPrecision" DOUBLE PRECISION,
+      "ragUsed"          BOOLEAN NOT NULL DEFAULT false,
+      "notesRetrieved"   INTEGER NOT NULL DEFAULT 0,
+      "chunksRetrieved"  INTEGER NOT NULL DEFAULT 0,
+      "hydeUsed"         BOOLEAN NOT NULL DEFAULT false,
+      "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "RagEvaluation_pkey" PRIMARY KEY ("id")
+    )
+  `)
+  await db.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "RagEvaluation_userId_idx" ON "RagEvaluation"("userId")`
+  )
+  await db.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "RagEvaluation_sessionId_idx" ON "RagEvaluation"("sessionId")`
+  )
+  await db.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "RagEvaluation_createdAt_idx" ON "RagEvaluation"("createdAt")`
+  )
+}
+
 // ─── POST /api/admin/content/embed ───────────────────────────────────────────
-//
-// Re-embeds all uploads that are stuck in 'processing' or have no chunks yet.
-// Uses sentence-window chunking: stores both the retrieval chunk and its
-// surrounding window context so the RAG pipeline can pass richer context to
-// the LLM.
 
 export async function POST(request: NextRequest) {
   if (!verifyAdmin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Find uploads that are still processing or have failed but have text
+  // Ensure windowContent column and RagEvaluation table exist before any inserts
+  try {
+    await ensureSchema()
+  } catch (schemaErr) {
+    console.error('[admin/content/embed] schema migration failed', schemaErr)
+    return NextResponse.json({ error: 'Schema migration failed: ' + String(schemaErr) }, { status: 500 })
+  }
+
   const pending = await db.upload.findMany({
     where: {
       status: { in: ['processing', 'failed'] },
       extractedText: { not: null },
     },
     select: { id: true, extractedText: true, filename: true },
-    take: 50, // Process max 50 at a time to stay within function timeout
+    take: 50,
     orderBy: { createdAt: 'asc' },
   })
 
@@ -41,6 +80,7 @@ export async function POST(request: NextRequest) {
 
   let processed = 0
   let failed = 0
+  const errors: string[] = []
 
   for (const upload of pending) {
     if (!upload.extractedText) continue
@@ -67,7 +107,9 @@ export async function POST(request: NextRequest) {
       await db.upload.update({ where: { id: upload.id }, data: { status: 'ready' } })
       processed++
     } catch (err) {
-      console.error('[admin/content/embed]', upload.filename, err)
+      const msg = `${upload.filename}: ${String(err)}`
+      console.error('[admin/content/embed]', msg)
+      errors.push(msg)
       await db.upload.update({ where: { id: upload.id }, data: { status: 'failed' } }).catch(() => {})
       failed++
     }
@@ -78,12 +120,11 @@ export async function POST(request: NextRequest) {
     processed,
     failed,
     total: pending.length,
+    errors: errors.length > 0 ? errors : undefined,
   })
 }
 
 // ─── GET /api/admin/content/embed ────────────────────────────────────────────
-//
-// Returns a count of uploads awaiting embedding — useful for monitoring.
 
 export async function GET(request: NextRequest) {
   if (!verifyAdmin(request)) {

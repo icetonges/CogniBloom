@@ -139,10 +139,11 @@ export default function UploadsPage() {
       <Card className="p-4 bg-primary/5 border-primary/20 text-sm text-muted-foreground space-y-1">
         <p className="font-medium text-foreground">How it works</p>
         <p>1. Upload a PDF, TXT, or Markdown file (max 10 MB)</p>
-        <p>2. Text is extracted and split into chunks</p>
-        <p>3. Each chunk is embedded with Google&apos;s text-embedding-004</p>
-        <p>4. The AI tutor searches your uploads when answering questions</p>
-        <p>5. Once ready, click <Trophy className="w-3 h-3 inline" /> to generate a quiz from the document</p>
+        <p>2. Text is extracted and split into sentence-window chunks for precise retrieval</p>
+        <p>3. Each chunk is embedded with Google&apos;s text-embedding-004 (document-optimised task type)</p>
+        <p>4. At query time, HyDE + hybrid search finds the most relevant passages from your uploads</p>
+        <p>5. The AI tutor automatically draws on your uploads when answering questions</p>
+        <p>6. Once ready, click <Trophy className="w-3 h-3 inline" /> to generate a quiz from the document</p>
       </Card>
     </div>
   )
