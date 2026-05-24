@@ -17,9 +17,16 @@ function verifyAdmin(request: NextRequest): boolean {
 // hasn't been applied to the production database yet.
 
 async function ensureSchema() {
+  // windowContent column
   await db.$executeRawUnsafe(
     `ALTER TABLE "Chunk" ADD COLUMN IF NOT EXISTS "windowContent" TEXT`
   )
+
+  // Unique constraint required for ON CONFLICT — may be missing if migration never ran
+  await db.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "Chunk_uploadId_chunkIndex_key"
+    ON "Chunk"("uploadId", "chunkIndex")
+  `)
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "RagEvaluation" (
       "id"               TEXT NOT NULL,
@@ -86,25 +93,45 @@ export async function POST(request: NextRequest) {
     if (!upload.extractedText) continue
     try {
       const chunks = chunkTextWithWindows(upload.extractedText)
+      console.log(`[admin/embed] ${upload.filename}: ${chunks.length} chunks`)
 
-      for (let i = 0; i < chunks.length; i++) {
-        const { content, windowContent } = chunks[i]
-        const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
-        const vectorStr = embeddingToSql(embedding)
-        await db.$executeRaw`
-          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
-          VALUES (gen_random_uuid()::text, ${upload.id}, ${i}, ${content}, ${windowContent})
-          ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
-            "content" = EXCLUDED."content",
-            "windowContent" = EXCLUDED."windowContent"
-        `
-        await db.$executeRaw`
-          UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
-          WHERE "uploadId" = ${upload.id} AND "chunkIndex" = ${i}
-        `
+      if (chunks.length === 0) {
+        errors.push(`${upload.filename}: chunkTextWithWindows produced 0 chunks`)
+        await db.upload.update({ where: { id: upload.id }, data: { status: 'failed' } }).catch(() => {})
+        failed++
+        continue
       }
 
+      // Delete any stale chunks first (clean re-embed)
+      await db.$executeRaw`DELETE FROM "Chunk" WHERE "uploadId" = ${upload.id}`
+
+      let embeddedCount = 0
+      for (let i = 0; i < chunks.length; i++) {
+        const { content, windowContent } = chunks[i]
+        try {
+          const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
+          const vectorStr = embeddingToSql(embedding)
+          await db.$executeRaw`
+            INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
+            VALUES (gen_random_uuid()::text, ${upload.id}, ${i}, ${content}, ${windowContent})
+            ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
+              "content" = EXCLUDED."content",
+              "windowContent" = EXCLUDED."windowContent"
+          `
+          await db.$executeRaw`
+            UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
+            WHERE "uploadId" = ${upload.id} AND "chunkIndex" = ${i}
+          `
+          embeddedCount++
+        } catch (chunkErr) {
+          console.error(`[admin/embed] chunk ${i} failed for ${upload.filename}:`, chunkErr)
+        }
+      }
+
+      if (embeddedCount === 0) throw new Error(`All ${chunks.length} chunk inserts failed`)
+
       await db.upload.update({ where: { id: upload.id }, data: { status: 'ready' } })
+      console.log(`[admin/embed] ${upload.filename}: ${embeddedCount}/${chunks.length} chunks done`)
       processed++
     } catch (err) {
       const msg = `${upload.filename}: ${String(err)}`

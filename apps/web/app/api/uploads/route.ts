@@ -146,11 +146,22 @@ export async function POST(request: NextRequest) {
 }
 
 async function ensureChunkSchema() {
-  // Idempotent DDL — ensures the windowContent column exists in production
-  // regardless of whether the Prisma migration has been applied yet.
+  // Idempotent DDL — self-heals the production DB schema regardless of
+  // whether the Prisma migration has been applied.
+
+  // 1. windowContent column (sentence-window context)
   await db.$executeRawUnsafe(
     `ALTER TABLE "Chunk" ADD COLUMN IF NOT EXISTS "windowContent" TEXT`
   )
+
+  // 2. Unique constraint required by ON CONFLICT ("uploadId", "chunkIndex").
+  //    Prisma defines @@unique([uploadId, chunkIndex]) but if the migration
+  //    was never applied the constraint is absent and every INSERT throws
+  //    "there is no unique or exclusion constraint matching the ON CONFLICT".
+  await db.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "Chunk_uploadId_chunkIndex_key"
+    ON "Chunk"("uploadId", "chunkIndex")
+  `)
 }
 
 async function embedUpload(uploadId: string, text: string) {
@@ -159,22 +170,43 @@ async function embedUpload(uploadId: string, text: string) {
     await ensureChunkSchema()
 
     const chunks = chunkTextWithWindows(text)
+    console.log(`[embedUpload] ${uploadId}: ${chunks.length} chunks to embed`)
+
+    if (chunks.length === 0) {
+      console.warn(`[embedUpload] ${uploadId}: chunkTextWithWindows produced 0 chunks — text length=${text.length}`)
+      await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
+      return
+    }
+
+    let embeddedCount = 0
     for (let i = 0; i < chunks.length; i++) {
       const { content, windowContent } = chunks[i]
-      const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
-      const vectorStr = embeddingToSql(embedding)
-      await db.$executeRaw`
-        INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
-        VALUES (gen_random_uuid()::text, ${uploadId}, ${i}, ${content}, ${windowContent})
-        ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
-          "content" = EXCLUDED."content",
-          "windowContent" = EXCLUDED."windowContent"
-      `
-      await db.$executeRaw`
-        UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
-        WHERE "uploadId" = ${uploadId} AND "chunkIndex" = ${i}
-      `
+      try {
+        const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
+        const vectorStr = embeddingToSql(embedding)
+        await db.$executeRaw`
+          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
+          VALUES (gen_random_uuid()::text, ${uploadId}, ${i}, ${content}, ${windowContent})
+          ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
+            "content" = EXCLUDED."content",
+            "windowContent" = EXCLUDED."windowContent"
+        `
+        await db.$executeRaw`
+          UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
+          WHERE "uploadId" = ${uploadId} AND "chunkIndex" = ${i}
+        `
+        embeddedCount++
+      } catch (chunkErr) {
+        // Log but continue — one bad chunk shouldn't kill the whole upload
+        console.error(`[embedUpload] chunk ${i} failed for upload ${uploadId}:`, chunkErr)
+      }
     }
+
+    if (embeddedCount === 0) {
+      throw new Error(`All ${chunks.length} chunks failed to embed`)
+    }
+
+    console.log(`[embedUpload] ${uploadId}: ${embeddedCount}/${chunks.length} chunks embedded`)
     await db.upload.update({ where: { id: uploadId }, data: { status: 'ready' } })
   } catch (err) {
     console.error('[embedUpload]', uploadId, err)
