@@ -145,8 +145,19 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function ensureChunkSchema() {
+  // Idempotent DDL — ensures the windowContent column exists in production
+  // regardless of whether the Prisma migration has been applied yet.
+  await db.$executeRawUnsafe(
+    `ALTER TABLE "Chunk" ADD COLUMN IF NOT EXISTS "windowContent" TEXT`
+  )
+}
+
 async function embedUpload(uploadId: string, text: string) {
   try {
+    // Self-heal schema before first INSERT — safe to run on every call
+    await ensureChunkSchema()
+
     const chunks = chunkTextWithWindows(text)
     for (let i = 0; i < chunks.length; i++) {
       const { content, windowContent } = chunks[i]
