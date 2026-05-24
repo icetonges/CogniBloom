@@ -53,8 +53,9 @@ export async function generateEmbedding(
     ? BGE_QUERY_PREFIX + text.slice(0, 7900)
     : text.slice(0, 8000)
 
+  // router.huggingface.co resolves from Vercel; api-inference.huggingface.co does not (ENOTFOUND)
   const response = await fetch(
-    `https://api-inference.huggingface.co/models/${HF_MODEL}`,
+    `https://router.huggingface.co/hf-inference/models/${HF_MODEL}`,
     {
       method: 'POST',
       headers: {
