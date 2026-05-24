@@ -296,14 +296,14 @@ async function embedUpload(uploadId: string, pages: PageContent[]): Promise<Embe
     }
 
     if (embeddedCount === 0) {
-      const msg = `All ${chunks.length} chunks failed to embed. First error: ${firstError}`
+      const msg = `All ${allChunks.length} chunks failed to embed. First error: ${firstError}`
       await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
-      return { chunksEmbedded: 0, chunksTotal: chunks.length, error: msg }
+      return { chunksEmbedded: 0, chunksTotal: allChunks.length, error: msg }
     }
 
-    console.log(`[embedUpload] ${uploadId}: ${embeddedCount}/${chunks.length} chunks embedded`)
+    console.log(`[embedUpload] ${uploadId}: ${embeddedCount}/${allChunks.length} chunks embedded`)
     await db.upload.update({ where: { id: uploadId }, data: { status: 'ready' } })
-    return { chunksEmbedded: embeddedCount, chunksTotal: chunks.length, error: firstError }
+    return { chunksEmbedded: embeddedCount, chunksTotal: allChunks.length, error: firstError }
   } catch (err) {
     const msg = String(err)
     console.error('[embedUpload]', uploadId, err)
