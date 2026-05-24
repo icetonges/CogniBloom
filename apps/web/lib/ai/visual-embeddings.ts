@@ -39,7 +39,7 @@ export async function embedImage(pngBuffer: Buffer): Promise<number[]> {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'image/png',
     },
-    body: pngBuffer,
+    body: new Uint8Array(pngBuffer),
   })
 
   if (!response.ok) {
