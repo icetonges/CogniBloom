@@ -92,11 +92,60 @@ export async function generateEmbedding(
   return values
 }
 
+/**
+ * Batch-embed multiple texts in a single HuggingFace API call.
+ * Much faster than N sequential calls — the HF feature-extraction endpoint
+ * accepts an array of strings and returns an array of vectors.
+ *
+ * Input batches larger than BATCH_SIZE are split into multiple requests
+ * to stay well within HF's request-size limits.
+ */
 export async function generateEmbeddings(
   texts: string[],
   taskType: EmbeddingTaskType = 'RETRIEVAL_QUERY',
 ): Promise<number[][]> {
-  return Promise.all(texts.map((t) => generateEmbedding(t, taskType)))
+  if (texts.length === 0) return []
+
+  const token = getApiKey()
+  const BATCH_SIZE = 32   // safe upper limit for HF Inference API
+  const results: number[][] = []
+
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const batch = texts.slice(i, i + BATCH_SIZE).map((t) =>
+      taskType === 'RETRIEVAL_QUERY'
+        ? BGE_QUERY_PREFIX + t.slice(0, 7900)
+        : t.slice(0, 8000)
+    )
+
+    const response = await fetch(
+      `https://router.huggingface.co/hf-inference/models/${HF_MODEL}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ inputs: batch, options: { wait_for_model: true } }),
+      }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      throw new Error(`HF Batch Embedding [${response.status}]: ${errText}`)
+    }
+
+    // HF returns number[][] for a batch of strings (one row = one vector).
+    // Occasionally a row is wrapped one level deeper: number[][][] → unwrap.
+    const data = await response.json() as (number[] | number[][])[]
+    for (const row of data) {
+      const vec: number[] = Array.isArray(row[0])
+        ? (row as number[][])[0]!
+        : (row as number[])
+      results.push(vec)
+    }
+  }
+
+  return results
 }
 
 export function embeddingToSql(embedding: number[]): string {

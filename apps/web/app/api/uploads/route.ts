@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
+import { generateEmbeddings, embeddingToSql } from '@/lib/ai/embeddings'
 import { embedImage, clipEmbeddingToSql } from '@/lib/ai/visual-embeddings'
 import { renderPdfPages, pageHasFigures } from '@/lib/pdf-renderer'
 import { MODELS } from '@/lib/ai/models'
@@ -10,7 +10,9 @@ import { chunkTextWithWindows } from '@/lib/content'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
-export const maxDuration = 60
+// 300 s covers Gemini extraction + background embedding on Vercel Pro.
+// after() callbacks also run within this budget.
+export const maxDuration = 300
 
 /**
  * Extract plain text from a PDF using Gemini vision.
@@ -165,7 +167,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Persist the upload record
+    // Persist the upload record immediately — embedding happens in background
     const upload = await db.upload.create({
       data: {
         userId,
@@ -181,17 +183,17 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 1. Embed text chunks (BGE 768-dim)
-    const embedResult = await embedUpload(upload.id, pages)
-
-    // 2. Embed figure pages (CLIP 512-dim) — only for PDFs with figures
-    let figuresEmbedded = 0
-    let figureError: string | null = null
-    if (file.type === 'application/pdf') {
-      const figureResult = await embedFigures(upload.id, buffer, pages)
-      figuresEmbedded = figureResult.embedded
-      figureError = figureResult.error ?? null
-    }
+    // Run chunking + embedding AFTER the HTTP response is sent.
+    // after() callbacks still respect maxDuration (300 s above) — no timeout risk.
+    // Errors are persisted to the DB (status: 'failed') so the uploads list can
+    // surface them without needing to stay in the request window.
+    const isPdf = file.type === 'application/pdf'
+    after(async () => {
+      await embedUpload(upload.id, pages)
+      if (isPdf) {
+        await embedFigures(upload.id, buffer, pages)
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -199,15 +201,13 @@ export async function POST(request: NextRequest) {
         id: upload.id,
         filename: upload.filename,
         fileSize: upload.fileSize,
-        status: embedResult.error ? 'failed' : 'ready',
+        // Embedding is async — the actual status will become 'ready' or 'failed'
+        // once the background job completes. The uploads list polls GET /api/uploads.
+        status: 'processing',
         charsExtracted: extractedText.length,
-        chunksEmbedded: embedResult.chunksEmbedded,
-        chunksTotal: embedResult.chunksTotal,
-        embedError: embedResult.error ?? null,
-        figuresEmbedded,
-        figureError,
+        pageCount: pages.length,
       },
-    })
+    }, { status: 201 })
   } catch (error) {
     console.error('[POST /api/uploads]', error)
     return NextResponse.json(
@@ -265,14 +265,30 @@ async function embedUpload(uploadId: string, pages: PageContent[]): Promise<Embe
       return { chunksEmbedded: 0, chunksTotal: 0, error: msg }
     }
 
+    // Batch-embed all chunks in one/few HF API calls (vs N sequential calls)
+    let embeddings: number[][]
+    try {
+      embeddings = await generateEmbeddings(
+        allChunks.map((c) => c.content),
+        'RETRIEVAL_DOCUMENT',
+      )
+    } catch (batchErr) {
+      const msg = `Batch embedding failed: ${String(batchErr)}`
+      await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
+      return { chunksEmbedded: 0, chunksTotal: allChunks.length, error: msg }
+    }
+
     let embeddedCount = 0
     let firstError: string | undefined
+    const { randomUUID } = await import('crypto')
+
     for (let i = 0; i < allChunks.length; i++) {
-      const { content, windowContent, pageIndex } = allChunks[i]
+      const { content, windowContent, pageIndex } = allChunks[i]!
+      const embedding = embeddings[i]
+      if (!embedding) continue
+
       try {
-        const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
         const vectorStr = embeddingToSql(embedding)
-        const { randomUUID } = await import('crypto')
         const chunkId = randomUUID()
         await db.$executeRaw`
           INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent", "startPage", "endPage")
@@ -289,9 +305,8 @@ async function embedUpload(uploadId: string, pages: PageContent[]): Promise<Embe
         `
         embeddedCount++
       } catch (chunkErr) {
-        const errMsg = String(chunkErr)
         console.error(`[embedUpload] chunk ${i} failed for upload ${uploadId}:`, chunkErr)
-        if (!firstError) firstError = `chunk ${i}: ${errMsg}`
+        if (!firstError) firstError = `chunk ${i}: ${String(chunkErr)}`
       }
     }
 
