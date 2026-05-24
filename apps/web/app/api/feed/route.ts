@@ -127,16 +127,21 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
         const parsed = extractJson(res.content)
 
         // Persist to DB for caching
+        const title = String(parsed['title'] ?? 'Untitled')
+        const body = String(parsed['body'] ?? '')
+        const difficulty = String(parsed['difficulty'] ?? 'medium')
+        const estimatedMinutes = Number(parsed['estimatedMinutes']) || 2
+
         const dbItem = await db.dailyFeedItem.create({
           data: {
             type: topic.type,
-            title: String(parsed.title ?? 'Untitled'),
-            description: String(parsed.body ?? ''),
-            content: String(parsed.body ?? ''),
+            title,
+            description: body,
+            content: body,
             subject: topic.subject,
-            difficulty: String(parsed.difficulty ?? 'medium'),
+            difficulty,
             gradeLevel: [5, 6, 7, 8, 9, 10],
-            estimatedTime: Number(parsed.estimatedMinutes) || 2,
+            estimatedTime: estimatedMinutes,
             isAiGenerated: true,
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
           },
@@ -146,11 +151,11 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
           id: dbItem.id,
           type: topic.type as FeedItem['type'],
           emoji: topic.emoji,
-          title: String(parsed.title ?? 'Untitled'),
-          body: String(parsed.body ?? ''),
+          title,
+          body,
           subject: topic.subject,
-          difficulty: (String(parsed.difficulty ?? 'medium')) as FeedItem['difficulty'],
-          estimatedMinutes: Number(parsed.estimatedMinutes) || 2,
+          difficulty: difficulty as FeedItem['difficulty'],
+          estimatedMinutes,
         } satisfies FeedItem
       })
     )
