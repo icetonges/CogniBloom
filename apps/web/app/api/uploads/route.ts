@@ -125,11 +125,6 @@ function parsePagedOutput(raw: string): PageContent[] {
   void PAGE_MARKER // suppress unused warning
 }
 
-/** Convenience: get all pages as a single string (for backwards compat) */
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pages = await extractPdfPages(buffer)
-  return pages.map(p => p.text).join('\n\n')
-}
 
 // POST /api/uploads — accepts multipart form with a file
 export async function POST(request: NextRequest) {
