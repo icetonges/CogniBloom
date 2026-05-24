@@ -108,21 +108,17 @@ IMPORTANT: Before the content of each page, output a marker exactly like this:
 
 /** Parse Gemini output with ===PAGE N=== markers into PageContent[]. */
 function parsePagedOutput(raw: string): PageContent[] {
-  const PAGE_MARKER = /^===PAGE (\d+)===/m
   const segments = raw.split(/^===PAGE \d+===/m).filter(s => s.trim())
   const markers = [...raw.matchAll(/^===PAGE (\d+)===/gm)]
 
   if (markers.length === 0) {
-    // No markers — treat entire output as page 0
     return [{ pageIndex: 0, text: raw.trim() }]
   }
 
   return segments.map((text, i) => ({
-    pageIndex: i,  // 0-based
+    pageIndex: i,
     text: text.trim(),
   })).filter(p => p.text.length > 0)
-
-  void PAGE_MARKER // suppress unused warning
 }
 
 
