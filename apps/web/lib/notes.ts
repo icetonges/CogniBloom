@@ -12,7 +12,7 @@ import { buildNoteSlug } from '@/lib/note-format'
 export async function embedNote(noteId: string, title: string, content: string): Promise<void> {
   try {
     const text = `${title}\n\n${content}`
-    const embedding = await generateEmbedding(text)
+    const embedding = await generateEmbedding(text, 'RETRIEVAL_DOCUMENT')
     const vectorStr = embeddingToSql(embedding)
     await db.$executeRaw`
       UPDATE "Note" SET embedding = ${vectorStr}::vector(768) WHERE id = ${noteId}

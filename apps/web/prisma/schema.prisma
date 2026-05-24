@@ -240,6 +240,8 @@ model Chunk {
 
   chunkIndex          Int
   content             String      @db.Text
+  /// Wider surrounding sentence window — used in LLM prompt context (sentence-window RAG)
+  windowContent       String?     @db.Text
   embedding           Unsupported("vector(768)")?
 
   startPage           Int?
@@ -247,6 +249,35 @@ model Chunk {
 
   @@unique([uploadId, chunkIndex])
   @@index([uploadId])
+}
+
+// ============ RAG EVALUATION ============
+
+/// RAGAS-inspired retrieval quality metrics captured after each tutor response.
+model RagEvaluation {
+  id                  String      @id @default(cuid())
+  userId              String
+  sessionId           String
+  query               String      @db.Text
+  response            String      @db.Text
+
+  /// Fraction of response claims grounded in the retrieved context (0–1)
+  faithfulness        Float?
+  /// How relevant the response is to the query (0–1)
+  answerRelevancy     Float?
+  /// How well the retrieved context covers what was needed (0–1)
+  contextPrecision    Float?
+  /// Whether any context was retrieved at all
+  ragUsed             Boolean     @default(false)
+  notesRetrieved      Int         @default(0)
+  chunksRetrieved     Int         @default(0)
+  hydeUsed            Boolean     @default(false)
+
+  createdAt           DateTime    @default(now())
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([createdAt])
 }
 
 // ============ TUTOR SESSIONS & CONVERSATIONS ============

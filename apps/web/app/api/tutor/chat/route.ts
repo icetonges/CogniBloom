@@ -2,7 +2,8 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { streamWithFallback } from '@/lib/ai/fallback'
-import { getRagContext } from '@/lib/ai/rag'
+import { getRagResult } from '@/lib/ai/rag'
+import { evaluateRagResponse } from '@/lib/ai/rag-eval'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 import { awardXP, XP } from '@/lib/gamification'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
@@ -51,10 +52,11 @@ export async function POST(request: NextRequest) {
 
     // Get RAG context from the student's notes + user preferences (parallel)
     const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
-    const [ragContext, userPrefs] = await Promise.all([
-      lastUserMsg ? getRagContext(userId, lastUserMsg.content) : Promise.resolve(''),
+    const [ragResult, userPrefs] = await Promise.all([
+      lastUserMsg ? getRagResult(userId, lastUserMsg.content) : Promise.resolve({ context: '', notesUsed: [], chunksUsed: [], hydeUsed: false }),
       db.userPreferences.findUnique({ where: { userId } }),
     ])
+    const ragContext = ragResult.context
 
     // Build system prompt with RAG context and response-length preference
     const baseSystemPrompt = getSystemPrompt(body.mode || 'general')
@@ -129,6 +131,22 @@ export async function POST(request: NextRequest) {
 
           // Award XP for completing an AI session exchange
           after(() => awardXP(userId, XP.SESSION_COMPLETED))
+
+          // Evaluate RAG quality asynchronously -- never blocks the client
+          if (lastUserMsg && assistantContent) {
+            after(() =>
+              evaluateRagResponse({
+                userId,
+                sessionId: sessionId!,
+                query: lastUserMsg.content,
+                response: assistantContent,
+                context: ragContext,
+                notesUsed: ragResult.notesUsed,
+                chunksUsed: ragResult.chunksUsed,
+                hydeUsed: ragResult.hydeUsed,
+              })
+            )
+          }
 
           controller.enqueue(
             encoder.encode(

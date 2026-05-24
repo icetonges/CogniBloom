@@ -35,5 +35,9 @@ export type { AIUsageMetrics } from './manager'
 
 // Embeddings & RAG
 export { generateEmbedding, generateEmbeddings, embeddingToSql, EMBEDDING_DIMS } from './embeddings'
-export { searchSimilarNotes, buildRagContext, getRagContext } from './rag'
-export type { RagNote } from './rag'
+export type { EmbeddingTaskType } from './embeddings'
+export { searchSimilarNotes, searchSimilarChunks, buildRagContext, getRagContext, getRagResult } from './rag'
+export type { RagNote, RagChunk, RagResult } from './rag'
+
+// RAG Evaluation
+export { evaluateRagResponse } from './rag-eval'

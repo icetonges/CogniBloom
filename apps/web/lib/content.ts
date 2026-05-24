@@ -6,14 +6,70 @@ import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
 import { DANIEL_USER_ID } from '@/lib/user'
 
-// ─── Text chunking ────────────────────────────────────────────────────────────
+// ─── Text chunking ────────────────────────────────────────────────────��───────
 
-/** Split text into ~500-token segments with 50-token overlap. */
+/**
+ * Sentence-window chunking: splits on sentence boundaries, groups into small
+ * retrieval chunks, and stores a wider surrounding window for LLM context.
+ */
+function splitIntoSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 10)
+}
+
+export interface ChunkWithWindow {
+  content: string       // the retrieval chunk (embedded & matched)
+  windowContent: string // wider surrounding context for the prompt
+}
+
+/**
+ * Returns chunks with their surrounding sentence-window context.
+ * childSize  = number of sentences per retrieval chunk (default 3)
+ * windowSize = half-width of the surrounding context window in sentences (default 2)
+ */
+export function chunkTextWithWindows(
+  text: string,
+  childSize = 3,
+  windowSize = 2,
+): ChunkWithWindow[] {
+  const sentences = splitIntoSentences(text)
+  if (sentences.length === 0) return []
+
+  const chunks: ChunkWithWindow[] = []
+  for (let i = 0; i < sentences.length; i += childSize) {
+    const childSentences = sentences.slice(i, i + childSize)
+    const content = childSentences.join(' ').trim()
+    if (content.length < 30) continue
+
+    const winStart = Math.max(0, i - windowSize)
+    const winEnd = Math.min(sentences.length, i + childSize + windowSize)
+    const windowContent = sentences.slice(winStart, winEnd).join(' ').trim()
+    chunks.push({ content, windowContent })
+  }
+  return chunks
+}
+
+/**
+ * Simple flat chunking — returns retrieval-unit strings.
+ * Sentence-window aware for shorter texts; fixed-size for longer ones.
+ */
 export function chunkText(text: string, chunkSize = 1500, overlap = 200): string[] {
+  if (text.length < chunkSize * 2) {
+    const withWindows = chunkTextWithWindows(text)
+    if (withWindows.length > 0) return withWindows.map((c) => c.content)
+  }
+
   const chunks: string[] = []
   let start = 0
   while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length)
+    let end = Math.min(start + chunkSize, text.length)
+    if (end < text.length) {
+      const snippet = text.slice(end - 200, end)
+      const lastPeriod = snippet.lastIndexOf('.')
+      if (lastPeriod >= 0) end = end - 200 + lastPeriod + 1
+    }
     chunks.push(text.slice(start, end).trim())
     start += chunkSize - overlap
   }
@@ -147,7 +203,7 @@ export async function ingestContent(
 
     for (let i = 0; i < chunks.length; i++) {
       try {
-        const embedding = await generateEmbedding(chunks[i])
+        const embedding = await generateEmbedding(chunks[i], 'RETRIEVAL_DOCUMENT')
         const vectorStr = embeddingToSql(embedding)
         await db.$executeRaw`
           INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content")

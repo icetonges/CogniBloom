@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     // Try vector search first if semantic mode is on
     if (semantic) {
       try {
-        const embedding = await generateEmbedding(query)
+        const embedding = await generateEmbedding(query, 'RETRIEVAL_QUERY')
         const vectorStr = embeddingToSql(embedding)
 
         const vectorResults = await db.$queryRaw<NoteResult[]>`

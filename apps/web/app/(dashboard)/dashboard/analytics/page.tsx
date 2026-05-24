@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Loader2, BookOpen, MessageSquare, Zap, Flame, TrendingUp, Brain, Trophy, Target, Layers } from 'lucide-react'
+import { Loader2, BookOpen, MessageSquare, Zap, Flame, TrendingUp, Brain, Trophy, Target, Layers, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -75,10 +75,44 @@ function masteryLabel(score: number) {
   return { text: 'Learning', color: 'text-red-400' }
 }
 
+interface RagEvalAverages {
+  faithfulness: number | null
+  answerRelevancy: number | null
+  contextPrecision: number | null
+}
+
+interface RagEvalTimeline {
+  date: string
+  faithfulness: number | null
+  answerRelevancy: number | null
+  contextPrecision: number | null
+}
+
+interface RagEvalData {
+  averages: RagEvalAverages
+  totalEvaluations: number
+  ragUsageRate: number
+  hydeUsageRate: number
+  timeline: RagEvalTimeline[]
+}
+
+function ragPct(v: number | null): string {
+  if (v === null) return '—'
+  return `${Math.round(v * 100)}%`
+}
+
+function ragScoreColor(v: number | null): string {
+  if (v === null) return 'text-muted-foreground'
+  if (v >= 0.8) return 'text-green-500'
+  if (v >= 0.6) return 'text-amber-500'
+  return 'text-red-400'
+}
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [ragEval, setRagEval] = useState<RagEvalData | null>(null)
 
   useEffect(() => {
     fetch('/api/analytics')
@@ -86,6 +120,11 @@ export default function AnalyticsPage() {
       .then(({ data }) => setData(data))
       .catch(() => setError('Failed to load analytics'))
       .finally(() => setLoading(false))
+
+    fetch('/api/analytics/rag-eval')
+      .then((r) => r.json())
+      .then(({ data }) => { if (data) setRagEval(data) })
+      .catch(() => {})
   }, [])
 
   if (loading) {
@@ -103,26 +142,22 @@ export default function AnalyticsPage() {
   const maxMessages = Math.max(...data.activityChart.map((d) => d.messages), 1)
   const maxSubjectCount = Math.max(...data.subjectBreakdown.map((s) => s.count), 1)
   const topMode = Object.entries(data.modeCounts).sort(([, a], [, b]) => b - a)[0]?.[0]
-
   const masteryEntries = Object.entries(data.mastery.scores).sort(([, a], [, b]) => b - a)
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Learning Analytics 📊</h1>
+        <h1 className="text-3xl font-bold">Learning Analytics</h1>
         <p className="text-muted-foreground mt-1">Track your progress and see how you&apos;re growing.</p>
       </div>
 
-      {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={<BookOpen className="w-5 h-5 text-blue-500" />} title="Total Notes" value={data.totals.notes} sub="all time" color="blue" />
         <StatCard icon={<MessageSquare className="w-5 h-5 text-purple-500" />} title="AI Sessions" value={data.totals.sessions} sub="all time" color="purple" />
-        <StatCard icon={<Flame className="w-5 h-5 text-orange-500" />} title="Streak" value={`🔥 ${data.streak}`} sub="days active" color="amber" />
+        <StatCard icon={<Flame className="w-5 h-5 text-orange-500" />} title="Streak" value={data.streak + ' days'} sub="days active" color="amber" />
         <StatCard icon={<Zap className="w-5 h-5 text-green-500" />} title="This Week" value={data.thisWeek.sessions} sub="sessions" color="green" />
       </div>
 
-      {/* Mastery Dashboard */}
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold flex items-center gap-2">
@@ -130,11 +165,10 @@ export default function AnalyticsPage() {
           </h2>
           {data.mastery.totalPracticeAnswered > 0 && (
             <span className="text-xs text-muted-foreground">
-              {data.mastery.totalPracticeAnswered} questions answered · {Math.round(data.mastery.averageAccuracy * 100)}% avg accuracy
+              {data.mastery.totalPracticeAnswered} questions answered
             </span>
           )}
         </div>
-
         {masteryEntries.length === 0 ? (
           <div className="py-6 text-center space-y-2">
             <p className="text-sm text-muted-foreground">No mastery data yet.</p>
@@ -143,7 +177,7 @@ export default function AnalyticsPage() {
         ) : (
           <div className="space-y-4">
             {masteryEntries.map(([subject, score], i) => {
-              const pct = Math.round(score * 100)
+              const scorePct = Math.round(score * 100)
               const { text: lvlText, color: lvlColor } = masteryLabel(score)
               const gradient = MASTERY_COLORS[i % MASTERY_COLORS.length]
               return (
@@ -152,27 +186,22 @@ export default function AnalyticsPage() {
                     <span className="font-medium capitalize">{subject}</span>
                     <div className="flex items-center gap-2">
                       <span className={cn('text-xs font-medium', lvlColor)}>{lvlText}</span>
-                      <span className="font-bold text-foreground w-8 text-right">{pct}%</span>
+                      <span className="font-bold text-foreground w-8 text-right">{scorePct}%</span>
                     </div>
                   </div>
                   <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                    <div
-                      className={cn('h-3 rounded-full bg-gradient-to-r transition-all duration-700', gradient)}
-                      style={{ width: `${pct}%` }}
-                    />
+                    <div className={cn('h-3 rounded-full bg-gradient-to-r transition-all duration-700', gradient)} style={{ width: `${scorePct}%` }} />
                   </div>
                 </div>
               )
             })}
           </div>
         )}
-
-        {/* Strong / Weak areas */}
         {(data.mastery.strongAreas.length > 0 || data.mastery.weakAreas.length > 0) && (
           <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-border">
             {data.mastery.strongAreas.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-green-500 mb-1.5">💪 Strengths</p>
+                <p className="text-xs font-semibold text-green-500 mb-1.5">Strengths</p>
                 <div className="flex flex-wrap gap-1.5">
                   {data.mastery.strongAreas.map((a) => (
                     <span key={a} className="text-xs bg-green-500/10 text-green-600 px-2.5 py-1 rounded-full capitalize">{a}</span>
@@ -182,7 +211,7 @@ export default function AnalyticsPage() {
             )}
             {data.mastery.weakAreas.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-amber-500 mb-1.5">⚡ Areas to improve</p>
+                <p className="text-xs font-semibold text-amber-500 mb-1.5">Areas to improve</p>
                 <div className="flex flex-wrap gap-1.5">
                   {data.mastery.weakAreas.map((a) => (
                     <span key={a} className="text-xs bg-amber-500/10 text-amber-600 px-2.5 py-1 rounded-full capitalize">{a}</span>
@@ -194,9 +223,7 @@ export default function AnalyticsPage() {
         )}
       </Card>
 
-      {/* Activity chart + Subject breakdown */}
       <div className="grid md:grid-cols-2 gap-6">
-        {/* 7-day activity bar chart */}
         <Card className="p-5 space-y-4">
           <h2 className="font-semibold flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-primary" /> 7-Day Activity
@@ -211,7 +238,7 @@ export default function AnalyticsPage() {
                     <div
                       className={cn('w-full rounded-t-sm transition-all', day.messages > 0 ? 'bg-primary' : 'bg-muted')}
                       style={{ height: `${height}%`, minHeight: day.messages > 0 ? '6px' : '0' }}
-                      title={`${day.messages} messages, ${day.sessions} sessions`}
+                      title={`${day.messages} messages`}
                     />
                   </div>
                   <span className="text-xs text-muted-foreground">{label}</span>
@@ -219,29 +246,23 @@ export default function AnalyticsPage() {
               )
             })}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {data.thisWeek.sessions} sessions · {data.totals.messagesThisMonth} messages this month
-          </p>
+          <p className="text-xs text-muted-foreground">{data.thisWeek.sessions} sessions this week</p>
         </Card>
 
-        {/* Subject breakdown */}
         <Card className="p-5 space-y-4">
           <h2 className="font-semibold">Notes by Subject</h2>
           {data.subjectBreakdown.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No notes yet — start taking notes!</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">No notes yet.</p>
           ) : (
             <div className="space-y-3">
               {data.subjectBreakdown.map((s, i) => (
                 <div key={s.subject} className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="font-medium">{s.subject}</span>
-                    <span className="text-muted-foreground">{s.count} note{s.count !== 1 ? 's' : ''}</span>
+                    <span className="text-muted-foreground">{s.count} {s.count !== 1 ? 'notes' : 'note'}</span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className={cn('h-2 rounded-full transition-all', SUBJECT_COLORS[i % SUBJECT_COLORS.length])}
-                      style={{ width: `${(s.count / maxSubjectCount) * 100}%` }}
-                    />
+                    <div className={cn('h-2 rounded-full transition-all', SUBJECT_COLORS[i % SUBJECT_COLORS.length])} style={{ width: `${(s.count / maxSubjectCount) * 100}%` }} />
                   </div>
                 </div>
               ))}
@@ -250,7 +271,6 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      {/* Recent Quiz History */}
       {data.recentQuizzes.length > 0 && (
         <Card className="p-5 space-y-4">
           <h2 className="font-semibold flex items-center gap-2">
@@ -258,22 +278,22 @@ export default function AnalyticsPage() {
           </h2>
           <div className="space-y-2">
             {data.recentQuizzes.map((q) => {
-              const pct = Math.round(q.score * 100)
-              const scoreColor = pct >= 80 ? 'text-green-500' : pct >= 60 ? 'text-amber-500' : 'text-red-400'
-              const bgBar = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-400'
+              const scorePct = Math.round(q.score * 100)
+              const scoreColor = scorePct >= 80 ? 'text-green-500' : scorePct >= 60 ? 'text-amber-500' : 'text-red-400'
+              const bgBar = scorePct >= 80 ? 'bg-green-500' : scorePct >= 60 ? 'bg-amber-500' : 'bg-red-400'
               return (
                 <div key={q.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{q.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {q.subject} · {q.difficulty} · {q.correctAnswers}/{q.totalQuestions} correct
-                      {q.completedAt ? ` · ${formatDistanceToNow(new Date(q.completedAt), { addSuffix: true })}` : ''}
+                      {q.subject} / {q.difficulty} / {q.correctAnswers}/{q.totalQuestions} correct
+                      {q.completedAt ? ` / ${formatDistanceToNow(new Date(q.completedAt), { addSuffix: true })}` : ''}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className={cn('text-lg font-bold', scoreColor)}>{pct}%</p>
+                    <p className={cn('text-lg font-bold', scoreColor)}>{scorePct}%</p>
                     <div className="w-16 bg-muted rounded-full h-1.5 mt-1">
-                      <div className={cn('h-1.5 rounded-full', bgBar)} style={{ width: `${pct}%` }} />
+                      <div className={cn('h-1.5 rounded-full', bgBar)} style={{ width: `${scorePct}%` }} />
                     </div>
                   </div>
                 </div>
@@ -283,7 +303,6 @@ export default function AnalyticsPage() {
         </Card>
       )}
 
-      {/* AI tutor usage */}
       <Card className="p-5 space-y-4">
         <h2 className="font-semibold flex items-center gap-2">
           <Target className="w-4 h-4 text-primary" /> AI Tutor Usage
@@ -306,22 +325,17 @@ export default function AnalyticsPage() {
             <p className="text-xs text-muted-foreground">notes this week</p>
           </div>
         </div>
-
-        {/* Mode breakdown mini pills */}
         {Object.keys(data.modeCounts).length > 0 && (
           <div className="flex flex-wrap gap-2 pt-2">
-            {Object.entries(data.modeCounts)
-              .sort(([, a], [, b]) => b - a)
-              .map(([mode, count]) => (
-                <span key={mode} className="text-xs bg-muted px-3 py-1 rounded-full text-muted-foreground">
-                  {MODE_LABELS[mode] || mode}: {count}
-                </span>
-              ))}
+            {Object.entries(data.modeCounts).sort(([, a], [, b]) => b - a).map(([mode, count]) => (
+              <span key={mode} className="text-xs bg-muted px-3 py-1 rounded-full text-muted-foreground">
+                {MODE_LABELS[mode] || mode}: {count}
+              </span>
+            ))}
           </div>
         )}
       </Card>
 
-      {/* Flashcard Health */}
       {data.flashcards.total > 0 && (
         <Card className="p-5 space-y-4">
           <h2 className="font-semibold flex items-center gap-2">
@@ -354,17 +368,95 @@ export default function AnalyticsPage() {
           {data.flashcards.due > 0 && (
             <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 flex items-center justify-between">
               <p className="text-sm text-amber-700 dark:text-amber-400">
-                You have <strong>{data.flashcards.due}</strong> card{data.flashcards.due !== 1 ? 's' : ''} due for review.
+                You have <strong>{data.flashcards.due}</strong>{' '}
+                {data.flashcards.due !== 1 ? 'cards' : 'card'} due for review.
               </p>
               <a href="/dashboard/flashcards" className="text-xs font-medium text-amber-600 hover:underline shrink-0 ml-3">
-                Review now →
+                Review now
               </a>
             </div>
           )}
         </Card>
       )}
 
-      {/* Encouragement */}
+      <Card className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold flex items-center gap-2">
+            <Database className="w-4 h-4 text-teal-500" /> AI Retrieval Quality
+          </h2>
+          {ragEval && ragEval.totalEvaluations > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {ragEval.totalEvaluations} evals, last 30 days
+            </span>
+          )}
+        </div>
+        {!ragEval || ragEval.totalEvaluations === 0 ? (
+          <div className="py-6 text-center space-y-1">
+            <p className="text-sm text-muted-foreground">No evaluation data yet.</p>
+            <p className="text-xs text-muted-foreground">
+              RAG quality is measured automatically after each AI Tutor conversation.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-xl bg-muted/40 p-3 space-y-1">
+                <p className={cn('text-2xl font-bold', ragScoreColor(ragEval.averages.faithfulness))}>
+                  {ragPct(ragEval.averages.faithfulness)}
+                </p>
+                <p className="text-xs font-medium text-muted-foreground">Faithfulness</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">grounded in context</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 p-3 space-y-1">
+                <p className={cn('text-2xl font-bold', ragScoreColor(ragEval.averages.answerRelevancy))}>
+                  {ragPct(ragEval.averages.answerRelevancy)}
+                </p>
+                <p className="text-xs font-medium text-muted-foreground">Answer Relevancy</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">answers the question</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 p-3 space-y-1">
+                <p className={cn('text-2xl font-bold', ragScoreColor(ragEval.averages.contextPrecision))}>
+                  {ragPct(ragEval.averages.contextPrecision)}
+                </p>
+                <p className="text-xs font-medium text-muted-foreground">Context Precision</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">retrieved context is relevant</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1 border-t border-border flex-wrap">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+                RAG used in {Math.round(ragEval.ragUsageRate * 100)}% of responses
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />
+                HyDE expansion: {Math.round(ragEval.hydeUsageRate * 100)}%
+              </span>
+            </div>
+            {ragEval.timeline.length > 1 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Answer relevancy trend</p>
+                <div className="flex items-end gap-0.5" style={{ height: '40px' }}>
+                  {ragEval.timeline.map((day) => {
+                    const v = day.answerRelevancy ?? 0
+                    const h = Math.max(v * 100, v > 0 ? 8 : 0)
+                    const barColor = v >= 0.8 ? 'bg-green-500' : v >= 0.6 ? 'bg-amber-500' : v > 0 ? 'bg-red-400' : 'bg-muted'
+                    return (
+                      <div key={day.date} className="flex-1 flex items-end" style={{ height: '40px' }} title={day.date + ': ' + ragPct(day.answerRelevancy)}>
+                        <div className={cn('w-full rounded-t-sm', barColor)} style={{ height: `${h}%`, minHeight: v > 0 ? '3px' : '0' }} />
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>{ragEval.timeline[0]?.date}</span>
+                  <span>{ragEval.timeline[ragEval.timeline.length - 1]?.date}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
       <Card className="p-5 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
         <div className="flex items-center gap-3">
           <span className="text-3xl">🌱</span>
@@ -372,8 +464,8 @@ export default function AnalyticsPage() {
             <p className="font-semibold">Keep going, Daniel!</p>
             <p className="text-sm text-muted-foreground">
               {data.streak > 0
-                ? `You're on a ${data.streak}-day streak — consistency is the secret to mastery!`
-                : 'Start a streak today — even 5 minutes of learning adds up over time!'}
+                ? `You are on a ${data.streak}-day streak. Consistency is the secret to mastery!`
+                : 'Start a streak today. Even 5 minutes of learning adds up over time!'}
             </p>
           </div>
         </div>
@@ -383,7 +475,10 @@ export default function AnalyticsPage() {
 }
 
 function StatCard({ icon, title, value, sub, color }: {
-  icon: React.ReactNode; title: string; value: number | string; sub: string
+  icon: React.ReactNode
+  title: string
+  value: number | string
+  sub: string
   color: 'blue' | 'purple' | 'amber' | 'green'
 }) {
   const bg = { blue: 'bg-blue-500/10', purple: 'bg-purple-500/10', amber: 'bg-amber-500/10', green: 'bg-green-500/10' }[color]

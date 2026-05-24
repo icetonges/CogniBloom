@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       const chunks = chunkText(upload.extractedText)
 
       for (let i = 0; i < chunks.length; i++) {
-        const embedding = await generateEmbedding(chunks[i])
+        const embedding = await generateEmbedding(chunks[i], 'RETRIEVAL_DOCUMENT')
         const vectorStr = embeddingToSql(embedding)
         await db.$executeRaw`
           INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content")
