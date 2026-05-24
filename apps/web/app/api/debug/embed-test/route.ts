@@ -10,7 +10,7 @@ function serializeError(err: unknown): string {
   return err.message + (cause ? ` → cause: ${serializeError(cause)}` : '')
 }
 
-async function tryFetch(label: string, url: string, body: unknown): Promise<{
+async function tryFetch(_label: string, url: string, body: unknown): Promise<{
   ok: boolean; status?: number; dims?: number; error?: string; latencyMs: number
 }> {
   const t0 = Date.now()
