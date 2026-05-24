@@ -268,13 +268,17 @@ export async function ingestContent(
 
     for (let i = 0; i < chunks.length; i++) {
       try {
-        const { content } = chunks[i]
+        const { content, windowContent } = chunks[i]
         const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
         const vectorStr = embeddingToSql(embedding)
+        const { randomUUID } = await import('crypto')
+        const chunkId = randomUUID()
         await db.$executeRaw`
-          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content")
-          VALUES (gen_random_uuid()::text, ${upload.id}, ${i}, ${content})
-          ON CONFLICT ("uploadId", "chunkIndex") DO NOTHING
+          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
+          VALUES (${chunkId}, ${upload.id}, ${i}, ${content}, ${windowContent})
+          ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
+            "content" = EXCLUDED."content",
+            "windowContent" = EXCLUDED."windowContent"
         `
         await db.$executeRaw`
           UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
