@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRequire } from 'module'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
-
-// Load pdf-parse via createRequire — avoids the CJS/ESM double-wrap that causes
-// "b is not a function" in minified production builds when using dynamic import().
-const _require = createRequire(import.meta.url)
-type PdfParseFallbackFn = (buf: Buffer) => Promise<{ text: string; numpages: number }>
-const _pdfParse = _require('pdf-parse') as PdfParseFallbackFn
 
 const MAX_SIZE = 25 * 1024 * 1024 // 25 MB
 
@@ -196,23 +189,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, html, title: title ?? rawTitle })
       } catch (geminiErr) {
         console.error('Gemini PDF vision error:', geminiErr)
-
-        // Fallback: pdf-parse plain text (loses figures, better than nothing)
-        try {
-          const data = await _pdfParse(buffer)
-          const cleaned = data.text.replace(/\s+/g, ' ').trim()
-          if (cleaned.length >= 50) {
-            const html = textToHtml(data.text)
-            return NextResponse.json({
-              success: true,
-              html: `<p style="color:#f59e0b;font-size:0.8em">⚠ Figures and formulas could not be extracted (AI vision unavailable). Text only.</p>${html}`,
-              title: rawTitle,
-            })
-          }
-        } catch {
-          // pdf-parse also failed
-        }
-
         const msg = geminiErr instanceof Error ? geminiErr.message : 'Unknown error'
         return NextResponse.json(
           { error: `Could not extract PDF content. ${msg}` },

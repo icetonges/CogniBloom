@@ -1,21 +1,38 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { createRequire } from 'module'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
 import { chunkText } from '@/lib/content'
 
-// Load pdf-parse via createRequire so the CJS module is resolved correctly in
-// both dev (ESM interop) and production (Next.js bundler). Dynamic import() of
-// CJS modules wraps the export differently per environment, causing the
-// "b is not a function" TypeError in minified builds.
-const _require = createRequire(import.meta.url)
-type PdfParseFn = (buf: Buffer) => Promise<{ text: string }>
-const pdfParse = _require('pdf-parse') as PdfParseFn
-
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
 export const maxDuration = 60
+
+/**
+ * Extract plain text from a PDF using Gemini vision.
+ * This avoids all pdf-parse / pdfjs-dist / DOMMatrix / CJS bundler issues.
+ */
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const apiKey = process.env['GOOGLE_API_KEY'] ?? process.env['GEMINI_API_KEY']
+  if (!apiKey) throw new Error('No Google API key configured for PDF extraction.')
+
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType: 'application/pdf',
+        data: buffer.toString('base64'),
+      },
+    },
+    `Extract ALL text from this document verbatim. Preserve headings, paragraphs, lists, tables, and numbered items. Include all math formulas, chemical equations, and captions exactly as written.
+Output ONLY the extracted text — no commentary, no formatting instructions, no markdown wrappers.`,
+  ])
+
+  return result.response.text().trim()
+}
 
 // POST /api/uploads — accepts multipart form with a file
 export async function POST(request: NextRequest) {
@@ -27,29 +44,37 @@ export async function POST(request: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024} MB)` }, { status: 413 })
+      return NextResponse.json(
+        { error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024} MB)` },
+        { status: 413 }
+      )
     }
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return NextResponse.json({ error: 'Unsupported file type. Allowed: PDF, TXT, MD' }, { status: 415 })
+      return NextResponse.json(
+        { error: 'Unsupported file type. Allowed: PDF, TXT, MD' },
+        { status: 415 }
+      )
     }
 
-    // Extract text
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     let extractedText = ''
 
     if (file.type === 'application/pdf') {
-      const parsed = await pdfParse(buffer)
-      extractedText = parsed.text
+      extractedText = await extractPdfText(buffer)
     } else {
+      // TXT / Markdown — read directly
       extractedText = buffer.toString('utf-8')
     }
 
     if (!extractedText.trim()) {
-      return NextResponse.json({ error: 'Could not extract text from file' }, { status: 422 })
+      return NextResponse.json(
+        { error: 'Could not extract text from file' },
+        { status: 422 }
+      )
     }
 
-    // Create Upload record (no R2 for now — store extracted text directly)
+    // Persist the upload record
     const upload = await db.upload.create({
       data: {
         userId,
@@ -64,8 +89,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Chunk and embed after the response. On Vercel, `after()` keeps this work
-    // attached to the request lifecycle instead of dropping it when the response ends.
+    // Chunk + embed asynchronously after the response is sent.
+    // `after()` keeps this alive on Vercel without blocking the client.
     after(() => embedUpload(upload.id, extractedText))
 
     return NextResponse.json({
@@ -79,7 +104,11 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    return NextResponse.json({ error: 'Upload failed: ' + String(error) }, { status: 500 })
+    console.error('[POST /api/uploads]', error)
+    return NextResponse.json(
+      { error: 'Upload failed: ' + String(error) },
+      { status: 500 }
+    )
   }
 }
 
@@ -94,7 +123,6 @@ async function embedUpload(uploadId: string, text: string) {
         VALUES (gen_random_uuid()::text, ${uploadId}, ${i}, ${chunks[i]})
         ON CONFLICT ("uploadId", "chunkIndex") DO NOTHING
       `
-      // Store embedding via raw update (Unsupported type)
       await db.$executeRaw`
         UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
         WHERE "uploadId" = ${uploadId} AND "chunkIndex" = ${i}
@@ -137,9 +165,7 @@ export async function DELETE(request: NextRequest) {
     const upload = await db.upload.findFirst({ where: { id, userId } })
     if (!upload) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    // Chunks cascade-delete via FK
     await db.upload.delete({ where: { id } })
-
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
