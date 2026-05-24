@@ -13,8 +13,10 @@ export const maxDuration = 60
  * Extract plain text from a PDF using Gemini vision.
  * This avoids all pdf-parse / pdfjs-dist / DOMMatrix / CJS bundler issues.
  */
-// Model fallback chain — tries each model in order until one succeeds.
-// Handles 503 overload errors from Google without failing the whole upload.
+// Retry + model fallback chain for PDF extraction.
+// Pattern: the first call often gets a transient 503 but the same model
+// works immediately on retry — so we retry the primary model once with a
+// short delay before falling through to backup models.
 const PDF_MODELS = [
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash-lite',
@@ -24,6 +26,13 @@ const PDF_MODELS = [
 const PDF_PROMPT = `Extract ALL text from this document verbatim. Preserve headings, paragraphs, lists, tables, and numbered items. Include all math formulas, chemical equations, and captions exactly as written.
 Output ONLY the extracted text — no commentary, no formatting instructions, no markdown wrappers.`
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+function isTransientError(err: unknown): boolean {
+  const msg = String(err)
+  return msg.includes('503') || msg.includes('429') || msg.includes('overload') || msg.includes('unavailable')
+}
+
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const apiKey = process.env['GOOGLE_API_KEY'] ?? process.env['GEMINI_API_KEY']
   if (!apiKey) throw new Error('No Google API key configured for PDF extraction.')
@@ -32,21 +41,26 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   const inlineData = { mimeType: 'application/pdf' as const, data: buffer.toString('base64') }
   let lastError: unknown
 
-  for (const modelId of PDF_MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelId })
-      const result = await model.generateContent([{ inlineData }, PDF_PROMPT])
-      const text = result.response.text().trim()
-      if (text) return text
-    } catch (err) {
-      const msg = String(err)
-      // Only fall through on rate-limit / overload errors; hard-fail on auth/quota
-      if (msg.includes('503') || msg.includes('429') || msg.includes('overload') || msg.includes('unavailable')) {
+  for (let m = 0; m < PDF_MODELS.length; m++) {
+    const modelId = PDF_MODELS[m]
+    // Each model gets up to 2 attempts: immediate + one retry after a short delay
+    const attempts = m === 0 ? 2 : 1
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelId })
+        const result = await model.generateContent([{ inlineData }, PDF_PROMPT])
+        const text = result.response.text().trim()
+        if (text) return text
+      } catch (err) {
+        if (!isTransientError(err)) throw err  // auth/quota errors bubble up immediately
         lastError = err
-        console.warn(`[extractPdfText] ${modelId} unavailable, trying next model...`)
-        continue
+        if (attempt < attempts) {
+          console.warn(`[extractPdfText] ${modelId} attempt ${attempt} failed (503/429), retrying in 1.5s...`)
+          await sleep(1500)
+        } else {
+          console.warn(`[extractPdfText] ${modelId} exhausted, trying next model...`)
+        }
       }
-      throw err  // surface auth errors, invalid key, etc. immediately
     }
   }
 
