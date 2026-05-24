@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from './embeddings'
+import { embedTextForImageSearch, clipEmbeddingToSql } from './visual-embeddings'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export interface RagNote {
@@ -257,11 +258,60 @@ export async function searchSimilarChunks(
 
 // ─── Unified context builder ──────────────────────────────────────────────────
 
+export interface RagFigure {
+  pageIndex: number
+  imageBase64: string   // PNG — pass directly to Gemini Vision as inline_data
+  caption: string | null
+  similarity: number
+}
+
 export interface RagResult {
   context: string
   notesUsed: RagNote[]
   chunksUsed: RagChunk[]
+  figuresUsed: RagFigure[]
   hydeUsed: boolean
+}
+
+/**
+ * Search FigureEmbedding table using CLIP text encoding of the query.
+ * Returns page images whose visual content is similar to the query.
+ */
+async function searchSimilarFigures(
+  userId: string,
+  query: string,
+  limit = 2,
+  minSimilarity = 0.20,  // CLIP scores are lower than BGE — use a lower threshold
+): Promise<RagFigure[]> {
+  try {
+    const clipVec = await embedTextForImageSearch(query)
+    const vectorStr = clipEmbeddingToSql(clipVec)
+
+    const results = await db.$queryRaw<Array<{
+      pageIndex: number
+      imageBase64: string
+      caption: string | null
+      similarity: number
+    }>>`
+      SELECT
+        fe."pageIndex",
+        fe."imageBase64",
+        fe."caption",
+        1 - (fe.embedding <=> ${vectorStr}::vector(512)) AS similarity
+      FROM "FigureEmbedding" fe
+      JOIN "Upload" u ON u.id = fe."uploadId"
+      WHERE u."userId" = ${userId}
+        AND fe.embedding IS NOT NULL
+        AND 1 - (fe.embedding <=> ${vectorStr}::vector(512)) > ${minSimilarity}
+      ORDER BY fe.embedding <=> ${vectorStr}::vector(512)
+      LIMIT ${limit}
+    `
+
+    return results.map(r => ({ ...r, similarity: Number(r.similarity) }))
+  } catch {
+    // FigureEmbedding table may not exist yet on older deployments
+    return []
+  }
 }
 
 export async function getRagContext(userId: string, query: string): Promise<string> {
@@ -271,9 +321,11 @@ export async function getRagContext(userId: string, query: string): Promise<stri
 
 export async function getRagResult(userId: string, query: string): Promise<RagResult> {
   try {
-    const [notes, chunks] = await Promise.all([
+    // Run all three searches in parallel
+    const [notes, chunks, figures] = await Promise.all([
       searchSimilarNotes(userId, query, 4, 0.55, true),
       searchSimilarChunks(userId, query, 4, 0.45, true),
+      searchSimilarFigures(userId, query, 2, 0.20),
     ])
 
     const parts: string[] = []
@@ -281,7 +333,6 @@ export async function getRagResult(userId: string, query: string): Promise<RagRe
     if (notes.length > 0) parts.push(buildRagContext(notes))
 
     if (chunks.length > 0) {
-      // Use the wider window content for LLM context — key sentence-window insight
       const chunkSection = chunks.map(
         (c, i) =>
           `[Document ${i + 1} — ${c.filename}]: ${(c.windowContent ?? c.content).slice(0, 800)}`
@@ -295,13 +346,27 @@ export async function getRagResult(userId: string, query: string): Promise<RagRe
       )
     }
 
+    // Figures are returned separately so callers can pass them as Gemini Vision images.
+    // The context string includes captions for models that don't support vision.
+    if (figures.length > 0) {
+      const figCaptions = figures
+        .filter(f => f.caption)
+        .map((f, i) => `[Figure ${i + 1} — page ${f.pageIndex + 1}]: ${f.caption}`)
+      if (figCaptions.length > 0) {
+        parts.push(
+          ['--- Relevant figures from uploaded documents ---', ...figCaptions, '--- End of figures ---'].join('\n\n')
+        )
+      }
+    }
+
     return {
       context: parts.join('\n\n'),
       notesUsed: notes,
       chunksUsed: chunks,
+      figuresUsed: figures,
       hydeUsed: true,
     }
   } catch {
-    return { context: '', notesUsed: [], chunksUsed: [], hydeUsed: false }
+    return { context: '', notesUsed: [], chunksUsed: [], figuresUsed: [], hydeUsed: false }
   }
 }

@@ -222,6 +222,7 @@ model Upload {
   extractedText        String?     @db.Text
   extractedMetadata    Json?
   chunks              Chunk[]
+  figures             FigureEmbedding[]
 
   noteId              String?
   note                Note?       @relation(fields: [noteId], references: [id], onDelete: SetNull)
@@ -249,6 +250,32 @@ model Chunk {
 
   @@unique([uploadId, chunkIndex])
   @@index([uploadId])
+}
+
+// ============ MULTIMODAL / FIGURE EMBEDDINGS ============
+
+/// One entry per PDF page that contains a figure/diagram/shape.
+/// CLIP embedding (512-dim) allows visual similarity search:
+///   - student query text → CLIP text encode → cosine search → finds matching page image
+///   - retrieved page image (base64) → passed to Gemini Vision as visual context
+model FigureEmbedding {
+  id           String   @id @default(cuid())
+  uploadId     String
+  upload       Upload   @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  pageIndex    Int      // 0-based page number in the source PDF
+  imageBase64  String   @db.Text // PNG rendered at 150 DPI, base64-encoded
+  caption      String?  @db.Text // Gemini's [FIGURE: ...] description for this page
+  width        Int?
+  height       Int?
+
+  /// CLIP vector(512) — same space as CLIP text encoding of queries
+  embedding    Unsupported("vector(512)")?
+
+  createdAt    DateTime @default(now())
+
+  @@index([uploadId])
+  @@index([pageIndex])
 }
 
 // ============ RAG EVALUATION ============

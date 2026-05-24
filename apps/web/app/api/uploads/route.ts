@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
+import { embedImage, clipEmbeddingToSql } from '@/lib/ai/visual-embeddings'
+import { renderPdfPages, pageHasFigures } from '@/lib/pdf-renderer'
 import { MODELS } from '@/lib/ai/models'
 import { chunkTextWithWindows } from '@/lib/content'
 
@@ -188,9 +190,17 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Embed synchronously — errors are now visible in the response.
-    // (Previously used after() which silently dropped all failures.)
+    // 1. Embed text chunks (BGE 768-dim)
     const embedResult = await embedUpload(upload.id, pages)
+
+    // 2. Embed figure pages (CLIP 512-dim) — only for PDFs with figures
+    let figuresEmbedded = 0
+    let figureError: string | null = null
+    if (file.type === 'application/pdf') {
+      const figureResult = await embedFigures(upload.id, buffer, pages)
+      figuresEmbedded = figureResult.embedded
+      figureError = figureResult.error ?? null
+    }
 
     return NextResponse.json({
       success: true,
@@ -203,6 +213,8 @@ export async function POST(request: NextRequest) {
         chunksEmbedded: embedResult.chunksEmbedded,
         chunksTotal: embedResult.chunksTotal,
         embedError: embedResult.error ?? null,
+        figuresEmbedded,
+        figureError,
       },
     })
   } catch (error) {
@@ -306,6 +318,85 @@ async function embedUpload(uploadId: string, pages: PageContent[]): Promise<Embe
     console.error('[embedUpload]', uploadId, err)
     await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } }).catch(() => null)
     return { chunksEmbedded: 0, chunksTotal: 0, error: msg }
+  }
+}
+
+/** Render figure-containing PDF pages to PNG, CLIP-embed them, store in FigureEmbedding table. */
+async function embedFigures(
+  uploadId: string,
+  pdfBuffer: Buffer,
+  pages: PageContent[],
+): Promise<{ embedded: number; error?: string }> {
+  try {
+    // Only process pages that Gemini marked as having figures
+    const figurePageIndices = new Set(
+      pages
+        .filter(p => pageHasFigures(p.text))
+        .map(p => p.pageIndex)
+    )
+
+    if (figurePageIndices.size === 0) {
+      return { embedded: 0 }
+    }
+
+    // Render all pages to PNG using MuPDF WASM
+    const renderedPages = await renderPdfPages(pdfBuffer)
+
+    // Self-heal: ensure FigureEmbedding table + vector column exist
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "FigureEmbedding" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "uploadId" TEXT NOT NULL,
+        "pageIndex" INTEGER NOT NULL,
+        "imageBase64" TEXT NOT NULL,
+        "caption" TEXT,
+        "width" INTEGER,
+        "height" INTEGER,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    await db.$executeRawUnsafe(`
+      ALTER TABLE "FigureEmbedding" ADD COLUMN IF NOT EXISTS "embedding" vector(512)
+    `)
+
+    let embedded = 0
+    let firstError: string | undefined
+
+    for (const rendered of renderedPages) {
+      if (!figurePageIndices.has(rendered.pageIndex)) continue
+
+      try {
+        const clipVector = await embedImage(rendered.png)
+        const vectorStr = clipEmbeddingToSql(clipVector)
+        const caption = pages.find(p => p.pageIndex === rendered.pageIndex)?.text
+          .match(/\[FIGURE:[^\]]+\]/gi)?.join('\n') ?? null
+
+        const { randomUUID } = await import('crypto')
+        const id = randomUUID()
+
+        await db.$executeRaw`
+          INSERT INTO "FigureEmbedding"
+            ("id", "uploadId", "pageIndex", "imageBase64", "caption", "width", "height")
+          VALUES
+            (${id}, ${uploadId}, ${rendered.pageIndex}, ${rendered.base64},
+             ${caption}, ${rendered.width}, ${rendered.height})
+          ON CONFLICT DO NOTHING
+        `
+        await db.$executeRaw`
+          UPDATE "FigureEmbedding"
+          SET embedding = ${vectorStr}::vector(512)
+          WHERE "id" = ${id}
+        `
+        embedded++
+      } catch (err) {
+        if (!firstError) firstError = `page ${rendered.pageIndex}: ${String(err)}`
+        console.error(`[embedFigures] page ${rendered.pageIndex} failed:`, err)
+      }
+    }
+
+    return { embedded, error: firstError }
+  } catch (err) {
+    return { embedded: 0, error: String(err) }
   }
 }
 
