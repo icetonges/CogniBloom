@@ -13,25 +13,44 @@ export const maxDuration = 60
  * Extract plain text from a PDF using Gemini vision.
  * This avoids all pdf-parse / pdfjs-dist / DOMMatrix / CJS bundler issues.
  */
+// Model fallback chain — tries each model in order until one succeeds.
+// Handles 503 overload errors from Google without failing the whole upload.
+const PDF_MODELS = [
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+]
+
+const PDF_PROMPT = `Extract ALL text from this document verbatim. Preserve headings, paragraphs, lists, tables, and numbered items. Include all math formulas, chemical equations, and captions exactly as written.
+Output ONLY the extracted text — no commentary, no formatting instructions, no markdown wrappers.`
+
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const apiKey = process.env['GOOGLE_API_KEY'] ?? process.env['GEMINI_API_KEY']
   if (!apiKey) throw new Error('No Google API key configured for PDF extraction.')
 
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+  const inlineData = { mimeType: 'application/pdf' as const, data: buffer.toString('base64') }
+  let lastError: unknown
 
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        mimeType: 'application/pdf',
-        data: buffer.toString('base64'),
-      },
-    },
-    `Extract ALL text from this document verbatim. Preserve headings, paragraphs, lists, tables, and numbered items. Include all math formulas, chemical equations, and captions exactly as written.
-Output ONLY the extracted text — no commentary, no formatting instructions, no markdown wrappers.`,
-  ])
+  for (const modelId of PDF_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelId })
+      const result = await model.generateContent([{ inlineData }, PDF_PROMPT])
+      const text = result.response.text().trim()
+      if (text) return text
+    } catch (err) {
+      const msg = String(err)
+      // Only fall through on rate-limit / overload errors; hard-fail on auth/quota
+      if (msg.includes('503') || msg.includes('429') || msg.includes('overload') || msg.includes('unavailable')) {
+        lastError = err
+        console.warn(`[extractPdfText] ${modelId} unavailable, trying next model...`)
+        continue
+      }
+      throw err  // surface auth errors, invalid key, etc. immediately
+    }
+  }
 
-  return result.response.text().trim()
+  throw lastError ?? new Error('All Gemini models failed for PDF extraction.')
 }
 
 // POST /api/uploads — accepts multipart form with a file
