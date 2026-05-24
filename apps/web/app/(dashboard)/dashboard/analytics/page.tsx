@@ -190,7 +190,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
                   <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                    <div className={cn('h-3 rounded-full bg-gradient-to-r transition-all duration-700', gradient)} style={{ width: `${scorePct}%` }} />
+                    <div className={cn('h-3 rounded-full bg-gradient-to-r transition-all duration-700', gradient)} style={{ width: `${Math.min(100, scorePct)}%` }} />
                   </div>
                 </div>
               )
@@ -278,7 +278,8 @@ export default function AnalyticsPage() {
           </h2>
           <div className="space-y-2">
             {data.recentQuizzes.map((q) => {
-              const scorePct = Math.round(q.score * 100)
+              // score is stored as 0-100 in the DB (not 0-1), so no ×100
+              const scorePct = Math.min(100, Math.round(q.score))
               const scoreColor = scorePct >= 80 ? 'text-green-500' : scorePct >= 60 ? 'text-amber-500' : 'text-red-400'
               const bgBar = scorePct >= 80 ? 'bg-green-500' : scorePct >= 60 ? 'bg-amber-500' : 'bg-red-400'
               return (
