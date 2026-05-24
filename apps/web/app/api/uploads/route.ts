@@ -22,8 +22,21 @@ const PDF_MODELS = PDF_MODEL_PRIORITY.filter((modelId) =>
   MODELS.some((model) => model.id === modelId && model.provider === 'google' && model.supportsVision)
 )
 
-const PDF_PROMPT = `Extract ALL text from this document verbatim. Preserve headings, paragraphs, lists, tables, and numbered items. Include all math formulas, chemical equations, and captions exactly as written.
-Output ONLY the extracted text — no commentary, no formatting instructions, no markdown wrappers.`
+const PDF_PROMPT = `You are processing an educational document for a RAG (retrieval-augmented generation) system. Students will ask questions about this content, so completeness is critical.
+
+For each page, output the content in reading order:
+
+1. TEXT: Extract every word verbatim — questions, answer choices, headings, paragraphs, formulas, equations, captions, labels, numbers, units. Do not paraphrase.
+
+2. FIGURES: For EVERY diagram, shape, chart, graph, table, or image — no matter how small — write a detailed description immediately at the location where it appears in the text. Wrap it in [FIGURE: ...] tags. Include:
+   - Exact shape(s) and their spatial arrangement
+   - All labeled dimensions, measurements, and units (e.g. "10 m wide, 8 m tall")
+   - Shaded, colored, or highlighted regions and precisely what they represent
+   - All numbers, tick marks, axes, legends, arrows
+   - How the figure relates to the surrounding question or text
+   Example: [FIGURE: A rectangle 10m wide and 8m tall. A 1-meter-wide shaded border runs along the inside of all four edges, forming a frame. The unshaded inner rectangle is 8m×6m. The shaded border represents the area within 1 meter of any edge.]
+
+Output ONLY the extracted content with inline [FIGURE: ...] descriptions. No meta-commentary, no markdown fences, no instructions.`
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -37,43 +50,83 @@ function isModelUnavailableError(err: unknown): boolean {
   return msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
+export interface PageContent {
+  pageIndex: number   // 0-based
+  text: string        // extracted text + inline [FIGURE: ...] descriptions
+}
+
+/**
+ * Extract text + figure descriptions from a PDF using Gemini Vision.
+ * Sends the whole PDF at once (Gemini handles multi-page natively).
+ * Also asks for page markers so we can track which chunk came from which page.
+ */
+async function extractPdfPages(buffer: Buffer): Promise<PageContent[]> {
   const apiKey = process.env['GOOGLE_API_KEY'] ?? process.env['GEMINI_API_KEY']
   if (!apiKey) throw new Error('No Google API key configured for PDF extraction.')
 
   const genAI = new GoogleGenerativeAI(apiKey)
   const inlineData = { mimeType: 'application/pdf' as const, data: buffer.toString('base64') }
-  let lastError: unknown
 
+  // Page-aware prompt: Gemini outputs ===PAGE N=== markers between pages
+  const pagedPrompt = PDF_PROMPT + `
+
+IMPORTANT: Before the content of each page, output a marker exactly like this:
+===PAGE 1===
+===PAGE 2===
+(use the actual page number, starting from 1)`
+
+  let lastError: unknown
   for (let m = 0; m < PDF_MODELS.length; m++) {
     const modelId = PDF_MODELS[m]
-    // Each model gets up to 2 attempts: immediate + one retry after a short delay
     const attempts = m === 0 ? 2 : 1
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
         const model = genAI.getGenerativeModel({ model: modelId })
-        const result = await model.generateContent([{ inlineData }, PDF_PROMPT])
-        const text = result.response.text().trim()
-        if (text) return text
+        const result = await model.generateContent([{ inlineData }, pagedPrompt])
+        const raw = result.response.text().trim()
+        if (!raw) continue
+        return parsePagedOutput(raw)
       } catch (err) {
         if (isModelUnavailableError(err)) {
           lastError = err
-          console.warn(`[extractPdfText] ${modelId} is unavailable, trying next PDF-capable model...`)
+          console.warn(`[extractPdfPages] ${modelId} unavailable, trying next...`)
           break
         }
-        if (!isTransientError(err)) throw err  // auth/quota errors bubble up immediately
+        if (!isTransientError(err)) throw err
         lastError = err
         if (attempt < attempts) {
-          console.warn(`[extractPdfText] ${modelId} attempt ${attempt} failed (503/429), retrying in 1.5s...`)
+          console.warn(`[extractPdfPages] ${modelId} attempt ${attempt} failed, retrying in 1.5s...`)
           await sleep(1500)
-        } else {
-          console.warn(`[extractPdfText] ${modelId} exhausted, trying next model...`)
         }
       }
     }
   }
-
   throw lastError ?? new Error('All Gemini models failed for PDF extraction.')
+}
+
+/** Parse Gemini output with ===PAGE N=== markers into PageContent[]. */
+function parsePagedOutput(raw: string): PageContent[] {
+  const PAGE_MARKER = /^===PAGE (\d+)===/m
+  const segments = raw.split(/^===PAGE \d+===/m).filter(s => s.trim())
+  const markers = [...raw.matchAll(/^===PAGE (\d+)===/gm)]
+
+  if (markers.length === 0) {
+    // No markers — treat entire output as page 0
+    return [{ pageIndex: 0, text: raw.trim() }]
+  }
+
+  return segments.map((text, i) => ({
+    pageIndex: i,  // 0-based
+    text: text.trim(),
+  })).filter(p => p.text.length > 0)
+
+  void PAGE_MARKER // suppress unused warning
+}
+
+/** Convenience: get all pages as a single string (for backwards compat) */
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const pages = await extractPdfPages(buffer)
+  return pages.map(p => p.text).join('\n\n')
 }
 
 // POST /api/uploads — accepts multipart form with a file
@@ -100,13 +153,16 @@ export async function POST(request: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
+    let pages: PageContent[] = []
     let extractedText = ''
 
     if (file.type === 'application/pdf') {
-      extractedText = await extractPdfText(buffer)
+      pages = await extractPdfPages(buffer)
+      extractedText = pages.map(p => p.text).join('\n\n')
     } else {
-      // TXT / Markdown — read directly
+      // TXT / Markdown — treat as single page
       extractedText = buffer.toString('utf-8')
+      pages = [{ pageIndex: 0, text: extractedText }]
     }
 
     if (!extractedText.trim()) {
@@ -128,12 +184,13 @@ export async function POST(request: NextRequest) {
         r2Url: `local://${Date.now()}_${file.name}`, // placeholder until R2 is wired
         status: 'processing',
         extractedText,
+        extractedMetadata: { pageCount: pages.length },
       },
     })
 
     // Embed synchronously — errors are now visible in the response.
     // (Previously used after() which silently dropped all failures.)
-    const embedResult = await embedUpload(upload.id, extractedText)
+    const embedResult = await embedUpload(upload.id, pages)
 
     return NextResponse.json({
       success: true,
@@ -182,16 +239,24 @@ interface EmbedResult {
   error?: string
 }
 
-async function embedUpload(uploadId: string, text: string): Promise<EmbedResult> {
+async function embedUpload(uploadId: string, pages: PageContent[]): Promise<EmbedResult> {
   try {
     // Self-heal schema before first INSERT — safe to run on every call
     await ensureChunkSchema()
 
-    const chunks = chunkTextWithWindows(text)
-    console.log(`[embedUpload] ${uploadId}: ${chunks.length} chunks to embed`)
+    // Build flat chunk list, each chunk tagged with its source page index
+    const allChunks: Array<{ content: string; windowContent: string | undefined; pageIndex: number }> = []
+    for (const page of pages) {
+      const pageChunks = chunkTextWithWindows(page.text)
+      for (const c of pageChunks) {
+        allChunks.push({ content: c.content, windowContent: c.windowContent, pageIndex: page.pageIndex })
+      }
+    }
 
-    if (chunks.length === 0) {
-      const msg = `chunkTextWithWindows produced 0 chunks — text length=${text.length}`
+    console.log(`[embedUpload] ${uploadId}: ${allChunks.length} chunks across ${pages.length} pages`)
+
+    if (allChunks.length === 0) {
+      const msg = `chunkTextWithWindows produced 0 chunks — total text length=${pages.map(p => p.text).join('').length}`
       console.warn(`[embedUpload] ${uploadId}: ${msg}`)
       await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
       return { chunksEmbedded: 0, chunksTotal: 0, error: msg }
@@ -199,19 +264,21 @@ async function embedUpload(uploadId: string, text: string): Promise<EmbedResult>
 
     let embeddedCount = 0
     let firstError: string | undefined
-    for (let i = 0; i < chunks.length; i++) {
-      const { content, windowContent } = chunks[i]
+    for (let i = 0; i < allChunks.length; i++) {
+      const { content, windowContent, pageIndex } = allChunks[i]
       try {
         const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
         const vectorStr = embeddingToSql(embedding)
         const { randomUUID } = await import('crypto')
         const chunkId = randomUUID()
         await db.$executeRaw`
-          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
-          VALUES (${chunkId}, ${uploadId}, ${i}, ${content}, ${windowContent})
+          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent", "startPage", "endPage")
+          VALUES (${chunkId}, ${uploadId}, ${i}, ${content}, ${windowContent ?? null}, ${pageIndex}, ${pageIndex})
           ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
             "content" = EXCLUDED."content",
-            "windowContent" = EXCLUDED."windowContent"
+            "windowContent" = EXCLUDED."windowContent",
+            "startPage" = EXCLUDED."startPage",
+            "endPage" = EXCLUDED."endPage"
         `
         await db.$executeRaw`
           UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
