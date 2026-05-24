@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
@@ -131,9 +131,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Chunk + embed asynchronously after the response is sent.
-    // `after()` keeps this alive on Vercel without blocking the client.
-    after(() => embedUpload(upload.id, extractedText))
+    // Embed synchronously — errors are now visible in the response.
+    // (Previously used after() which silently dropped all failures.)
+    const embedResult = await embedUpload(upload.id, extractedText)
 
     return NextResponse.json({
       success: true,
@@ -141,8 +141,11 @@ export async function POST(request: NextRequest) {
         id: upload.id,
         filename: upload.filename,
         fileSize: upload.fileSize,
-        status: 'processing',
+        status: embedResult.error ? 'failed' : 'ready',
         charsExtracted: extractedText.length,
+        chunksEmbedded: embedResult.chunksEmbedded,
+        chunksTotal: embedResult.chunksTotal,
+        embedError: embedResult.error ?? null,
       },
     })
   } catch (error) {
@@ -173,7 +176,13 @@ async function ensureChunkSchema() {
   `)
 }
 
-async function embedUpload(uploadId: string, text: string) {
+interface EmbedResult {
+  chunksEmbedded: number
+  chunksTotal: number
+  error?: string
+}
+
+async function embedUpload(uploadId: string, text: string): Promise<EmbedResult> {
   try {
     // Self-heal schema before first INSERT — safe to run on every call
     await ensureChunkSchema()
@@ -182,12 +191,14 @@ async function embedUpload(uploadId: string, text: string) {
     console.log(`[embedUpload] ${uploadId}: ${chunks.length} chunks to embed`)
 
     if (chunks.length === 0) {
-      console.warn(`[embedUpload] ${uploadId}: chunkTextWithWindows produced 0 chunks — text length=${text.length}`)
+      const msg = `chunkTextWithWindows produced 0 chunks — text length=${text.length}`
+      console.warn(`[embedUpload] ${uploadId}: ${msg}`)
       await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
-      return
+      return { chunksEmbedded: 0, chunksTotal: 0, error: msg }
     }
 
     let embeddedCount = 0
+    let firstError: string | undefined
     for (let i = 0; i < chunks.length; i++) {
       const { content, windowContent } = chunks[i]
       try {
@@ -208,20 +219,26 @@ async function embedUpload(uploadId: string, text: string) {
         `
         embeddedCount++
       } catch (chunkErr) {
-        // Log but continue — one bad chunk shouldn't kill the whole upload
+        const errMsg = String(chunkErr)
         console.error(`[embedUpload] chunk ${i} failed for upload ${uploadId}:`, chunkErr)
+        if (!firstError) firstError = `chunk ${i}: ${errMsg}`
       }
     }
 
     if (embeddedCount === 0) {
-      throw new Error(`All ${chunks.length} chunks failed to embed`)
+      const msg = `All ${chunks.length} chunks failed to embed. First error: ${firstError}`
+      await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
+      return { chunksEmbedded: 0, chunksTotal: chunks.length, error: msg }
     }
 
     console.log(`[embedUpload] ${uploadId}: ${embeddedCount}/${chunks.length} chunks embedded`)
     await db.upload.update({ where: { id: uploadId }, data: { status: 'ready' } })
+    return { chunksEmbedded: embeddedCount, chunksTotal: chunks.length, error: firstError }
   } catch (err) {
+    const msg = String(err)
     console.error('[embedUpload]', uploadId, err)
-    await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
+    await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } }).catch(() => null)
+    return { chunksEmbedded: 0, chunksTotal: 0, error: msg }
   }
 }
 
