@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
-import { chunkText } from '@/lib/content'
+import { chunkTextWithWindows } from '@/lib/content'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
@@ -114,14 +114,17 @@ export async function POST(request: NextRequest) {
 
 async function embedUpload(uploadId: string, text: string) {
   try {
-    const chunks = chunkText(text)
+    const chunks = chunkTextWithWindows(text)
     for (let i = 0; i < chunks.length; i++) {
-      const embedding = await generateEmbedding(chunks[i], 'RETRIEVAL_DOCUMENT')
+      const { content, windowContent } = chunks[i]
+      const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
       const vectorStr = embeddingToSql(embedding)
       await db.$executeRaw`
-        INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content")
-        VALUES (gen_random_uuid()::text, ${uploadId}, ${i}, ${chunks[i]})
-        ON CONFLICT ("uploadId", "chunkIndex") DO NOTHING
+        INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
+        VALUES (gen_random_uuid()::text, ${uploadId}, ${i}, ${content}, ${windowContent})
+        ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
+          "content" = EXCLUDED."content",
+          "windowContent" = EXCLUDED."windowContent"
       `
       await db.$executeRaw`
         UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
@@ -129,7 +132,8 @@ async function embedUpload(uploadId: string, text: string) {
       `
     }
     await db.upload.update({ where: { id: uploadId }, data: { status: 'ready' } })
-  } catch {
+  } catch (err) {
+    console.error('[embedUpload]', uploadId, err)
     await db.upload.update({ where: { id: uploadId }, data: { status: 'failed' } })
   }
 }

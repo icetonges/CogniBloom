@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
-import { chunkText } from '@/lib/content'
+import { chunkTextWithWindows } from '@/lib/content'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -15,7 +15,9 @@ function verifyAdmin(request: NextRequest): boolean {
 // ─── POST /api/admin/content/embed ───────────────────────────────────────────
 //
 // Re-embeds all uploads that are stuck in 'processing' or have no chunks yet.
-// Called at the end of the content-ingest GitHub Actions workflow.
+// Uses sentence-window chunking: stores both the retrieval chunk and its
+// surrounding window context so the RAG pipeline can pass richer context to
+// the LLM.
 
 export async function POST(request: NextRequest) {
   if (!verifyAdmin(request)) {
@@ -43,15 +45,18 @@ export async function POST(request: NextRequest) {
   for (const upload of pending) {
     if (!upload.extractedText) continue
     try {
-      const chunks = chunkText(upload.extractedText)
+      const chunks = chunkTextWithWindows(upload.extractedText)
 
       for (let i = 0; i < chunks.length; i++) {
-        const embedding = await generateEmbedding(chunks[i], 'RETRIEVAL_DOCUMENT')
+        const { content, windowContent } = chunks[i]
+        const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT')
         const vectorStr = embeddingToSql(embedding)
         await db.$executeRaw`
-          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content")
-          VALUES (gen_random_uuid()::text, ${upload.id}, ${i}, ${chunks[i]})
-          ON CONFLICT ("uploadId", "chunkIndex") DO NOTHING
+          INSERT INTO "Chunk" ("id", "uploadId", "chunkIndex", "content", "windowContent")
+          VALUES (gen_random_uuid()::text, ${upload.id}, ${i}, ${content}, ${windowContent})
+          ON CONFLICT ("uploadId", "chunkIndex") DO UPDATE SET
+            "content" = EXCLUDED."content",
+            "windowContent" = EXCLUDED."windowContent"
         `
         await db.$executeRaw`
           UPDATE "Chunk" SET embedding = ${vectorStr}::vector(768)
@@ -61,7 +66,8 @@ export async function POST(request: NextRequest) {
 
       await db.upload.update({ where: { id: upload.id }, data: { status: 'ready' } })
       processed++
-    } catch {
+    } catch (err) {
+      console.error('[admin/content/embed]', upload.filename, err)
       await db.upload.update({ where: { id: upload.id }, data: { status: 'failed' } }).catch(() => {})
       failed++
     }
