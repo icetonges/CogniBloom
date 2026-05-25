@@ -15,7 +15,8 @@ export interface FeedItem {
   subject: string
   difficulty: 'easy' | 'medium' | 'hard'
   estimatedMinutes: number
-  source?: string
+  sourceUrl?: string    // Wikipedia / Khan Academy search link
+  createdAt?: string    // ISO date — used for date grouping in the UI
 }
 
 const FEED_TOPICS = [
@@ -53,53 +54,86 @@ function extractJson(text: string): Record<string, unknown> {
   return JSON.parse(match[0]) as Record<string, unknown>
 }
 
-// GET /api/feed — return today's personalised feed
+const PAGE_SIZE = 8
+
+/**
+ * Build a Wikipedia search URL for a given topic/title.
+ * This is always a valid, useful link even when the exact article name differs.
+ */
+function wikipediaUrl(title: string): string {
+  return `https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(title)}`
+}
+
+// GET /api/feed
+// ?refresh=true        — force-regenerate today's feed
+// ?page=N (default 1) — 1 = today's feed, 2+ = older history (8 items per page)
 export async function GET(request: NextRequest) {
   try {
     const userId = DANIEL_USER_ID
     const { searchParams } = new URL(request.url)
     const refresh = searchParams.get('refresh') === 'true'
+    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
 
-    // Try to serve from DB cache (generated today)
+    // ── History pages (page 2+): return older items from DB, no generation ────
+    if (page > 1) {
+      const today = easternMidnight()
+      const skip = (page - 2) * PAGE_SIZE   // page 2 → offset 0 before today
+      const history = await db.dailyFeedItem.findMany({
+        where: { createdAt: { lt: today } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: PAGE_SIZE,
+      })
+      const total = await db.dailyFeedItem.count({ where: { createdAt: { lt: today } } })
+      return NextResponse.json({
+        success: true,
+        data: history.map(mapDbItem),
+        meta: {
+          page,
+          pageSize: PAGE_SIZE,
+          total,
+          hasMore: skip + history.length < total,
+        },
+      })
+    }
+
+    // ── Page 1: today's feed ──────────────────────────────────────────────────
     if (!refresh) {
       const today = easternMidnight()
       const cached = await db.dailyFeedItem.findMany({
         where: { createdAt: { gte: today } },
-        take: 8,
+        take: PAGE_SIZE,
         orderBy: { createdAt: 'asc' },
       })
       if (cached.length >= 4) {
         return NextResponse.json({
           success: true,
           data: cached.map(mapDbItem),
-          meta: { cached: true, generatedAt: cached[0]?.createdAt },
+          meta: { cached: true, page: 1, generatedAt: cached[0]?.createdAt },
         })
       }
 
-      // Fallback: serve most recent items from the last 7 days while we regenerate
-      // (prevents "empty feed" flash on first load of a new day)
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      // Fallback: serve yesterday's items while we regenerate
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
       const recent = await db.dailyFeedItem.findMany({
-        where: { createdAt: { gte: sevenDaysAgo } },
-        take: 8,
+        where: { createdAt: { gte: yesterday, lt: today } },
+        take: PAGE_SIZE,
         orderBy: { createdAt: 'desc' },
       })
       if (recent.length >= 4) {
-        // Return stale items immediately; client can refresh for fresh content
         return NextResponse.json({
           success: true,
           data: recent.map(mapDbItem),
-          meta: { cached: true, stale: true, generatedAt: recent[0]?.createdAt },
+          meta: { cached: true, stale: true, page: 1, generatedAt: recent[0]?.createdAt },
         })
       }
     }
 
-    // Load user preferences for personalisation
+    // ── Generate fresh today's feed ───────────────────────────────────────────
     const prefs = await db.userPreferences.findUnique({ where: { userId } })
     const userSubjects = prefs?.subjects?.length ? prefs.subjects : ['Math', 'Science']
     const userGrade = prefs?.grade ?? 'Year 9'
 
-    // Weight topics: preferred subjects get 2 entries, others get 1
     const weightedTopics = FEED_TOPICS.flatMap((t) =>
       userSubjects.some((s) => t.subject.toLowerCase().includes(s.toLowerCase()))
         ? [t, t]
@@ -107,7 +141,6 @@ export async function GET(request: NextRequest) {
     )
     const selected = shuffle(weightedTopics).slice(0, 6)
 
-    // Generate fresh feed via AI (with fallback across providers)
     const items = await Promise.allSettled(
       selected.map(async (topic) => {
         const res = await chatWithFallback({
@@ -117,20 +150,21 @@ export async function GET(request: NextRequest) {
               content: `Create ${topic.prompt} for a ${userGrade} student. Be engaging, concise, and educational.
 
 Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
-{"title":"Short catchy title (max 10 words)","body":"The main content (2-4 sentences, clear and engaging)","difficulty":"easy|medium|hard","estimatedMinutes":2}`,
+{"title":"Short catchy title (max 10 words)","body":"The main content (2-4 sentences, clear and engaging)","difficulty":"easy|medium|hard","estimatedMinutes":2,"sourceTopic":"The most precise Wikipedia article title for further reading on this topic"}`,
             },
           ],
           temperature: 0.85,
-          maxTokens: 400,
+          maxTokens: 450,
         })
 
         const parsed = extractJson(res.content)
 
-        // Persist to DB for caching
         const title = String(parsed['title'] ?? 'Untitled')
         const body = String(parsed['body'] ?? '')
         const difficulty = String(parsed['difficulty'] ?? 'medium')
         const estimatedMinutes = Number(parsed['estimatedMinutes']) || 2
+        const sourceTopic = String(parsed['sourceTopic'] ?? title)
+        const sourceUrl = wikipediaUrl(sourceTopic)
 
         const dbItem = await db.dailyFeedItem.create({
           data: {
@@ -143,7 +177,9 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
             gradeLevel: [5, 6, 7, 8, 9, 10],
             estimatedTime: estimatedMinutes,
             isAiGenerated: true,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            sourceUrl,
+            // Keep indefinitely — never expires; history is valuable
+            expiresAt: new Date('2099-01-01'),
           },
         })
 
@@ -156,6 +192,8 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
           subject: topic.subject,
           difficulty: difficulty as FeedItem['difficulty'],
           estimatedMinutes,
+          sourceUrl,
+          createdAt: dbItem.createdAt.toISOString(),
         } satisfies FeedItem
       })
     )
@@ -164,28 +202,22 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
       .filter((r): r is PromiseFulfilledResult<FeedItem> => r.status === 'fulfilled')
       .map((r) => r.value)
 
-    // Log any failures for debugging
     const failures = items.filter((r) => r.status === 'rejected')
     if (failures.length > 0) {
       console.warn(`[feed] ${failures.length}/${items.length} items failed to generate`)
-      failures.forEach((r, i) => {
-        if (r.status === 'rejected') console.warn(`[feed] item ${i} error:`, r.reason)
-      })
     }
 
-    // If generation completely failed, serve stale items as last resort
+    // Last resort: serve most recent DB items
     if (feed.length === 0) {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       const stale = await db.dailyFeedItem.findMany({
-        where: { createdAt: { gte: sevenDaysAgo } },
-        take: 8,
         orderBy: { createdAt: 'desc' },
+        take: PAGE_SIZE,
       })
       if (stale.length > 0) {
         return NextResponse.json({
           success: true,
           data: stale.map(mapDbItem),
-          meta: { cached: true, stale: true, generatedAt: stale[0]?.createdAt },
+          meta: { cached: true, stale: true, page: 1, generatedAt: stale[0]?.createdAt },
         })
       }
     }
@@ -193,7 +225,7 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
     return NextResponse.json({
       success: true,
       data: feed,
-      meta: { cached: false, generatedAt: new Date() },
+      meta: { cached: false, page: 1, generatedAt: new Date() },
     })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -202,7 +234,8 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
 
 function mapDbItem(item: {
   id: string; type: string; title: string; description: string;
-  subject: string; difficulty: string; estimatedTime: number
+  subject: string; difficulty: string; estimatedTime: number;
+  sourceUrl: string | null; createdAt: Date;
 }): FeedItem {
   const emojiMap: Record<string, string> = {
     Science: '🔬', History: '📜', Math: '🧮', Language: '📖',
@@ -211,12 +244,14 @@ function mapDbItem(item: {
   return {
     id: item.id,
     type: item.type as FeedItem['type'],
-    emoji: emojiMap[item.subject] || '📚',
+    emoji: emojiMap[item.subject] ?? '📚',
     title: item.title,
     body: item.description,
     subject: item.subject,
     difficulty: item.difficulty as FeedItem['difficulty'],
     estimatedMinutes: item.estimatedTime,
+    sourceUrl: item.sourceUrl ?? undefined,
+    createdAt: item.createdAt.toISOString(),
   }
 }
 
