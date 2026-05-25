@@ -10,7 +10,7 @@ import {
   Cpu, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CATEGORY_META } from '@/lib/feed/sources'
+import { CATEGORY_META } from '@/lib/feed/meta'
 
 interface FeedItem {
   id: string

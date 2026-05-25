@@ -44,7 +44,7 @@ export interface IngestResult {
 
 async function ingestSource(
   source: SourceDef,
-  dbSourceId: string,
+  _dbSourceId: string,
   existingTitles: Set<string>,
 ): Promise<{ items: RawItem[]; error?: string }> {
   try {

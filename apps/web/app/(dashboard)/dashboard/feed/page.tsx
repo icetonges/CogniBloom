@@ -12,7 +12,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import type { FeedItem } from '@/app/api/feed/route'
-import { CATEGORY_META } from '@/lib/feed/sources'
+import { CATEGORY_META } from '@/lib/feed/meta'
 
 const DIFFICULTY_COLORS = {
   easy: 'bg-green-500/10 text-green-700 dark:text-green-400',

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
-import { CATEGORY_META } from '@/lib/feed/sources'
+import { CATEGORY_META } from '@/lib/feed/meta'
 
 interface SourceRow {
   id: string
