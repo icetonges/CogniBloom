@@ -20,7 +20,7 @@ import { ALL_CATEGORIES, type Category } from '@/lib/feed/sources'
 export const maxDuration = 300 // 5 min — parallel ingestion across 14 categories
 
 function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
+  const secret = process.env['CRON_SECRET']
   if (!secret) return true // dev: no secret required
 
   const authHeader = request.headers.get('authorization')
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
 
 // Allow GET for easy browser testing in dev
 export async function GET(request: NextRequest) {
-  if (process.env.NODE_ENV !== 'development') {
+  if (process.env['NODE_ENV'] !== 'development') {
     return NextResponse.json({ error: 'Use POST' }, { status: 405 })
   }
   return POST(request)
