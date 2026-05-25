@@ -518,6 +518,57 @@ model KnowledgePoint {
   @@index([gradeLevel])
 }
 
+// ============ MULTI-SOURCE CATEGORY FEED ============
+
+/// Tracks every external source (RSS feed, public API, or AI generator)
+/// that supplies content for a learning category.
+model FeedSource {
+  id           String             @id @default(cuid())
+  name         String             // "Hacker News", "NASA APOD", "arXiv Math"
+  category     String             // "coding", "science", "math", …
+  url          String             @default("")  // "" for AI-only sources
+  type         String             // "rss" | "api" | "ai"
+  isActive     Boolean            @default(true)
+  lastPulledAt DateTime?
+  lastStatus   String?            // "success" | "error" | "skipped"
+  lastError    String?            @db.Text
+  itemsToday   Int                @default(0)
+  itemsTotal   Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  items        CategoryFeedItem[]
+
+  @@index([category])
+}
+
+/// One learning card from any category feed source.
+/// Stores real pulled content (RSS/API) or AI-generated content.
+model CategoryFeedItem {
+  id               String      @id @default(cuid())
+  category         String      // "math" | "coding" | "science" | …
+  sourceId         String?
+  source           FeedSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceName       String?     // denormalised for fast display
+  title            String
+  summary          String      @db.Text
+  body             String?     @db.Text  // full content when available
+  url              String?               // link to original article / video
+  imageUrl         String?
+  emoji            String      @default("📚")
+  tags             String[]    @default([])
+  difficulty       String      @default("medium")
+  estimatedMinutes Int         @default(3)
+  contentType      String      @default("article") // article | video | puzzle | challenge | tip
+  author           String?
+  publishedAt      DateTime?
+  isAiGenerated    Boolean     @default(false)
+  expiresAt        DateTime
+  createdAt        DateTime    @default(now())
+
+  @@index([category, createdAt])
+  @@index([expiresAt])
+}
+
 // ============ DAILY FEED & CONTENT ============
 
 model DailyFeedItem {

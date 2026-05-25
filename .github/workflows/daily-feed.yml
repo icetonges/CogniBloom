@@ -26,6 +26,25 @@ jobs:
             "$APP_URL/api/feed?refresh=true")
           echo "Feed refresh status: $STATUS"
 
+      - name: Ingest multi-source category feeds
+        run: |
+          echo "Ingesting category feeds (math, coding, science, etc.)..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "$APP_URL/api/feed/ingest?cleanup=true" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 290)
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" = "200" ]; then
+            TOTAL_NEW=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('summary',{}).get('totalNewItems',0))" 2>/dev/null || echo "?")
+            echo "✅ Category ingest complete — $TOTAL_NEW new items"
+          else
+            echo "⚠️  Category ingest returned HTTP $HTTP_STATUS (non-blocking)"
+          fi
+
       - name: Send daily summary email
         run: |
           echo "Sending daily summary to Daniel and parents..."

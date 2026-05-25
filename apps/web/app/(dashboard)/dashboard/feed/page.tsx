@@ -7,11 +7,12 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Loader2, RefreshCw, BookOpen, Trophy, Layers, CheckCircle2,
-  ChevronDown, ChevronUp, ExternalLink, History,
+  ChevronDown, ChevronUp, ExternalLink, History, Settings2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import type { FeedItem } from '@/app/api/feed/route'
+import { CATEGORY_META } from '@/lib/feed/sources'
 
 const DIFFICULTY_COLORS = {
   easy: 'bg-green-500/10 text-green-700 dark:text-green-400',
@@ -135,6 +136,15 @@ export default function FeedPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => router.push('/dashboard/feed/sources')}
+            className="gap-2"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Sources
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleShowHistory}
             className="gap-2"
           >
@@ -151,6 +161,23 @@ export default function FeedPage() {
             <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
+        </div>
+      </div>
+
+      {/* Category feed navigation */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Browse by Category</p>
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted">
+          {CATEGORY_META.map((cat) => (
+            <button
+              key={cat.slug}
+              onClick={() => router.push(`/dashboard/feed/category/${cat.slug}`)}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
+            >
+              <span>{cat.emoji}</span>
+              {cat.label}
+            </button>
+          ))}
         </div>
       </div>
 
