@@ -297,7 +297,7 @@ export default function CategoryFeedPage() {
           <p className="text-muted-foreground mt-1 text-sm">{meta.description}</p>
           {isFallback && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              Showing most recent items — today's feed will appear after the next ingest run.
+              Showing most recent items — today&apos;s feed will appear after the next ingest run.
             </p>
           )}
         </div>
@@ -347,7 +347,7 @@ export default function CategoryFeedPage() {
         <Card className="p-12 text-center text-muted-foreground">
           <p className="text-4xl mb-4">{meta.emoji}</p>
           <p className="font-medium mb-1">No {meta.label} items yet</p>
-          <p className="text-sm mb-4">The daily ingest hasn't run for this category yet.</p>
+          <p className="text-sm mb-4">The daily ingest hasn&apos;t run for this category yet.</p>
           <Button
             variant="outline"
             size="sm"
