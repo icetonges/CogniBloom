@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { chatWithFallback } from '@/lib/ai/fallback'
@@ -64,10 +64,35 @@ function wikipediaUrl(title: string): string {
   return `https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(title)}`
 }
 
+/**
+ * One-time backfill: write a Wikipedia search URL into any DB row that has
+ * sourceUrl = null (items created before this feature was added).
+ * Runs in the background — never blocks the response.
+ */
+async function backfillSourceUrls(): Promise<void> {
+  try {
+    const missing = await db.dailyFeedItem.findMany({
+      where: { sourceUrl: null },
+      select: { id: true, title: true },
+    })
+    for (const item of missing) {
+      await db.dailyFeedItem.update({
+        where: { id: item.id },
+        data: { sourceUrl: wikipediaUrl(item.title) },
+      })
+    }
+  } catch {
+    // Non-critical — ignore errors
+  }
+}
+
 // GET /api/feed
 // ?refresh=true        — force-regenerate today's feed
 // ?page=N (default 1) — 1 = today's feed, 2+ = older history (8 items per page)
 export async function GET(request: NextRequest) {
+  // Patch any legacy items that are missing sourceUrl — runs after response, non-blocking
+  after(() => backfillSourceUrls())
+
   try {
     const userId = DANIEL_USER_ID
     const { searchParams } = new URL(request.url)
@@ -250,7 +275,9 @@ function mapDbItem(item: {
     subject: item.subject,
     difficulty: item.difficulty as FeedItem['difficulty'],
     estimatedMinutes: item.estimatedTime,
-    sourceUrl: item.sourceUrl ?? undefined,
+    // Fall back to a Wikipedia search URL derived from the title so that
+    // items created before sourceUrl was introduced still show a link.
+    sourceUrl: item.sourceUrl ?? wikipediaUrl(item.title),
     createdAt: item.createdAt.toISOString(),
   }
 }
