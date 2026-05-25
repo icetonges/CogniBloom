@@ -215,7 +215,7 @@ function CategoryFeedCard({ item }: { item: FeedItem }) {
 export default function CategoryFeedPage() {
   const params = useParams()
   const router = useRouter()
-  const slug = params?.category as string
+  const slug = params?.['category'] as string
 
   const meta = CATEGORY_META.find((c) => c.slug === slug)
 
