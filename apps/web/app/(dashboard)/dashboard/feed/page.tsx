@@ -42,6 +42,7 @@ function formatDateLabel(iso: string): string {
 }
 
 export default function FeedPage() {
+  const router = useRouter()
   const [items, setItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
