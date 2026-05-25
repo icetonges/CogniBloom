@@ -113,7 +113,7 @@ function CategoryFeedCard({ item }: { item: FeedItem }) {
       >
         <span className="text-2xl select-none">{item.emoji}</span>
         <div className="flex flex-col items-end gap-1">
-          <span className={cn('text-xs px-2 py-0.5 rounded-full capitalize', DIFFICULTY_COLORS[item.difficulty] ?? DIFFICULTY_COLORS.medium)}>
+          <span className={cn('text-xs px-2 py-0.5 rounded-full capitalize', DIFFICULTY_COLORS[item.difficulty] ?? DIFFICULTY_COLORS['medium'])}>
             {item.difficulty}
           </span>
           {item.isAiGenerated && (
