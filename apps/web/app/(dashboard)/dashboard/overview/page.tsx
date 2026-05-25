@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { db } from '@/lib/db'
 import { formatDistanceToNow } from 'date-fns'
 import { xpToLevel, xpForLevel } from '@/lib/gamification'
-import { easternMidnight } from '@/lib/timezone'
+import { easternMidnight, pgDateToEasternMidnight } from '@/lib/timezone'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ export default async function DashboardOverviewPage() {
   const todayDate = easternMidnight()
   for (let i = 0; i < allActivity.length; i++) {
     const exp = new Date(todayDate); exp.setDate(todayDate.getDate() - i)
-    if (easternMidnight(new Date(allActivity[i].day)).getTime() === exp.getTime()) streak++
+    if (pgDateToEasternMidnight(new Date(allActivity[i].day)).getTime() === exp.getTime()) streak++
     else break
   }
 
@@ -121,7 +121,7 @@ export default async function DashboardOverviewPage() {
   // Focus tasks
   const masteryScores = (learningProfile?.masteryScores as Record<string, number>) ?? {}
   const activityToday = allActivity.length > 0 &&
-    easternMidnight(new Date(allActivity[0].day)).getTime() === todayDate.getTime()
+    pgDateToEasternMidnight(new Date(allActivity[0].day)).getTime() === todayDate.getTime()
 
   const focusTasks: { emoji: string; text: string; href: string; urgent?: boolean }[] = []
   if (flashcardsDue > 0) {

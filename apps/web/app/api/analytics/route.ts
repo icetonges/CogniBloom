@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
-import { easternDateBoundaries, easternMidnight } from '@/lib/timezone'
+import { easternDateBoundaries, easternMidnight, pgDateToEasternMidnight } from '@/lib/timezone'
 
 // GET /api/analytics — return learning stats for the authenticated user
 export async function GET() {
@@ -116,7 +116,7 @@ export async function GET() {
     for (let i = 0; i < allActivity.length; i++) {
       const expected = new Date(today)
       expected.setDate(today.getDate() - i)
-      const actual = easternMidnight(new Date(allActivity[i].day))
+      const actual = pgDateToEasternMidnight(new Date(allActivity[i].day))
       if (actual.getTime() === expected.getTime()) {
         streak++
       } else {

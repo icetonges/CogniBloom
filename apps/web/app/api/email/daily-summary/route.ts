@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sendDailySummary } from '@/lib/email'
 import { DANIEL_USER_ID, APP_USER, ALL_SUMMARY_RECIPIENTS } from '@/lib/user'
-import { easternDateBoundaries, easternMidnight } from '@/lib/timezone'
+import { easternDateBoundaries, pgDateToEasternMidnight } from '@/lib/timezone'
 
 // POST /api/email/daily-summary
 // Called by GitHub Actions cron daily. Protected by CRON_SECRET.
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < allActivity.length; i++) {
       const expected = new Date(startOfDay)
       expected.setDate(startOfDay.getDate() - i)
-      const actual = easternMidnight(new Date(allActivity[i].day))
+      const actual = pgDateToEasternMidnight(new Date(allActivity[i].day))
       if (actual.getTime() === expected.getTime()) streak++
       else break
     }
