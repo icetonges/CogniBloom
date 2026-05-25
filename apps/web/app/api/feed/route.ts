@@ -194,7 +194,7 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
           estimatedMinutes,
           sourceUrl,
           createdAt: dbItem.createdAt.toISOString(),
-        } satisfies FeedItem
+        } as FeedItem
       })
     )
 
