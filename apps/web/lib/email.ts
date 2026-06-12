@@ -73,7 +73,7 @@ function buildSummaryHtml(d: DailySummaryData): string {
                       <div style="font-size:28px;font-weight:800;color:#f59e0b;">
                         ${d.flashcardsReviewed}
                       </div>
-                      <div style="font-size:12px;color:#94a3b8;margin-top:4px;">Reviewed today</div>
+                      <div style="font-size:12px;color:#94a3b8;margin-top:4px;">Reviewed (last 24h)</div>
                     </td>
                     <td style="text-align:center;padding:0 0 0 8px;
                                border-left:1px solid #2d3f50;">
@@ -102,7 +102,7 @@ function buildSummaryHtml(d: DailySummaryData): string {
             <tr>
               <td style="padding:20px;">
                 <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#94a3b8;
-                           text-transform:uppercase;letter-spacing:0.05em;">🏆 Quizzes today</p>
+                           text-transform:uppercase;letter-spacing:0.05em;">🏆 Quizzes (last 24h)</p>
                 <p style="margin:0;font-size:15px;color:#e2e8f0;">
                   <strong style="color:#6366f1;">${d.quizzesTaken}</strong> quiz${d.quizzesTaken !== 1 ? 'zes' : ''}
                   ${d.avgQuizScore !== null
@@ -303,12 +303,12 @@ function buildSummaryText(d: DailySummaryData): string {
 
   if (d.flashcardsReviewed > 0 || d.flashcardsDue > 0) {
     lines.push('', `🃏 Flashcards`)
-    lines.push(`  Reviewed today: ${d.flashcardsReviewed}`)
+    lines.push(`  Reviewed (last 24h): ${d.flashcardsReviewed}`)
     lines.push(`  Due now:        ${d.flashcardsDue > 0 ? d.flashcardsDue : '0 (all caught up!)'}`)
   }
 
   if (d.quizzesTaken > 0) {
-    lines.push('', `🏆 Quizzes today: ${d.quizzesTaken}` +
+    lines.push('', `🏆 Quizzes (last 24h): ${d.quizzesTaken}` +
       (d.avgQuizScore !== null ? ` — avg score ${Math.round(d.avgQuizScore)}%` : ''))
   }
 

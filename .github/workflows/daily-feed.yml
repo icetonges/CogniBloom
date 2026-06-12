@@ -2,8 +2,10 @@ name: Daily Feed & Summary
 
 on:
   schedule:
-    # 7 PM AEST (09:00 UTC) every day — good time for an evening summary
-    - cron: '0 9 * * *'
+    # 7 AM New York (11:00 UTC during EDT) every day — morning summary
+    # covering the previous 24 hours. Note: GitHub cron is fixed UTC, so
+    # during EST (winter) this fires at 6 AM New York instead.
+    - cron: '0 11 * * *'
   workflow_dispatch:
 
 permissions:
