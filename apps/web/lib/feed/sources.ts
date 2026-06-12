@@ -208,14 +208,14 @@ export const FEED_SOURCES: SourceDef[] = [
         return stories
           .filter((s): s is PromiseFulfilledResult<Record<string, unknown>> => s.status === 'fulfilled' && s.value?.title)
           .map((s) => ({
-            title: truncate(String(s.value.title), 120),
-            summary: `Trending on Hacker News${s.value.score ? ` · ${s.value.score} points` : ''}${s.value.descendants ? ` · ${s.value.descendants} comments` : ''}`,
-            url: String(s.value.url || `https://news.ycombinator.com/item?id=${s.value.id}`),
+            title: truncate(String(s.value['title']), 120),
+            summary: `Trending on Hacker News${s.value['score'] ? ` · ${s.value['score']} points` : ''}${s.value['descendants'] ? ` · ${s.value['descendants']} comments` : ''}`,
+            url: String(s.value['url'] || `https://news.ycombinator.com/item?id=${s.value['id']}`),
             tags: ['hacker-news', 'coding', 'tech'],
             difficulty: 'medium' as const,
             estimatedMinutes: 5,
             contentType: 'article',
-            publishedAt: s.value.time ? new Date((s.value.time as number) * 1000) : undefined,
+            publishedAt: s.value['time'] ? new Date((s.value['time'] as number) * 1000) : undefined,
             isAiGenerated: false,
             emoji: '⚡',
           }))
@@ -522,9 +522,9 @@ export const FEED_SOURCES: SourceDef[] = [
         return stories
           .filter((s): s is PromiseFulfilledResult<Record<string, unknown>> => s.status === 'fulfilled' && s.value?.title)
           .map((s) => ({
-            title: truncate(String(s.value.title), 120),
-            summary: truncate(String(s.value.text ?? s.value.title), 400),
-            url: `https://news.ycombinator.com/item?id=${s.value.id}`,
+            title: truncate(String(s.value['title']), 120),
+            summary: truncate(String(s.value['text'] ?? s.value['title']), 400),
+            url: `https://news.ycombinator.com/item?id=${s.value['id']}`,
             tags: ['debate', 'discussion', 'hacker-news'],
             difficulty: 'medium' as const,
             estimatedMinutes: 5,
@@ -618,14 +618,14 @@ export const FEED_SOURCES: SourceDef[] = [
         return stories
           .filter((s): s is PromiseFulfilledResult<Record<string, unknown>> => s.status === 'fulfilled' && s.value?.url && s.value?.title)
           .map((s) => ({
-            title: truncate(String(s.value.title), 120),
-            summary: `Latest news from Hacker News${s.value.score ? ` · ${s.value.score} points` : ''}`,
-            url: String(s.value.url),
+            title: truncate(String(s.value['title']), 120),
+            summary: `Latest news from Hacker News${s.value['score'] ? ` · ${s.value['score']} points` : ''}`,
+            url: String(s.value['url']),
             tags: ['news', 'technology', 'current-events'],
             difficulty: 'medium' as const,
             estimatedMinutes: 4,
             contentType: 'article',
-            publishedAt: s.value.time ? new Date((s.value.time as number) * 1000) : undefined,
+            publishedAt: s.value['time'] ? new Date((s.value['time'] as number) * 1000) : undefined,
             isAiGenerated: false,
             emoji: '📰',
           }))
