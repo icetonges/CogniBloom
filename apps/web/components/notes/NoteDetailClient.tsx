@@ -263,10 +263,10 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
     // Full-page layout — break out of dashboard container
     <div className="-mx-4 md:-mx-8 -mt-6 flex flex-col" style={{ minHeight: 'calc(100vh - 64px)' }}>
 
-      {/* ── Top bar ── */}
+      {/* ── Top bar (sticks to the top of the page scroller) ── */}
       <div
-        className="flex items-center gap-2 px-5 py-3 flex-shrink-0 flex-wrap"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}
+        className="sticky top-0 z-30 flex items-center gap-2 px-5 py-3 flex-shrink-0 flex-wrap backdrop-blur"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(6,12,24,0.85)' }}
       >
         <button
           onClick={() => router.push('/dashboard/notes')}
@@ -400,7 +400,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Note title…"
-                className="w-full bg-transparent text-2xl md:text-3xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40"
+                className="cb-title-input w-full bg-transparent text-2xl md:text-3xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40 pb-1"
                 style={{ color: 'inherit', lineHeight: '1.2' }}
               />
             )}
@@ -429,15 +429,13 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
                   value={editSubject}
                   onChange={(e) => setEditSubject(e.target.value)}
                   placeholder="Subject…"
-                  className="px-3 py-2 rounded-xl text-sm focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: 'inherit' }}
+                  className="cb-input px-3 py-2 rounded-xl text-sm focus:outline-none"
                 />
                 <input
                   value={editTags}
                   onChange={(e) => setEditTags(e.target.value)}
                   placeholder="Tags (comma-separated)…"
-                  className="px-3 py-2 rounded-xl text-sm focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: 'inherit' }}
+                  className="cb-input px-3 py-2 rounded-xl text-sm focus:outline-none"
                 />
               </div>
             )}

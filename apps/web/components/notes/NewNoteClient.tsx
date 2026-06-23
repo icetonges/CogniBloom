@@ -239,12 +239,15 @@ export function NewNoteClient() {
   }
 
   return (
-    // Break out of dashboard container padding to go full-width
-    <div className="-mx-4 md:-mx-8 -mt-6 flex flex-col" style={{ minHeight: 'calc(100vh - 64px)' }}>
-      {/* ── Top bar ── */}
+    // Break out of dashboard container padding to go full-width.
+    // A single scroll container (the dashboard <main>) handles scrolling — this
+    // wrapper intentionally does NOT create its own scroll region, so wheel
+    // events never get trapped between nested scrollers.
+    <div className="-mx-4 md:-mx-8 -mt-6 flex flex-col">
+      {/* ── Top bar (sticks to the top of the page scroller) ── */}
       <div
-        className="flex items-center gap-3 px-5 py-3 flex-shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}
+        className="sticky top-0 z-30 flex items-center gap-3 px-5 py-3 flex-shrink-0 backdrop-blur"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(6,12,24,0.85)' }}
       >
         <button
           onClick={() => router.push('/dashboard/notes')}
@@ -372,8 +375,8 @@ export function NewNoteClient() {
         </div>
       )}
 
-      {/* ── Single-column body ── */}
-      <div className="flex-1 overflow-y-auto">
+      {/* ── Single-column body (no nested scroller — page scroll handles it) ── */}
+      <div className="flex-1">
         <div className="max-w-5xl mx-auto w-full px-4 sm:px-8 py-6 space-y-5">
 
           {/* Title */}
@@ -383,14 +386,14 @@ export function NewNoteClient() {
             placeholder="Note title…"
             disabled={isSaving}
             autoFocus
-            className="w-full bg-transparent text-3xl md:text-4xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40"
+            className="cb-title-input w-full bg-transparent text-3xl md:text-4xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40 pb-1"
             style={{ color: 'inherit', lineHeight: '1.2' }}
           />
 
           {/* Subject (left) + Tags (right) */}
           <div className="grid md:grid-cols-[1.5fr_1fr] gap-4">
             {/* Subject */}
-            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="cb-field-card rounded-2xl p-4">
               <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
                 <BookOpen className="w-3.5 h-3.5" /> Subject
               </label>
@@ -400,8 +403,7 @@ export function NewNoteClient() {
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="AMC Math, AP Chemistry…"
                 disabled={isSaving}
-                className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none transition-all"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: 'inherit' }}
+                className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none"
               />
               <datalist id="subject-list">
                 {allSubjects.map((s) => <option key={s} value={s} />)}
@@ -437,7 +439,7 @@ export function NewNoteClient() {
             </div>
 
             {/* Tags */}
-            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="cb-field-card rounded-2xl p-4">
               <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
                 <Tag className="w-3.5 h-3.5" /> Tags
               </label>
@@ -446,8 +448,7 @@ export function NewNoteClient() {
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="practice, exam, review…"
                 disabled={isSaving}
-                className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none transition-all"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: 'inherit' }}
+                className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none"
               />
               {tagList.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">

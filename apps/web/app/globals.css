@@ -261,49 +261,34 @@
   animation: shimmer 5s linear infinite;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — doubled width for easier navigation */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
+  background: hsl(var(--muted) / 0.5);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.4);
-  border-radius: 3px;
+  /* 2px transparent border + padding-box clip gives the thicker bar a little
+     breathing room so it reads as a comfortable grip, not a heavy slab */
+  background: hsl(var(--muted-foreground) / 0.45);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 7px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.7);
+  background: hsl(var(--muted-foreground) / 0.75);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
-/* Focus visible styles */
-*:focus-visible {
-  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+/* Firefox — wider scrollbar (auto = standard width, vs. thin) */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.45) hsl(var(--muted) / 0.5);
 }
 
-/* Smooth transitions */
-.transition-smooth {
-  @apply transition-all duration-200 ease-in-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-.fade-in {
-  animation: fadeIn 200ms ease-out;
-}
-
-.fade-out {
-  animation: fadeOut 200ms ease-in;
-}
