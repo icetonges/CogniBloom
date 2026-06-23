@@ -292,3 +292,71 @@
   scrollbar-color: hsl(var(--muted-foreground) / 0.45) hsl(var(--muted) / 0.5);
 }
 
+/* ── Note editor: blue-framed input fields (stand out, no bright/white bg) ── */
+.cb-field-card {
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.32);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.06), 0 6px 18px rgba(99, 102, 241, 0.07);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cb-field-card:focus-within {
+  border-color: rgba(99, 102, 241, 0.55);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12), 0 8px 22px rgba(99, 102, 241, 0.12);
+}
+
+.cb-input {
+  background: rgba(99, 102, 241, 0.07);
+  border: 1px solid rgba(99, 102, 241, 0.38);
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.cb-input:focus {
+  border-color: rgba(99, 102, 241, 0.75);
+  background: rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+/* Big title input — full blue-framed box so it clearly reads as a field */
+.cb-title-input {
+  background: rgba(99, 102, 241, 0.07);
+  border: 1px solid rgba(99, 102, 241, 0.40);
+  border-radius: 0.85rem;
+  padding: 0.55rem 1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.cb-title-input::placeholder {
+  color: rgba(148, 163, 184, 0.5);
+}
+.cb-title-input:focus {
+  border-color: rgba(99, 102, 241, 0.78);
+  background: rgba(99, 102, 241, 0.10);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+/* Focus visible styles */
+*:focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.fade-in {
+  animation: fadeIn 200ms ease-out;
+}
+
+.fade-out {
+  animation: fadeOut 200ms ease-in;
+}

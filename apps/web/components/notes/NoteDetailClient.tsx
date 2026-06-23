@@ -400,7 +400,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Note title…"
-                className="cb-title-input w-full bg-transparent text-2xl md:text-3xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40 pb-1"
+                className="cb-title-input w-full text-2xl md:text-3xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40"
                 style={{ color: 'inherit', lineHeight: '1.2' }}
               />
             )}

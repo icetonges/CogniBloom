@@ -386,7 +386,7 @@ export function NewNoteClient() {
             placeholder="Note title…"
             disabled={isSaving}
             autoFocus
-            className="cb-title-input w-full bg-transparent text-3xl md:text-4xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40 pb-1"
+            className="cb-title-input w-full text-3xl md:text-4xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40"
             style={{ color: 'inherit', lineHeight: '1.2' }}
           />
 
