@@ -5,8 +5,9 @@ import type { ChatMessage } from '@/lib/ai/providers/types'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// POST /api/tutor/compare — run the same prompt through two models and return
-// both answers side by side. Body: { prompt, modelA, modelB, system? }
+// POST /api/tutor/compare — run a prompt through one or two models and return
+// the answer(s). Body: { prompt, modelA, modelB?, system? }
+// When modelB is omitted, a single model runs and b is returned as null.
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
@@ -17,8 +18,10 @@ export async function POST(request: NextRequest) {
     }
     const prompt = (body.prompt ?? '').trim()
     if (!prompt) return NextResponse.json({ error: 'prompt required' }, { status: 400 })
-    if (!body.modelA || !body.modelB) {
-      return NextResponse.json({ error: 'modelA and modelB required' }, { status: 400 })
+    // modelA is required; modelB is optional. When modelB is omitted we run a
+    // single model and return b:null (single-model "Ask" mode).
+    if (!body.modelA) {
+      return NextResponse.json({ error: 'modelA required' }, { status: 400 })
     }
 
     const system =
@@ -53,7 +56,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const [a, b] = await Promise.all([run(body.modelA), run(body.modelB)])
+    const [a, b] = await Promise.all([
+      run(body.modelA),
+      body.modelB ? run(body.modelB) : Promise.resolve(null),
+    ])
     return NextResponse.json({ success: true, a, b })
   } catch (err) {
     console.error('[POST /api/tutor/compare]', err)

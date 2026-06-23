@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { MODELS, DEFAULT_MODEL_ID } from '@/lib/ai/models'
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer'
-import { Loader2, Sparkles, GitCompare, ArrowRightLeft, AlertCircle } from 'lucide-react'
+import { Loader2, Sparkles, GitCompare, ArrowRightLeft, AlertCircle, Plus, X } from 'lucide-react'
 
 interface SideResult {
   requested: string
@@ -79,9 +79,11 @@ export function ModelCompare() {
   const [modelB, setModelB] = useState(
     () => MODELS.find((m) => m.id !== DEFAULT_MODEL_ID)?.id ?? MODELS[1].id
   )
+  // Single model by default; the 2nd model is opt-in for comparison.
+  const [compare, setCompare] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
-  const [res, setRes] = useState<{ a: SideResult; b: SideResult } | null>(null)
+  const [res, setRes] = useState<{ a: SideResult; b: SideResult | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const run = async () => {
@@ -90,11 +92,12 @@ export function ModelCompare() {
     try {
       const r = await fetch('/api/tutor/compare', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, modelA, modelB }),
+        // Only send modelB when comparing — otherwise the API runs a single model.
+        body: JSON.stringify(compare ? { prompt, modelA, modelB } : { prompt, modelA }),
       })
       const data = await r.json()
-      if (!r.ok) throw new Error(data?.error ?? 'Comparison failed')
-      setRes({ a: data.a, b: data.b })
+      if (!r.ok) throw new Error(data?.error ?? 'Request failed')
+      setRes({ a: data.a, b: data.b ?? null })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed')
     } finally {
@@ -106,18 +109,38 @@ export function ModelCompare() {
 
   return (
     <div className="space-y-4">
-      {/* model pickers */}
-      <div className="flex items-end gap-2">
-        <ModelSelect value={modelA} onChange={setModelA} label="Model A" />
-        <button
-          onClick={swap}
-          title="Swap models"
-          className="mb-0.5 p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-        >
-          <ArrowRightLeft className="w-4 h-4" />
-        </button>
-        <ModelSelect value={modelB} onChange={setModelB} label="Model B" />
-      </div>
+      {/* model picker(s) */}
+      {!compare ? (
+        <div className="flex items-end gap-2">
+          <ModelSelect value={modelA} onChange={setModelA} label="Model" />
+          <button
+            onClick={() => setCompare(true)}
+            title="Add a second model to compare side by side"
+            className="mb-0.5 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" /> Compare a 2nd model
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-end gap-2">
+          <ModelSelect value={modelA} onChange={setModelA} label="Model A" />
+          <button
+            onClick={swap}
+            title="Swap models"
+            className="mb-0.5 p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+          </button>
+          <ModelSelect value={modelB} onChange={setModelB} label="Model B" />
+          <button
+            onClick={() => setCompare(false)}
+            title="Remove second model"
+            className="mb-0.5 p-2 rounded-lg border border-border text-muted-foreground hover:text-rose-400 hover:bg-muted"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* prompt */}
       <div>
@@ -126,17 +149,24 @@ export function ModelCompare() {
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run() }}
           rows={3}
-          placeholder="Ask both models the same question… (Ctrl/Cmd+Enter to run)"
+          placeholder={compare
+            ? 'Ask both models the same question… (Ctrl/Cmd+Enter to run)'
+            : 'Ask the model a question… (Ctrl/Cmd+Enter to run)'}
           className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
         <div className="flex items-center justify-between mt-2">
-          <p className="text-xs text-muted-foreground">Runs the same prompt through both models in parallel.</p>
+          <p className="text-xs text-muted-foreground">
+            {compare
+              ? 'Runs the same prompt through both models in parallel.'
+              : 'Ask a single model, or add a second to compare.'}
+          </p>
           <button
             onClick={run}
             disabled={!prompt.trim() || loading}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-40"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Compare
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {compare ? 'Compare' : 'Ask'}
           </button>
         </div>
       </div>
@@ -149,16 +179,20 @@ export function ModelCompare() {
 
       {/* outputs */}
       {(loading || res) && (
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className={compare ? 'grid md:grid-cols-2 gap-3' : 'grid grid-cols-1 gap-3'}>
           <OutputCard side="Model A" result={res?.a ?? null} loading={loading} />
-          <OutputCard side="Model B" result={res?.b ?? null} loading={loading} />
+          {compare && <OutputCard side="Model B" result={res?.b ?? null} loading={loading} />}
         </div>
       )}
 
       {!loading && !res && !error && (
         <div className="text-center py-12 text-muted-foreground">
           <GitCompare className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Pick two models, ask a question, and compare their answers head-to-head.</p>
+          <p className="text-sm">
+            {compare
+              ? 'Pick two models, ask a question, and compare their answers head-to-head.'
+              : 'Pick a model and ask a question. Add a second model anytime to compare.'}
+          </p>
         </div>
       )}
     </div>
