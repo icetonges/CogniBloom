@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { db } from '@/lib/db'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { xpToLevel, xpForLevel } from '@/lib/gamification'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight, Sparkles, CalendarDays } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -549,12 +549,25 @@ export default async function LandingPage() {
 
               {/* CTAs */}
               <div className="flex flex-wrap gap-3">
-                <Link href="/dashboard">
+                <Link href="/dashboard/planner">
                   <button
                     className="flex items-center gap-2 px-7 py-3.5 rounded-xl font-bold text-white transition-all duration-200 hover:scale-105 active:scale-95"
                     style={{
                       background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                       boxShadow: '0 8px 32px rgba(99,102,241,0.45)',
+                      fontSize: '1rem',
+                    }}
+                  >
+                    <CalendarDays className="w-4 h-4" /> Daily Planner
+                  </button>
+                </Link>
+                <Link href="/dashboard">
+                  <button
+                    className="flex items-center gap-2 px-7 py-3.5 rounded-xl font-bold transition-all duration-200 hover:scale-105 active:scale-95"
+                    style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#e2e8f0',
                       fontSize: '1rem',
                     }}
                   >

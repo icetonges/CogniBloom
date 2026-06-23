@@ -13,7 +13,8 @@ const DEFAULT_ROUTINE = [
   { title: '$5 daily investment',      time: '09:00', details: 'Invest $5',     tag: 'investment' },
   { title: 'Workout — set 2',          time: '12:30', details: '5 min',         tag: 'fitness' },
   { title: 'Workout — set 3',          time: '18:00', details: '5 min',         tag: 'fitness' },
-  { title: 'Reflection / mindfulness', time: '21:00', details: '10 min',        tag: 'mind' },
+  { title: 'Daily mind map',           time: '20:45', details: '1 topic — branch it out', tag: 'mind' },
+  { title: 'Reflection / mindfulness', time: '21:00', details: '3 wins · 1 lesson · 1 goal', tag: 'mind' },
 ]
 
 function parseDay(value: string): Date | null {

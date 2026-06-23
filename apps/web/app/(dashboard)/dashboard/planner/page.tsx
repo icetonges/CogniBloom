@@ -43,7 +43,7 @@ const fmtHour = (h: number) => { const ampm = h < 12 ? 'AM' : 'PM'; const hr = h
 const ROUTINE_EMOJI: Record<string, string> = {
   'Duolingo': '🦉',
   'Workout — set 1': '💪', 'Workout — set 2': '💪', 'Workout — set 3': '💪', 'Workout': '💪',
-  '$5 daily investment': '💵', 'Reflection / mindfulness': '🧘',
+  '$5 daily investment': '💵', 'Reflection / mindfulness': '🧘', 'Daily mind map': '🧠',
 }
 const routineEmoji = (title: string) => ROUTINE_EMOJI[title] ?? '✨'
 const isRoutine = (e: Entry) => e.tags.includes('routine')
@@ -280,7 +280,7 @@ export default function PlannerPage() {
         <MonthView
           cursor={cursor}
           entries={entries}
-          onPickDay={(d) => setEditor({ entry: null, scope: 'day', date: d })}
+          onPickDay={(d) => { setCursor(d); setView('day') }}
           onAddGoal={() => setEditor({ entry: null, scope: 'month', date: cursor })}
           onOpen={(e) => setEditor({ entry: e, scope: e.scope, date: cursor })}
           onToggle={toggleDone}
@@ -443,38 +443,53 @@ function DayView({
     metaIdRef.current = me?.id ?? null
   }, [entries])
 
+  // ── save status indicator ──
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const inflight = useRef(0)
+  const begin = () => { inflight.current += 1; setSaveState('saving') }
+  const end = () => { inflight.current = Math.max(0, inflight.current - 1); if (inflight.current === 0) setSaveState('saved') }
+
   const J = { 'Content-Type': 'application/json' }
 
-  // ── inline entry CRUD (optimistic) ──
   const createEntry = async (payload: Record<string, unknown>) => {
-    const res = await fetch('/api/planner', { method: 'POST', headers: J, body: JSON.stringify({ scope: 'day', date: dateKey, priority: 'normal', ...payload }) })
-    const data = (await res.json())?.data as Entry | undefined
-    if (data) setItems((prev) => [...prev, data])
+    begin()
+    try {
+      const res = await fetch('/api/planner', { method: 'POST', headers: J, body: JSON.stringify({ scope: 'day', date: dateKey, priority: 'normal', ...payload }) })
+      const data = (await res.json())?.data as Entry | undefined
+      if (data) setItems((prev) => [...prev, data])
+    } catch { /* ignore */ } finally { end() }
   }
   const patchEntry = async (id: string, patch: Record<string, unknown>) => {
     setItems((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } as Entry : e)))
-    await fetch('/api/planner', { method: 'PATCH', headers: J, body: JSON.stringify({ id, ...patch }) }).catch(() => {})
+    begin()
+    try { await fetch('/api/planner', { method: 'PATCH', headers: J, body: JSON.stringify({ id, ...patch }) }) } catch { /* ignore */ } finally { end() }
   }
   const removeEntry = async (id: string) => {
     setItems((prev) => prev.filter((e) => e.id !== id))
-    await fetch(`/api/planner?id=${id}`, { method: 'DELETE' }).catch(() => {})
+    begin()
+    try { await fetch(`/api/planner?id=${id}`, { method: 'DELETE' }) } catch { /* ignore */ } finally { end() }
   }
   const toggle = (e: Entry) => patchEntry(e.id, { status: e.status === 'done' ? 'pending' : 'done' })
+  const commitTitle = (e: Entry, t: string) => (t.trim() ? patchEntry(e.id, { title: t.trim() }) : removeEntry(e.id))
 
   // ── meta save (debounced) ──
   const setMetaField = (patch: Partial<DayMeta>) => {
     const next = { ...meta, ...patch }
     setMeta(next)
+    setSaveState('saving')
     if (metaTimer.current) clearTimeout(metaTimer.current)
     metaTimer.current = setTimeout(async () => {
-      const details = JSON.stringify(next)
-      if (metaIdRef.current) {
-        await fetch('/api/planner', { method: 'PATCH', headers: J, body: JSON.stringify({ id: metaIdRef.current, details }) }).catch(() => {})
-      } else {
-        const res = await fetch('/api/planner', { method: 'POST', headers: J, body: JSON.stringify({ scope: 'day', date: dateKey, title: META_TAG, tags: [META_TAG], details }) }).catch(() => null)
-        const data = res ? (await res.json())?.data as Entry | undefined : undefined
-        if (data) { metaIdRef.current = data.id; setItems((prev) => [...prev, data]) }
-      }
+      begin()
+      try {
+        const details = JSON.stringify(next)
+        if (metaIdRef.current) {
+          await fetch('/api/planner', { method: 'PATCH', headers: J, body: JSON.stringify({ id: metaIdRef.current, details }) })
+        } else {
+          const res = await fetch('/api/planner', { method: 'POST', headers: J, body: JSON.stringify({ scope: 'day', date: dateKey, title: META_TAG, tags: [META_TAG], details }) })
+          const data = (await res.json())?.data as Entry | undefined
+          if (data) { metaIdRef.current = data.id; setItems((prev) => [...prev, data]) }
+        }
+      } catch { /* ignore */ } finally { end() }
     }, 800)
   }
 
@@ -490,22 +505,168 @@ function DayView({
   const rowInput = 'flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/50 py-0.5'
   const sectionTitle = 'text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5'
 
-  const commitTitle = (e: Entry, t: string) => (t.trim() ? patchEntry(e.id, { title: t.trim() }) : removeEntry(e.id))
-  return (
-    <div className="space-y-5">
-      {/* header */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <div className="text-2xl font-bold">{cursor.toLocaleDateString('en-US', { weekday: 'long' })}</div>
-            <div className="text-sm text-muted-foreground">{cursor.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+  // ── section blocks (ordered into columns below) ──
+  const priorities = (
+    <section key="pri">
+      <h3 className={sectionTitle}><Star className="w-3.5 h-3.5" /> Top priorities</h3>
+      <Card className="p-3 space-y-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+            <EditLine value={meta.priorities[i] ?? ''} onCommit={(t) => setMetaField({ priorities: meta.priorities.map((p, j) => (j === i ? t : p)) })} placeholder={`Priority ${i + 1}`} className={rowInput} />
           </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold tabular-nums">{pct}%</div>
-            <div className="text-xs text-muted-foreground">{done}/{tasks.length} done</div>
+        ))}
+      </Card>
+    </section>
+  )
+
+  const focus = (
+    <section key="focus">
+      <h3 className={sectionTitle}><Target className="w-3.5 h-3.5" /> Today&apos;s focus</h3>
+      <Card className="p-3">
+        <textarea value={meta.focus} onChange={(e) => setMetaField({ focus: e.target.value })} rows={2} placeholder="What's the intention for today?" className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-muted-foreground/50" />
+      </Card>
+    </section>
+  )
+
+  const todo = (
+    <section key="todo">
+      <h3 className={sectionTitle}><ListTodo className="w-3.5 h-3.5" /> To-do</h3>
+      <Card className="p-3 space-y-1.5">
+        {todos.map((e) => <TaskRow key={e.id} e={e} onToggle={toggle} onCommit={commitTitle} onRemove={removeEntry} onOpen={onOpenEntry} />)}
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 rounded-full border-2 border-dashed border-muted-foreground/30 shrink-0" />
+          <AddLine onAdd={(t) => createEntry({ title: t })} placeholder="Add a to-do…" className={rowInput} />
+        </div>
+      </Card>
+    </section>
+  )
+
+  const highlight = (
+    <section key="hl">
+      <h3 className={sectionTitle}><Sparkles className="w-3.5 h-3.5" /> Highlight &amp; notes</h3>
+      <Card className="p-3 space-y-2">
+        <EditLine value={meta.highlight} onCommit={(t) => setMetaField({ highlight: t })} placeholder="Highlight of the day…" className={rowInput} />
+        <textarea value={meta.memo} onChange={(e) => setMetaField({ memo: e.target.value })} rows={2} placeholder="Memo / brain dump…" className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-muted-foreground/50 border-t border-border/60 pt-2" />
+      </Card>
+    </section>
+  )
+
+  const schedule = (
+    <section key="sched">
+      <h3 className={sectionTitle}><Clock className="w-3.5 h-3.5" /> Today&apos;s schedule</h3>
+      <Card className="p-2 divide-y divide-border/60">
+        {HOURS.map((h) => {
+          const slot = timed.filter((e) => hourOf(e.startTime!) === h).sort((a, b) => (a.startTime! < b.startTime! ? -1 : 1))
+          const hh = `${pad(h)}:00`
+          return (
+            <div key={h} className="flex gap-3 py-1.5">
+              <div className="w-12 shrink-0 text-[11px] text-muted-foreground text-right pt-1 tabular-nums">{fmtHour(h)}</div>
+              <div className="flex-1 min-w-0 space-y-1">
+                {slot.map((e) => <TaskRow key={e.id} e={e} onToggle={toggle} onCommit={commitTitle} onRemove={removeEntry} onOpen={onOpenEntry} />)}
+                <AddLine onAdd={(t) => createEntry({ title: t, startTime: hh })} placeholder="+ add…" className="w-full bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/30 py-0.5" />
+              </div>
+            </div>
+          )
+        })}
+      </Card>
+    </section>
+  )
+
+  const habits = (
+    <section key="habits">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className={cn(sectionTitle, 'mb-0')}><Repeat className="w-3.5 h-3.5" /> Habit tracker</h3>
+        <button onClick={onRestoreRoutine} className="text-xs text-primary hover:underline inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Add routine</button>
+      </div>
+      <Card className="p-3 space-y-2.5">
+        {routine.map((e) => (
+          <div key={e.id} className="flex items-start gap-2.5 group">
+            <button onClick={() => toggle(e)} className={cn('mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0', e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary')}>
+              {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
+            </button>
+            <span className="text-base shrink-0 mt-0.5">{routineEmoji(e.title)}</span>
+            <div className="flex-1 min-w-0">
+              <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('w-full bg-transparent text-sm font-medium focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
+              {e.details && <div className="text-[11px] text-muted-foreground leading-snug">{e.details}</div>}
+            </div>
+            {e.startTime && <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 mt-0.5">{e.startTime}</span>}
+            <button onClick={() => removeEntry(e.id)} className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        ))}
+        {routine.length === 0 && <p className="text-sm text-muted-foreground text-center py-1">Tap &ldquo;Add routine&rdquo; to load your daily habits.</p>}
+      </Card>
+    </section>
+  )
+
+  const wellness = (
+    <section key="well">
+      <h3 className={sectionTitle}><Droplets className="w-3.5 h-3.5" /> Wellness</h3>
+      <Card className="p-3 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-12 shrink-0">Water</span>
+          <div className="flex gap-1">
+            {Array.from({ length: 8 }).map((_, i) => {
+              const n = i + 1
+              return (
+                <button key={n} onClick={() => setMetaField({ water: meta.water === n ? n - 1 : n })} title={`${n} glasses`}>
+                  <Droplets className={cn('w-4 h-4 transition-colors', n <= meta.water ? 'text-sky-400 fill-sky-400/30' : 'text-muted-foreground/30')} />
+                </button>
+              )
+            })}
           </div>
         </div>
-        <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-12 shrink-0">Mood</span>
+          <div className="flex gap-1.5">
+            {MOODS.map((m, i) => (
+              <button key={i} onClick={() => setMetaField({ mood: meta.mood === i ? null : i })} className={cn('text-xl transition-all', meta.mood === i ? 'scale-125' : 'opacity-40 hover:opacity-80')}>{m}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-12 shrink-0">Sleep</span>
+          <EditLine value={meta.sleep} onCommit={(t) => setMetaField({ sleep: t })} placeholder="e.g. 7.5 hrs" className={rowInput} />
+          <Moon className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+        </div>
+      </Card>
+    </section>
+  )
+
+  const meals = (
+    <section key="meals">
+      <h3 className={sectionTitle}><Utensils className="w-3.5 h-3.5" /> Meals</h3>
+      <Card className="p-3 space-y-1.5">
+        {([['b', 'Breakfast'], ['l', 'Lunch'], ['d', 'Dinner'], ['s', 'Snack']] as const).map(([k, label]) => (
+          <div key={k} className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded bg-muted text-[10px] font-bold text-muted-foreground flex items-center justify-center shrink-0 uppercase">{k}</span>
+            <EditLine value={meta.meals[k]} onCommit={(t) => setMetaField({ meals: { ...meta.meals, [k]: t } })} placeholder={label} className={rowInput} />
+          </div>
+        ))}
+      </Card>
+    </section>
+  )
+
+  return (
+    <div className="space-y-5">
+      {/* compact header + save status */}
+      <Card className="p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="leading-tight">
+            <div className="text-base font-bold">{cursor.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+            <div className="text-[11px] text-muted-foreground">{cursor.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-muted-foreground hidden sm:flex items-center gap-1">
+              {saveState === 'saving' ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</> : saveState === 'saved' ? <><Check className="w-3 h-3 text-emerald-500" /> All changes saved</> : null}
+            </span>
+            <div className="text-right">
+              <div className="text-base font-bold tabular-nums leading-none">{pct}%</div>
+              <div className="text-[10px] text-muted-foreground">{done}/{tasks.length} done</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 h-1 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
         </div>
       </Card>
@@ -513,140 +674,19 @@ function DayView({
       <AICoach />
 
       <div className="grid lg:grid-cols-2 gap-5 items-start">
-        {/* ════ LEFT ════ */}
+        {/* LEFT */}
         <div className="space-y-5">
-          {/* schedule */}
-          <section>
-            <h3 className={sectionTitle}><Clock className="w-3.5 h-3.5" /> Today&apos;s schedule</h3>
-            <Card className="p-2 divide-y divide-border/60">
-              {HOURS.map((h) => {
-                const slot = timed.filter((e) => hourOf(e.startTime!) === h).sort((a, b) => (a.startTime! < b.startTime! ? -1 : 1))
-                const hh = `${pad(h)}:00`
-                return (
-                  <div key={h} className="flex gap-3 py-1.5">
-                    <div className="w-12 shrink-0 text-[11px] text-muted-foreground text-right pt-1 tabular-nums">{fmtHour(h)}</div>
-                    <div className="flex-1 min-w-0 space-y-1">
-                      {slot.map((e) => <TaskRow key={e.id} e={e} onToggle={toggle} onCommit={commitTitle} onRemove={removeEntry} onOpen={onOpenEntry} />)}
-                      <AddLine onAdd={(t) => createEntry({ title: t, startTime: hh })} placeholder="+ add…" className="w-full bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/30 py-0.5" />
-                    </div>
-                  </div>
-                )
-              })}
-            </Card>
-          </section>
-
-          {/* to-do */}
-          <section>
-            <h3 className={sectionTitle}><ListTodo className="w-3.5 h-3.5" /> To-do</h3>
-            <Card className="p-3 space-y-1.5">
-              {todos.map((e) => <TaskRow key={e.id} e={e} onToggle={toggle} onCommit={commitTitle} onRemove={removeEntry} onOpen={onOpenEntry} />)}
-              <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full border-2 border-dashed border-muted-foreground/30 shrink-0" />
-                <AddLine onAdd={(t) => createEntry({ title: t })} placeholder="Add a to-do…" className={rowInput} />
-              </div>
-            </Card>
-          </section>
+          {priorities}
+          {focus}
+          {todo}
+          {highlight}
+          {schedule}
         </div>
-
-        {/* ════ RIGHT ════ */}
+        {/* RIGHT */}
         <div className="space-y-5">
-          {/* priorities */}
-          <section>
-            <h3 className={sectionTitle}><Star className="w-3.5 h-3.5" /> Top priorities</h3>
-            <Card className="p-3 space-y-2">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                  <EditLine value={meta.priorities[i] ?? ''} onCommit={(t) => setMetaField({ priorities: meta.priorities.map((p, j) => (j === i ? t : p)) })} placeholder={`Priority ${i + 1}`} className={rowInput} />
-                </div>
-              ))}
-            </Card>
-          </section>
-
-          {/* focus */}
-          <section>
-            <h3 className={sectionTitle}><Target className="w-3.5 h-3.5" /> Today&apos;s focus</h3>
-            <Card className="p-3">
-              <textarea value={meta.focus} onChange={(e) => setMetaField({ focus: e.target.value })} rows={2} placeholder="What's the intention for today?" className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-muted-foreground/50" />
-            </Card>
-          </section>
-
-          {/* habit tracker */}
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className={cn(sectionTitle, 'mb-0')}><Repeat className="w-3.5 h-3.5" /> Habit tracker</h3>
-              <button onClick={onRestoreRoutine} className="text-xs text-primary hover:underline inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Add routine</button>
-            </div>
-            <Card className="p-3 space-y-1.5">
-              {routine.map((e) => (
-                <div key={e.id} className="flex items-center gap-2.5 group">
-                  <button onClick={() => toggle(e)} className={cn('w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0', e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary')}>
-                    {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
-                  </button>
-                  <span className="text-base shrink-0">{routineEmoji(e.title)}</span>
-                  <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('flex-1 bg-transparent text-sm focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
-                  {e.startTime && <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{e.startTime}</span>}
-                  <button onClick={() => removeEntry(e.id)} className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0"><X className="w-3.5 h-3.5" /></button>
-                </div>
-              ))}
-              {routine.length === 0 && <p className="text-sm text-muted-foreground text-center py-1">Tap &ldquo;Add routine&rdquo; to load your daily habits.</p>}
-            </Card>
-          </section>
-
-          {/* wellness: water / mood / sleep */}
-          <section>
-            <h3 className={sectionTitle}><Droplets className="w-3.5 h-3.5" /> Wellness</h3>
-            <Card className="p-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-12 shrink-0">Water</span>
-                <div className="flex gap-1">
-                  {Array.from({ length: 8 }).map((_, i) => {
-                    const n = i + 1
-                    return (
-                      <button key={n} onClick={() => setMetaField({ water: meta.water === n ? n - 1 : n })} title={`${n} glasses`}>
-                        <Droplets className={cn('w-4 h-4 transition-colors', n <= meta.water ? 'text-sky-400 fill-sky-400/30' : 'text-muted-foreground/30')} />
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-12 shrink-0">Mood</span>
-                <div className="flex gap-1.5">
-                  {MOODS.map((m, i) => (
-                    <button key={i} onClick={() => setMetaField({ mood: meta.mood === i ? null : i })} className={cn('text-xl transition-all', meta.mood === i ? 'scale-125' : 'opacity-40 hover:opacity-80')}>{m}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-12 shrink-0">Sleep</span>
-                <EditLine value={meta.sleep} onCommit={(t) => setMetaField({ sleep: t })} placeholder="e.g. 7.5 hrs" className={rowInput} />
-                <Moon className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
-              </div>
-            </Card>
-          </section>
-
-          {/* meals */}
-          <section>
-            <h3 className={sectionTitle}><Utensils className="w-3.5 h-3.5" /> Meals</h3>
-            <Card className="p-3 space-y-1.5">
-              {([['b', 'Breakfast'], ['l', 'Lunch'], ['d', 'Dinner'], ['s', 'Snack']] as const).map(([k, label]) => (
-                <div key={k} className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded bg-muted text-[10px] font-bold text-muted-foreground flex items-center justify-center shrink-0 uppercase">{k}</span>
-                  <EditLine value={meta.meals[k]} onCommit={(t) => setMetaField({ meals: { ...meta.meals, [k]: t } })} placeholder={label} className={rowInput} />
-                </div>
-              ))}
-            </Card>
-          </section>
-
-          {/* highlight + memo */}
-          <section>
-            <h3 className={sectionTitle}><Sparkles className="w-3.5 h-3.5" /> Highlight &amp; notes</h3>
-            <Card className="p-3 space-y-2">
-              <EditLine value={meta.highlight} onCommit={(t) => setMetaField({ highlight: t })} placeholder="Highlight of the day…" className={rowInput} />
-              <textarea value={meta.memo} onChange={(e) => setMetaField({ memo: e.target.value })} rows={2} placeholder="Memo / brain dump…" className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-muted-foreground/50 border-t border-border/60 pt-2" />
-            </Card>
-          </section>
+          {habits}
+          {wellness}
+          {meals}
         </div>
       </div>
     </div>
@@ -669,7 +709,7 @@ function MonthView({
 
   const countByDay = useMemo(() => {
     const m: Record<string, number> = {}
-    dayEntries.forEach((e) => { if (e.tags.includes(META_TAG)) return; const k = e.date.slice(0, 10); m[k] = (m[k] ?? 0) + 1 })
+    dayEntries.forEach((e) => { if (e.tags.includes(META_TAG) || e.tags.includes('routine')) return; const k = e.date.slice(0, 10); m[k] = (m[k] ?? 0) + 1 })
     return m
   }, [dayEntries])
 
