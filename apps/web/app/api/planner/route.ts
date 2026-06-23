@@ -122,6 +122,7 @@ export async function PATCH(request: NextRequest) {
       priority?: string
       startTime?: string | null
       color?: string | null
+      sortOrder?: number
     }
     if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
@@ -135,6 +136,7 @@ export async function PATCH(request: NextRequest) {
     if (body.priority !== undefined && ['low', 'normal', 'high'].includes(body.priority)) data['priority'] = body.priority
     if (body.startTime !== undefined) data['startTime'] = body.startTime?.trim() || null
     if (body.color !== undefined) data['color'] = body.color?.trim() || null
+    if (typeof body.sortOrder === 'number') data['sortOrder'] = body.sortOrder
     if (body.status !== undefined && ['pending', 'done'].includes(body.status)) {
       data['status'] = body.status
       data['completedAt'] = body.status === 'done' ? new Date() : null

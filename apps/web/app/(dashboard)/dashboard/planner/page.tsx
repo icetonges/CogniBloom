@@ -9,7 +9,7 @@ import {
   Loader2, CalendarDays, CalendarRange, ChevronLeft, ChevronRight,
   Plus, X, Check, Trash2, Tag as TagIcon, Clock, Target, Flag,
   AlignLeft, Pen, Repeat, ListChecks, Sparkles,
-  Droplets, Star, Moon, Utensils, ListTodo, Brain, TrendingUp, Flame,
+  Droplets, Moon, Utensils, Brain, TrendingUp, Flame, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
@@ -497,8 +497,18 @@ function DayView({
   const routine = items.filter(isRoutine)
   const real = items.filter((e) => !isRoutine(e) && !e.tags.includes(META_TAG))
   const timed = real.filter((e) => e.startTime)
-  const todos = real.filter((e) => !e.startTime)
   const tasks = [...routine, ...real]
+  const habitList = [...routine].sort((a, b) => a.sortOrder - b.sortOrder)
+  const maxSort = routine.reduce((m, r) => Math.max(m, r.sortOrder), -1)
+  const reorderHabit = (e: Entry, dir: number) => {
+    const idx = habitList.findIndex((x) => x.id === e.id)
+    const j = idx + dir
+    if (j < 0 || j >= habitList.length) return
+    const a = habitList[idx], b = habitList[j]
+    const aOrder = a.sortOrder, bOrder = b.sortOrder
+    patchEntry(a.id, { sortOrder: bOrder })
+    patchEntry(b.id, { sortOrder: aOrder })
+  }
   const done = tasks.filter((e) => e.status === 'done').length
   const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0
 
@@ -506,38 +516,11 @@ function DayView({
   const sectionTitle = 'text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5'
 
   // ── section blocks (ordered into columns below) ──
-  const priorities = (
-    <section key="pri">
-      <h3 className={sectionTitle}><Star className="w-3.5 h-3.5" /> Top priorities</h3>
-      <Card className="p-3 space-y-2">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-            <EditLine value={meta.priorities[i] ?? ''} onCommit={(t) => setMetaField({ priorities: meta.priorities.map((p, j) => (j === i ? t : p)) })} placeholder={`Priority ${i + 1}`} className={rowInput} />
-          </div>
-        ))}
-      </Card>
-    </section>
-  )
-
   const focus = (
     <section key="focus">
       <h3 className={sectionTitle}><Target className="w-3.5 h-3.5" /> Today&apos;s focus</h3>
       <Card className="p-3">
         <textarea value={meta.focus} onChange={(e) => setMetaField({ focus: e.target.value })} rows={2} placeholder="What's the intention for today?" className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-muted-foreground/50" />
-      </Card>
-    </section>
-  )
-
-  const todo = (
-    <section key="todo">
-      <h3 className={sectionTitle}><ListTodo className="w-3.5 h-3.5" /> To-do</h3>
-      <Card className="p-3 space-y-1.5">
-        {todos.map((e) => <TaskRow key={e.id} e={e} onToggle={toggle} onCommit={commitTitle} onRemove={removeEntry} onOpen={onOpenEntry} />)}
-        <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded-full border-2 border-dashed border-muted-foreground/30 shrink-0" />
-          <AddLine onAdd={(t) => createEntry({ title: t })} placeholder="Add a to-do…" className={rowInput} />
-        </div>
       </Card>
     </section>
   )
@@ -577,24 +560,38 @@ function DayView({
     <section key="habits">
       <div className="flex items-center justify-between mb-2">
         <h3 className={cn(sectionTitle, 'mb-0')}><Repeat className="w-3.5 h-3.5" /> Habit tracker</h3>
-        <button onClick={onRestoreRoutine} className="text-xs text-primary hover:underline inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Add routine</button>
+        <button onClick={onRestoreRoutine} className="text-xs text-primary hover:underline inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Load defaults</button>
       </div>
-      <Card className="p-3 space-y-2.5">
-        {routine.map((e) => (
-          <div key={e.id} className="flex items-start gap-2.5 group">
+      <Card className="p-3 space-y-2">
+        {habitList.map((e, i) => (
+          <div key={e.id} className="flex items-start gap-2 group rounded-lg hover:bg-muted/30 px-1 -mx-1 py-0.5">
+            {/* reorder */}
+            <div className="flex flex-col shrink-0 -my-0.5">
+              <button onClick={() => reorderHabit(e, -1)} disabled={i === 0} title="Move up" className="text-muted-foreground/40 hover:text-primary disabled:opacity-20 leading-none"><ChevronUp className="w-3.5 h-3.5" /></button>
+              <button onClick={() => reorderHabit(e, 1)} disabled={i === habitList.length - 1} title="Move down" className="text-muted-foreground/40 hover:text-primary disabled:opacity-20 leading-none"><ChevronDown className="w-3.5 h-3.5" /></button>
+            </div>
             <button onClick={() => toggle(e)} className={cn('mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0', e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary')}>
               {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
             </button>
             <span className="text-base shrink-0 mt-0.5">{routineEmoji(e.title)}</span>
             <div className="flex-1 min-w-0">
               <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('w-full bg-transparent text-sm font-medium focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
-              {e.details && <div className="text-[11px] text-muted-foreground leading-snug">{e.details}</div>}
+              <EditLine value={e.details ?? ''} onCommit={(t) => patchEntry(e.id, { details: t })} placeholder="duration / note — e.g. 15 min lesson" className="w-full bg-transparent text-[11px] text-muted-foreground focus:outline-none placeholder:text-muted-foreground/40" />
             </div>
-            {e.startTime && <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 mt-0.5">{e.startTime}</span>}
-            <button onClick={() => removeEntry(e.id)} className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><X className="w-3.5 h-3.5" /></button>
+            <input
+              type="time"
+              value={e.startTime ?? ''}
+              onChange={(ev) => patchEntry(e.id, { startTime: ev.target.value })}
+              title="Time"
+              className="text-[11px] text-muted-foreground bg-transparent border border-border/60 rounded px-1 py-0.5 shrink-0 mt-0.5 w-[5.5rem] focus:outline-none focus:ring-1 focus:ring-primary/40"
+            />
+            <button onClick={() => removeEntry(e.id)} title="Remove" className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><X className="w-3.5 h-3.5" /></button>
           </div>
         ))}
-        {routine.length === 0 && <p className="text-sm text-muted-foreground text-center py-1">Tap &ldquo;Add routine&rdquo; to load your daily habits.</p>}
+        <div className="flex items-center gap-2 pt-2 border-t border-border/60">
+          <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+          <AddLine onAdd={(t) => createEntry({ title: t, tags: ['routine'] })} placeholder="Add a habit…" className={rowInput} />
+        </div>
       </Card>
     </section>
   )
@@ -676,14 +673,12 @@ function DayView({
       <div className="grid lg:grid-cols-2 gap-5 items-start">
         {/* LEFT */}
         <div className="space-y-5">
-          {priorities}
           {focus}
-          {todo}
-          {highlight}
           {schedule}
         </div>
         {/* RIGHT */}
         <div className="space-y-5">
+          {highlight}
           {habits}
           {wellness}
           {meals}
