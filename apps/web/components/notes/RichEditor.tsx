@@ -23,12 +23,13 @@ import {
   Code, Terminal,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
   Image as ImageIcon, Minus,
-  Undo, Redo, Highlighter, Loader2,
+  Undo, Redo, Highlighter, Loader2, PenLine,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MathExtension, MathInlineExtension } from '@/lib/tiptap/math-extension'
 import { MathDialog } from '@/components/notes/MathDialog'
 import { SymbolPicker } from '@/components/notes/SymbolPicker'
+import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
 
 // Load KaTeX CSS once
 import 'katex/dist/katex.min.css'
@@ -97,6 +98,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isInsertingImage, setIsInsertingImage] = useState(false)
     const [mathState, setMathState] = useState<MathEditState>({ open: false, latex: '', display: true })
+    const [hwOpen, setHwOpen] = useState(false)
 
     const editor = useEditor({
       extensions: [
@@ -193,6 +195,19 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
 
     const insertSymbol = useCallback((symbol: string) => {
       editor?.chain().focus().insertContent(symbol).run()
+    }, [editor])
+
+    // Insert handwriting result — recognized text and/or the ink image.
+    const handleHandwriting = useCallback((r: HandwritingResult) => {
+      if (!editor) return
+      if (r.imageDataUrl) {
+        editor.chain().focus().setImage({ src: r.imageDataUrl, alt: 'handwritten note' }).run()
+      }
+      if (r.text && r.text.trim()) {
+        const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        const html = r.text.split(/\n{2,}/).map((b) => `<p>${esc(b).replace(/\n/g, '<br>')}</p>`).join('')
+        editor.chain().focus().insertContent(html).run()
+      }
     }, [editor])
 
     if (!editor) return null
@@ -326,6 +341,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
               </>
             )}
 
+            {!isDisabled && (
+              <ToolBtn onClick={() => setHwOpen(true)} title="Handwrite (ink → text or image)" disabled={isDisabled}>
+                <PenLine className="w-3.5 h-3.5" />
+              </ToolBtn>
+            )}
+
             <ToolBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule" disabled={isDisabled}>
               <Minus className="w-3.5 h-3.5" />
             </ToolBtn>
@@ -398,6 +419,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
               }).run()
             }
           }}
+        />
+
+        {/* Handwriting input — ink to text (and/or image) */}
+        <HandwritingPad
+          open={hwOpen}
+          onClose={() => setHwOpen(false)}
+          onResult={handleHandwriting}
+          title="Handwrite note"
         />
 
       </>

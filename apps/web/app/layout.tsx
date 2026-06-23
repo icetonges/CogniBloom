@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Plus_Jakarta_Sans } from 'next/font/google'
+import { Plus_Jakarta_Sans, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import './globals.css'
 
@@ -8,6 +8,14 @@ const jakarta = Plus_Jakarta_Sans({
   variable: '--font-jakarta',
   display: 'swap',
   weight: ['400', '500', '600', '700', '800'],
+})
+
+// Display font — punchy geometric headings for a modern, teen-friendly feel
+const sora = Sora({
+  subsets: ['latin'],
+  variable: '--font-sora',
+  display: 'swap',
+  weight: ['500', '600', '700', '800'],
 })
 
 export const metadata: Metadata = {
@@ -45,7 +53,7 @@ export const viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={jakarta.variable}>
+    <html lang="en" suppressHydrationWarning className={`${jakarta.variable} ${sora.variable}`}>
       <head>
         <meta charSet="utf-8" />
       </head>
