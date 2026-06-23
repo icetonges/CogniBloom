@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Edit2, Sparkles, Download, Trash2,
   Loader2, BookOpen, Calendar, Tag,
-  Save, X, Bot, Brain,
+  Save, X, Bot, Brain, Check,
 } from 'lucide-react'
 import { formatNoteTitle, formatTimelineHeading, getDateGroupKey } from '@/lib/note-format'
 import { NoteAnalysis } from '@/components/notes/NoteAnalysis'
@@ -29,6 +29,10 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [autoStatus, setAutoStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [autoSavedAt, setAutoSavedAt] = useState<Date | null>(null)
+  const autoSavingRef = useRef(false)
+  const autoSnapshotRef = useRef<string>('')
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat')
   const [showSidebar, setShowSidebar] = useState(true)
 
@@ -137,6 +141,44 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
       setIsSaving(false)
     }
   }
+
+  // ── Auto-save while editing — debounced 1.8 s ──
+  useEffect(() => {
+    if (mode !== 'edit' || !note) return
+    if (!editTitle.trim() || !editContent.replace(/<[^>]+>/g, '').trim()) return
+    const snapshot = JSON.stringify({ t: editTitle.trim(), c: editContent, s: editSubject.trim(), g: editTags })
+    // Seed the baseline the first time we enter edit so we don't save unchanged content
+    if (!autoSnapshotRef.current) { autoSnapshotRef.current = snapshot; return }
+    if (snapshot === autoSnapshotRef.current) return
+    const timer = setTimeout(async () => {
+      if (autoSavingRef.current) return
+      autoSavingRef.current = true
+      setAutoStatus('saving')
+      try {
+        const res = await fetch(`/api/notes/${note.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: editTitle.trim(),
+            content: editContent,
+            subject: editSubject.trim() || null,
+            tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
+          }),
+        })
+        if (!res.ok) throw new Error()
+        const { data } = await res.json() as { data: Note }
+        setNote(data)
+        autoSnapshotRef.current = snapshot
+        setAutoSavedAt(new Date())
+        setAutoStatus('saved')
+      } catch {
+        setAutoStatus('error')
+      } finally {
+        autoSavingRef.current = false
+      }
+    }, 1800)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTitle, editContent, editSubject, editTags, mode])
 
   const handleDelete = async () => {
     if (!note || !confirm('Delete this note? This cannot be undone.')) return
@@ -251,7 +293,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
         {/* Edit / View toggle */}
         {mode === 'view' ? (
           <button
-            onClick={() => setMode('edit')}
+            onClick={() => { autoSnapshotRef.current = ''; setAutoStatus('idle'); setMode('edit') }}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
             style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
@@ -259,12 +301,30 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
           </button>
         ) : (
           <>
+            {autoStatus !== 'idle' && (
+              <span className="hidden sm:flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg text-muted-foreground"
+                style={{
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                  color: autoStatus === 'error' ? '#f87171' : autoStatus === 'saved' ? '#34d399' : undefined,
+                }}>
+                {autoStatus === 'saving'
+                  ? <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin" />
+                  : autoStatus === 'saved'
+                    ? <Check className="h-2.5 w-2.5 shrink-0" />
+                    : <X className="h-2.5 w-2.5 shrink-0" />}
+                {autoStatus === 'saving'
+                  ? 'Saving…'
+                  : autoStatus === 'saved'
+                    ? (autoSavedAt ? `Auto-saved ${autoSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Auto-saved')
+                    : 'Auto-save failed'}
+              </span>
+            )}
             <button
               onClick={() => { setMode('view'); setSaveError(null) }}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
             >
-              <X className="h-3.5 w-3.5" /> Cancel
+              <X className="h-3.5 w-3.5" /> Done
             </button>
             <button
               onClick={handleSave}

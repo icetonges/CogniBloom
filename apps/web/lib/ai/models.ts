@@ -1,5 +1,5 @@
 // Central AI model registry — single source of truth for all model metadata.
-// Used by the UI (ChatWindow), API routes, and the AI manager.
+// Used by the UI (ChatWindow, ModelCompare), API routes, and the AI manager.
 
 export interface ModelRegistryEntry {
   id: string
@@ -20,7 +20,36 @@ export interface ModelRegistryEntry {
 export type ModelId = string
 
 export const MODELS: ModelRegistryEntry[] = [
-  // ── Google Gemini ─────────────────────────────────────────────────────────
+  // ── Google Gemini (via Google AI Studio) ──────────────────────────────────
+  {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
+    provider: 'google',
+    providerLabel: 'Google',
+    providerColor: '#4285f4',
+    inputPricePer1M: 1.50,
+    outputPricePer1M: 9.00,
+    description: 'Flagship value model — ultimate balance of intelligence, speed, and deep thinking.',
+    contextWindow: '1M',
+    isFree: false,
+    supportsVision: true,
+    isDefault: true,
+    badge: 'Recommended',
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash-Lite',
+    provider: 'google',
+    providerLabel: 'Google',
+    providerColor: '#4285f4',
+    inputPricePer1M: 0.25,
+    outputPricePer1M: 1.50,
+    description: 'High-volume agentic tasks — ultra-low latency, optimized for massive scale.',
+    contextWindow: '1M',
+    isFree: false,
+    supportsVision: true,
+    badge: 'Cheapest',
+  },
   {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
@@ -29,43 +58,14 @@ export const MODELS: ModelRegistryEntry[] = [
     providerColor: '#4285f4',
     inputPricePer1M: 0.30,
     outputPricePer1M: 2.50,
-    description: 'Best balance · 1M context · thinking mode · free tier',
+    description: 'Proven reasoning staple — exceptional price-to-performance with 1M context.',
     contextWindow: '1M',
-    isFree: true,
+    isFree: false,
     supportsVision: true,
-    isDefault: true,
-    badge: 'Recommended',
-  },
-  {
-    id: 'gemini-2.5-flash-lite',
-    name: 'Gemini 2.5 Flash-Lite',
-    provider: 'google',
-    providerLabel: 'Google',
-    providerColor: '#4285f4',
-    inputPricePer1M: 0.10,
-    outputPricePer1M: 0.40,
-    description: 'Cheapest Google model · 1M context · free tier',
-    contextWindow: '1M',
-    isFree: true,
-    supportsVision: true,
-    badge: 'Cheapest',
-  },
-  {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
-    provider: 'google',
-    providerLabel: 'Google',
-    providerColor: '#4285f4',
-    inputPricePer1M: 1.25,
-    outputPricePer1M: 10.00,
-    description: 'Most capable Google model · 1M context · free tier',
-    contextWindow: '1M',
-    isFree: true,
-    supportsVision: true,
-    badge: 'Most Capable',
+    badge: 'Reliable',
   },
 
-  // ── Groq (free, ultra-fast inference) ────────────────────────────────────
+  // ── Groq — Compound (agentic, built-in web search) ────────────────────────
   {
     id: 'groq/compound-beta',
     name: 'Compound Beta',
@@ -74,12 +74,14 @@ export const MODELS: ModelRegistryEntry[] = [
     providerColor: '#f55036',
     inputPricePer1M: 0,
     outputPricePer1M: 0,
-    description: 'Agentic · built-in web search · auto tool use',
+    description: 'Agentic — built-in web search — auto tool use',
     contextWindow: '128K',
     isFree: true,
     supportsVision: false,
     badge: 'New',
   },
+
+  // ── Groq — Llama (free tier, ultra-fast) ──────────────────────────────────
   {
     id: 'meta-llama/llama-4-scout-17b-16e-instruct',
     name: 'Llama 4 Scout',
@@ -88,7 +90,7 @@ export const MODELS: ModelRegistryEntry[] = [
     providerColor: '#f55036',
     inputPricePer1M: 0,
     outputPricePer1M: 0,
-    description: 'Llama 4 · MoE architecture · vision · 128K',
+    description: 'Llama 4 — MoE architecture — vision — 128K',
     contextWindow: '128K',
     isFree: true,
     supportsVision: true,
@@ -101,7 +103,7 @@ export const MODELS: ModelRegistryEntry[] = [
     providerColor: '#f55036',
     inputPricePer1M: 0,
     outputPricePer1M: 0,
-    description: 'Best Llama 3 · ultra-fast inference · 128K',
+    description: 'Best Llama 3 — ultra-fast inference — 128K',
     contextWindow: '128K',
     isFree: true,
     supportsVision: false,
@@ -115,7 +117,7 @@ export const MODELS: ModelRegistryEntry[] = [
     providerColor: '#f55036',
     inputPricePer1M: 0,
     outputPricePer1M: 0,
-    description: 'Lightning-fast · great for simple tasks · 128K',
+    description: 'Lightning-fast — great for simple tasks — 128K',
     contextWindow: '128K',
     isFree: true,
     supportsVision: false,
@@ -123,42 +125,42 @@ export const MODELS: ModelRegistryEntry[] = [
 
   // ── Anthropic Claude (paid) ───────────────────────────────────────────────
   {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4',
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
     provider: 'anthropic',
     providerLabel: 'Anthropic',
     providerColor: '#c85a3a',
     inputPricePer1M: 3,
     outputPricePer1M: 15,
-    description: 'Balanced performance · 200K context',
+    description: 'Balanced performance — 200K context',
     contextWindow: '200K',
     isFree: false,
     supportsVision: true,
     badge: 'Balanced',
   },
   {
-    id: 'claude-opus-4-1-20250805',
-    name: 'Claude Opus 4.1',
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
     provider: 'anthropic',
     providerLabel: 'Anthropic',
     providerColor: '#c85a3a',
     inputPricePer1M: 15,
     outputPricePer1M: 75,
-    description: 'Highest intelligence · 200K context',
+    description: 'Most capable — 200K context',
     contextWindow: '200K',
     isFree: false,
     supportsVision: true,
     badge: 'Powerful',
   },
   {
-    id: 'claude-3-5-haiku-20241022',
-    name: 'Claude Haiku 3.5',
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
     provider: 'anthropic',
     providerLabel: 'Anthropic',
     providerColor: '#c85a3a',
     inputPricePer1M: 0.8,
     outputPricePer1M: 4,
-    description: 'Fast and affordable · 200K context',
+    description: 'Fastest Anthropic model — 200K context',
     contextWindow: '200K',
     isFree: false,
     supportsVision: true,
@@ -167,4 +169,4 @@ export const MODELS: ModelRegistryEntry[] = [
 ]
 
 export const DEFAULT_MODEL_ID: ModelId =
-  MODELS.find((m) => m.isDefault)?.id ?? 'gemini-2.5-flash'
+  MODELS.find((m) => m.isDefault)?.id ?? 'gemini-3.5-flash'

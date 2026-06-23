@@ -18,21 +18,21 @@ import type { ChatRequest, ChatResponse, StreamChunk } from '@/lib/ai/providers/
 // Order: free/fast Google first, then free Groq, then paid Anthropic
 
 export const FALLBACK_CHAIN: string[] = [
-  // Google Gemini (free tier)
-  'gemini-2.5-flash',               // primary: fast, 1M ctx, free
-  'gemini-2.5-flash-lite',          // lighter, no thinking, free
-  'gemini-2.5-pro',                 // most capable Google, free
+  // Google Gemini — newest first, with the proven 2.5 Flash as a reliable staple
+  'gemini-3.5-flash',               // flagship value default
+  'gemini-3.1-flash-lite',          // ultra-low latency, high volume
+  'gemini-2.5-flash',               // proven reliable staple
 
   // Groq (free, ultra-fast inference)
-  'llama-3.3-70b-versatile',        // best Llama 3, 128K, free
+  'groq/compound-beta',             // agentic, built-in web search
   'meta-llama/llama-4-scout-17b-16e-instruct', // Llama 4, vision, free
+  'llama-3.3-70b-versatile',        // best Llama 3, 128K, free
   'llama-3.1-8b-instant',           // fastest, simple tasks, free
-  'groq/compound-beta',             // agentic Groq system
 
   // Anthropic Claude (paid — last resort)
-  'claude-3-5-haiku-20241022',      // cheapest, 200K ctx
-  'claude-sonnet-4-20250514',       // balanced
-  'claude-opus-4-1-20250805',       // most powerful
+  'claude-haiku-4-5-20251001',      // cheapest, fastest
+  'claude-sonnet-4-6',              // balanced
+  'claude-opus-4-6',                // most powerful
 ]
 
 /** All models shown in UI dropdowns (same order, includes labels) */

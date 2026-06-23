@@ -16,6 +16,28 @@ import type {
 import { AuthenticationError, RateLimitError, ContextLengthError } from './types'
 
 const GOOGLE_MODELS: Record<string, ModelInfo> = {
+  'gemini-3.5-flash': {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
+    provider: 'google',
+    contextWindow: 1000000,
+    costPer1kInputTokens: 0.0015,
+    costPer1kOutputTokens: 0.009,
+    supportsVision: true,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
+  'gemini-3.1-flash-lite': {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash-Lite',
+    provider: 'google',
+    contextWindow: 1000000,
+    costPer1kInputTokens: 0.00025,
+    costPer1kOutputTokens: 0.0015,
+    supportsVision: true,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
   // ── Gemini 2.5 series ────────────────────────────────────────────────────
   'gemini-2.5-flash': {
     id: 'gemini-2.5-flash',

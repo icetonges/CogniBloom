@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Loader2, Save, Sparkles, ArrowLeft, FilePlus, X,
-  Tag, BookOpen, Bot, ChevronDown, ChevronRight, Clock,
+  Tag, BookOpen, Bot, ChevronDown, ChevronRight, Clock, Trash2, Check,
 } from 'lucide-react'
 import { RichEditor, type RichEditorRef } from '@/components/notes/RichEditor'
 import { DocumentImport } from '@/components/notes/DocumentImport'
@@ -55,6 +55,14 @@ export function NewNoteClient() {
   const [draftRestored, setDraftRestored] = useState(false)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Database-backed auto-save state
+  const [noteId, setNoteId] = useState<string | null>(null)
+  const [, setNoteSlug] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const savingRef = useRef(false)
+  const lastSavedSnapshot = useRef<string>('')
+
   // Restore draft on first mount
   useEffect(() => {
     try {
@@ -89,6 +97,56 @@ export function NewNoteClient() {
   }, [title, content, subject, tags])
 
   useEffect(() => { saveDraft() }, [saveDraft])
+
+  // ── Auto-save to the database — debounced 1.8 s, once there's a title ──
+  useEffect(() => {
+    if (!title.trim()) return
+    const snapshot = JSON.stringify({ t: title.trim(), c: content, s: subject.trim(), g: tags })
+    if (snapshot === lastSavedSnapshot.current) return
+    const timer = setTimeout(async () => {
+      if (savingRef.current) return
+      savingRef.current = true
+      setSaveStatus('saving')
+      try {
+        const tagListLocal = tags.split(',').map((t) => t.trim()).filter(Boolean)
+        const payload = {
+          title: title.trim(),
+          content,
+          contentFormat: 'html',
+          subject: subject.trim() || null,
+          tags: tagListLocal,
+          hasMath: /\$.*?\$|\\[.*?\\]|\\\(.*?\\\)|data-math/.test(content),
+          hasCode: /<code|<pre/.test(content),
+          hasImages: /<img/.test(content),
+        }
+        let data: Note
+        if (noteId) {
+          const res = await fetch(`/api/notes/${noteId}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          })
+          if (!res.ok) throw new Error()
+          data = (await res.json()).data
+        } else {
+          const res = await fetch('/api/notes', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          })
+          if (!res.ok) throw new Error()
+          data = (await res.json()).data
+          setNoteId(data.id)
+          setNoteSlug(data.slug ?? null)
+        }
+        lastSavedSnapshot.current = snapshot
+        setLastSavedAt(new Date())
+        setSaveStatus('saved')
+      } catch {
+        setSaveStatus('error')
+      } finally {
+        savingRef.current = false
+      }
+    }, 1800)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, content, subject, tags, noteId])
 
   const clearDraft = () => {
     try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
@@ -139,22 +197,21 @@ export function NewNoteClient() {
       const hasCode = /<code|<pre/.test(content)
       const hasImages = /<img/.test(content)
 
-      const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          content,
-          contentFormat: 'html',
-          subject: subject.trim() || null,
-          tags: tagList,
-          hasMath,
-          hasCode,
-          hasImages,
-        }),
-      })
+      const payload = {
+        title: title.trim(),
+        content,
+        contentFormat: 'html',
+        subject: subject.trim() || null,
+        tags: tagList,
+        hasMath,
+        hasCode,
+        hasImages,
+      }
+      const res = noteId
+        ? await fetch(`/api/notes/${noteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        : await fetch('/api/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 
-      if (!res.ok) throw new Error('Failed to create note')
+      if (!res.ok) throw new Error(noteId ? 'Failed to save note' : 'Failed to create note')
       const { data } = await res.json() as { data: Note }
 
       clearDraft()
@@ -168,6 +225,16 @@ export function NewNoteClient() {
       setError(err instanceof Error ? err.message : 'Failed to save')
       setIsSaving(false)
     }
+  }
+
+  const handleDelete = async () => {
+    const saved = !!noteId
+    if (!confirm(saved ? 'Delete this note? This cannot be undone.' : 'Discard this draft?')) return
+    if (noteId) {
+      try { await fetch(`/api/notes/${noteId}`, { method: 'DELETE' }) } catch { /* ignore */ }
+    }
+    clearDraft()
+    router.push('/dashboard/notes')
   }
 
   return (
@@ -205,9 +272,38 @@ export function NewNoteClient() {
               {draftRestored ? 'Draft restored' : 'Draft saved'}
             </span>
           )}
+          {saveStatus !== 'idle' && (
+            <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
+              style={{
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                color: saveStatus === 'error' ? '#f87171' : saveStatus === 'saved' ? '#34d399' : undefined,
+              }}>
+              {saveStatus === 'saving'
+                ? <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin" />
+                : saveStatus === 'saved'
+                  ? <Check className="h-2.5 w-2.5 shrink-0" />
+                  : <X className="h-2.5 w-2.5 shrink-0" />}
+              {saveStatus === 'saving'
+                ? 'Saving…'
+                : saveStatus === 'saved'
+                  ? (lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Auto-saved')
+                  : 'Save failed'}
+            </span>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {/* Delete / discard */}
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-xl text-muted-foreground hover:text-rose-400 transition-colors"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            title={noteId ? 'Delete note' : 'Discard draft'}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Delete</span>
+          </button>
           {/* Import — icon-only on mobile */}
           <button
             type="button"

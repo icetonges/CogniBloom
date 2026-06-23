@@ -14,6 +14,39 @@ import type {
 import { AuthenticationError, RateLimitError, ContextLengthError } from './types'
 
 const ANTHROPIC_MODELS: Record<string, ModelInfo> = {
+  'claude-sonnet-4-6': {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    provider: 'anthropic',
+    contextWindow: 200000,
+    costPer1kInputTokens: 0.003,
+    costPer1kOutputTokens: 0.015,
+    supportsVision: true,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
+  'claude-opus-4-6': {
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
+    provider: 'anthropic',
+    contextWindow: 200000,
+    costPer1kInputTokens: 0.015,
+    costPer1kOutputTokens: 0.075,
+    supportsVision: true,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
+  'claude-haiku-4-5-20251001': {
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
+    provider: 'anthropic',
+    contextWindow: 200000,
+    costPer1kInputTokens: 0.0008,
+    costPer1kOutputTokens: 0.004,
+    supportsVision: true,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
   'claude-sonnet-4-20250514': {
     id: 'claude-sonnet-4-20250514',
     name: 'Claude Sonnet 4',

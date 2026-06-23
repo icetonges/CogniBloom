@@ -5,9 +5,10 @@ import { ChatWindow } from './ChatWindow'
 import { formatDistanceToNow } from 'date-fns'
 import {
   BookOpen, Calculator, Code2, Globe, Beaker,
-  HelpCircle, Brain, Trophy, History, ChevronRight, Plus, RotateCcw,
+  HelpCircle, Brain, Trophy, History, ChevronRight, Plus, RotateCcw, GitCompare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ModelCompare } from './ModelCompare'
 
 const TUTOR_MODES = [
   { id: 'GENERAL',         name: 'General Chat',   desc: 'Ask questions on any topic',      icon: BookOpen,   iconColor: '#3b82f6', gradientCss: 'linear-gradient(135deg,#3b82f6,#6366f1)', glow: 'rgba(59,130,246,0.35)',  bg: 'rgba(59,130,246,0.1)',  border: 'rgba(59,130,246,0.25)'  },
@@ -33,6 +34,7 @@ export function ChatPage() {
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   const chatKey = useRef(0)
 
   useEffect(() => {
@@ -57,6 +59,28 @@ export function ChatPage() {
   const handleBack = () => {
     setSelectedMode(null)
     setResumeSessionId(null)
+  }
+
+  // ── Compare-models view ────────────────────────────────────────────────────
+  if (compareOpen) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+            <GitCompare className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-foreground">Compare Models</span>
+          <button
+            onClick={() => setCompareOpen(false)}
+            className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            ← Back
+          </button>
+        </div>
+        <ModelCompare />
+      </div>
+    )
   }
 
   // ── Active chat view ───────────────────────────────────────────────────────
@@ -126,12 +150,21 @@ export function ChatPage() {
   return (
     <div className="space-y-7">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-black tracking-tight mb-1">
-          <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">AI Tutor</span>
-          {' '}🎓
-        </h1>
-        <p className="text-muted-foreground">Choose a mode to start learning.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight mb-1">
+            <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">AI Tutor</span>
+            {' '}🎓
+          </h1>
+          <p className="text-muted-foreground">Choose a mode to start learning.</p>
+        </div>
+        <button
+          onClick={() => setCompareOpen(true)}
+          className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all hover:scale-[1.03]"
+          style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc' }}
+        >
+          <GitCompare className="w-4 h-4" /> Compare Models
+        </button>
       </div>
 
       {/* Mode grid */}

@@ -59,9 +59,9 @@ export function detectProvider(modelId: string): 'google' | 'groq' | 'anthropic'
 // Canonical list grouped by provider (matches models.ts registry)
 export const AVAILABLE_MODELS = {
   google: [
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-2.5-pro',
   ],
   groq: [
     'groq/compound-beta',
@@ -70,8 +70,8 @@ export const AVAILABLE_MODELS = {
     'llama-3.1-8b-instant',
   ],
   anthropic: [
-    'claude-sonnet-4-20250514',
-    'claude-opus-4-1-20250805',
-    'claude-3-5-haiku-20241022',
+    'claude-sonnet-4-6',
+    'claude-opus-4-6',
+    'claude-haiku-4-5-20251001',
   ],
 }

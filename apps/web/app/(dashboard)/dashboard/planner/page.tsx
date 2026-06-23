@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import {
   Loader2, CalendarDays, CalendarRange, ChevronLeft, ChevronRight,
   Plus, X, Check, Trash2, Tag as TagIcon, Clock, Target, Flag,
-  AlignLeft, Pen,
+  AlignLeft, Pen, Repeat,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
@@ -34,6 +34,18 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const monthKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
 
+// schedule rail: 6 AM → 10 PM
+const HOURS = Array.from({ length: 17 }, (_, i) => i + 6)
+const hourOf = (t: string) => parseInt(t.split(':')[0] ?? '0', 10)
+const fmtHour = (h: number) => { const ampm = h < 12 ? 'AM' : 'PM'; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr} ${ampm}` }
+const ROUTINE_EMOJI: Record<string, string> = {
+  'Duolingo': '🦉',
+  'Ball touches — set 1': '⚽', 'Ball touches — set 2': '⚽', 'Ball touches — set 3': '⚽',
+  'Investment review': '📈', 'Reflection / mindfulness': '🧘',
+}
+const routineEmoji = (title: string) => ROUTINE_EMOJI[title] ?? '✨'
+const isRoutine = (e: Entry) => e.tags.includes('routine')
+
 const PRIORITY_STYLE: Record<string, string> = {
   high: 'border-l-rose-500',
   normal: 'border-l-primary',
@@ -56,7 +68,7 @@ const tagColor = (tag: string) => {
   return TAG_COLORS[h % TAG_COLORS.length]
 }
 
-interface EditorState { entry: Entry | null; scope: 'day' | 'month'; date: Date }
+interface EditorState { entry: Entry | null; scope: 'day' | 'month'; date: Date; time?: string }
 
 export default function PlannerPage() {
   const [view, setView] = useState<View>('month') // monthly is the default
@@ -70,7 +82,13 @@ export default function PlannerPage() {
 
   const load = useCallback(() => {
     setLoading(true)
-    return fetch(`/api/planner?scope=${view}&date=${dateParam}`)
+    const req = view === 'day'
+      ? fetch('/api/planner/seed-day', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: dateParam }),
+        })
+      : fetch(`/api/planner?scope=${view}&date=${dateParam}`)
+    return req
       .then((r) => r.json())
       .then((res) => { if (res.success) { setEntries(res.data); setKnownTags(res.tags ?? []) } })
       .catch(() => {})
@@ -158,7 +176,8 @@ export default function PlannerPage() {
       ) : view === 'day' ? (
         <DayView
           entries={entries}
-          onAddPlan={() => setEditor({ entry: null, scope: 'day', date: cursor })}
+          cursor={cursor}
+          onAddAt={(time) => setEditor({ entry: null, scope: 'day', date: cursor, time })}
           onOpen={(e) => setEditor({ entry: e, scope: e.scope, date: cursor })}
           onToggle={toggleDone}
         />
@@ -185,36 +204,134 @@ export default function PlannerPage() {
   )
 }
 
-// ============ DAY VIEW ============
+// ============ DAY VIEW (full-page planner) ============
 function DayView({
-  entries, onAddPlan, onOpen, onToggle,
+  entries, cursor, onAddAt, onOpen, onToggle,
 }: {
   entries: Entry[]
-  onAddPlan: () => void
+  cursor: Date
+  onAddAt: (time?: string) => void
   onOpen: (e: Entry) => void
   onToggle: (e: Entry) => void
 }) {
-  const items = entries.filter((e) => e.scope === 'day')
-  const done = items.filter((e) => e.status === 'done').length
+  const dayItems = entries.filter((e) => e.scope === 'day')
+  const routine = dayItems.filter(isRoutine)
+  const custom = dayItems.filter((e) => !isRoutine(e))
+  const timed = custom.filter((e) => e.startTime).sort((a, b) => (a.startTime! < b.startTime! ? -1 : 1))
+  const untimed = custom.filter((e) => !e.startTime)
+  const done = dayItems.filter((e) => e.status === 'done').length
+  const pct = dayItems.length ? Math.round((done / dayItems.length) * 100) : 0
+
   return (
-    <div className="space-y-4">
-      {items.length > 0 && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${(done / items.length) * 100}%` }} />
+    <div className="space-y-5">
+      {/* header */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <div className="text-2xl font-bold">{cursor.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+            <div className="text-sm text-muted-foreground">{cursor.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
           </div>
-          <span className="tabular-nums">{done}/{items.length} done</span>
+          <div className="text-right">
+            <div className="text-2xl font-bold tabular-nums">{pct}%</div>
+            <div className="text-xs text-muted-foreground">{done}/{dayItems.length} done</div>
+          </div>
         </div>
-      )}
-      <div className="space-y-2">
-        {items.map((e) => <EntryRow key={e.id} entry={e} onOpen={onOpen} onToggle={onToggle} />)}
-        {items.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">No plans yet for this day.</p>
-        )}
+        <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
+          <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      </Card>
+
+      {/* daily routine */}
+      <div>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <Repeat className="w-4 h-4 text-primary" /> Daily routine
+        </h3>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {routine.map((e) => (
+            <Card key={e.id} className={cn('p-3 flex items-center gap-3', e.status === 'done' && 'opacity-60')}>
+              <button
+                onClick={() => onToggle(e)}
+                className={cn('w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors',
+                  e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary')}
+              >
+                {e.status === 'done' && <Check className="w-3.5 h-3.5 text-white" />}
+              </button>
+              <span className="text-xl shrink-0">{routineEmoji(e.title)}</span>
+              <button onClick={() => onOpen(e)} className="flex-1 min-w-0 text-left">
+                <div className={cn('text-sm font-medium truncate', e.status === 'done' && 'line-through text-muted-foreground')}>{e.title}</div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  {e.startTime && (<><Clock className="w-3 h-3" /> {e.startTime}</>)}
+                  {e.details && <span>· {e.details}</span>}
+                </div>
+              </button>
+            </Card>
+          ))}
+          {routine.length === 0 && <p className="text-sm text-muted-foreground">Your routine will appear here.</p>}
+        </div>
       </div>
-      <Button variant="outline" onClick={onAddPlan} className="w-full gap-2 border-dashed">
-        <Plus className="w-4 h-4" /> Add plan
-      </Button>
+
+      {/* schedule rail */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Clock className="w-4 h-4 text-violet-400" /> Schedule
+          </h3>
+          <button onClick={() => onAddAt()} className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+            <Plus className="w-3 h-3" /> Add plan
+          </button>
+        </div>
+        <Card className="p-2 divide-y divide-border">
+          {HOURS.map((h) => {
+            const slot = timed.filter((e) => hourOf(e.startTime!) === h)
+            const hh = `${pad(h)}:00`
+            return (
+              <div key={h} className="flex gap-3 py-1.5 group">
+                <button
+                  onClick={() => onAddAt(hh)}
+                  title="Add at this time"
+                  className="w-14 shrink-0 text-[11px] text-muted-foreground text-right pt-1 hover:text-primary"
+                >
+                  {fmtHour(h)}
+                </button>
+                <div className="flex-1 min-h-[28px] space-y-1">
+                  {slot.map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={() => onOpen(e)}
+                      className={cn('w-full text-left px-3 py-1.5 rounded-lg border-l-2 bg-muted/40 hover:bg-muted transition-colors', PRIORITY_STYLE[e.priority] ?? PRIORITY_STYLE['normal'])}
+                    >
+                      <span className={cn('text-xs font-medium', e.status === 'done' && 'line-through text-muted-foreground')}>
+                        {e.startTime} · {e.title}
+                      </span>
+                    </button>
+                  ))}
+                  {slot.length === 0 && (
+                    <button
+                      onClick={() => onAddAt(hh)}
+                      title="Add at this time"
+                      className="w-full h-6 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-primary/5 transition-opacity"
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </Card>
+      </div>
+
+      {/* anytime */}
+      <div>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <AlignLeft className="w-4 h-4 text-muted-foreground" /> Anytime
+        </h3>
+        <div className="space-y-2">
+          {untimed.map((e) => <EntryRow key={e.id} entry={e} onOpen={onOpen} onToggle={onToggle} />)}
+          {untimed.length === 0 && <p className="text-sm text-muted-foreground">No untimed plans.</p>}
+        </div>
+        <Button variant="outline" onClick={() => onAddAt()} className="w-full gap-2 border-dashed mt-3">
+          <Plus className="w-4 h-4" /> Add plan
+        </Button>
+      </div>
     </div>
   )
 }
@@ -358,7 +475,7 @@ function EntryEditor({
 
   const [title, setTitle] = useState(initial.entry?.title ?? '')
   const [details, setDetails] = useState(initial.entry?.details ?? '')
-  const [startTime, setStartTime] = useState(initial.entry?.startTime ?? '')
+  const [startTime, setStartTime] = useState(initial.entry?.startTime ?? initial.time ?? '')
   const [priority, setPriority] = useState<string>(initial.entry?.priority ?? 'normal')
   const [tags, setTags] = useState<string[]>(initial.entry?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
