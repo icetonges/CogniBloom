@@ -9,10 +9,11 @@ import {
   Loader2, CalendarDays, CalendarRange, ChevronLeft, ChevronRight,
   Plus, X, Check, Trash2, Tag as TagIcon, Clock, Target, Flag,
   AlignLeft, Pen, Repeat, ListChecks, Sparkles,
-  Droplets, Star, Moon, Utensils, ListTodo,
+  Droplets, Star, Moon, Utensils, ListTodo, Brain, TrendingUp, Flame,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
+import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer'
 
 interface Entry {
   id: string
@@ -166,7 +167,7 @@ const tagColor = (tag: string) => {
 interface EditorState { entry: Entry | null; scope: 'day' | 'month'; date: Date; time?: string }
 
 export default function PlannerPage() {
-  const [view, setView] = useState<View>('month') // monthly is the default
+  const [view, setView] = useState<View>('day') // daily plan is the front page
   const [cursor, setCursor] = useState(new Date())
   const [entries, setEntries] = useState<Entry[]>([])
   const [knownTags, setKnownTags] = useState<string[]>([])
@@ -174,6 +175,7 @@ export default function PlannerPage() {
   const [editor, setEditor] = useState<EditorState | null>(null)
 
   const dateParam = view === 'month' ? monthKey(cursor) : dayKey(cursor)
+  const isToday = view === 'day' && dayKey(cursor) === dayKey(new Date())
 
   const load = useCallback(() => {
     setLoading(true)
@@ -226,32 +228,23 @@ export default function PlannerPage() {
             <CalendarDays className="w-6 h-6 text-primary" /> Planner
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Plan your month and day. Tag activities however you like.
+            Your daily plan, habits, and goals — all in one place.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border p-0.5 bg-muted/40">
-            {(['month', 'day'] as View[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                  view === v ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {v === 'day' ? <CalendarDays className="w-3.5 h-3.5" /> : <CalendarRange className="w-3.5 h-3.5" />}
-                {v === 'day' ? 'Day' : 'Month'}
-              </button>
-            ))}
-          </div>
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setEditor({ entry: null, scope: view === 'month' ? 'month' : 'day', date: cursor })}
-          >
-            <Plus className="w-4 h-4" /> New
-          </Button>
+        <div className="inline-flex rounded-lg border border-border p-0.5 bg-muted/40">
+          {(['day', 'month'] as View[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                view === v ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {v === 'day' ? <CalendarDays className="w-3.5 h-3.5" /> : <CalendarRange className="w-3.5 h-3.5" />}
+              {v === 'day' ? 'Day' : 'Month'}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -259,14 +252,15 @@ export default function PlannerPage() {
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => shift(-1)}><ChevronLeft className="w-4 h-4" /></Button>
         <div className="text-center">
-          <div className="font-semibold">
+          <div className="font-semibold flex items-center justify-center gap-2">
             {view === 'month'
               ? cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
               : cursor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {isToday && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">TODAY</span>}
           </div>
-          <button onClick={() => setCursor(new Date())} className="text-xs text-primary hover:underline">
-            Jump to today
-          </button>
+          {!isToday && (
+            <button onClick={() => setCursor(new Date())} className="text-xs text-primary hover:underline">Jump to today</button>
+          )}
         </div>
         <Button variant="ghost" size="sm" onClick={() => shift(1)}><ChevronRight className="w-4 h-4" /></Button>
       </div>
@@ -301,6 +295,105 @@ export default function PlannerPage() {
           onSaved={afterSave}
         />
       )}
+    </div>
+  )
+}
+
+// ── AI Coach: analyzes planner trend, effort & consistency via the LLM chain ──
+interface HabitStat { title: string; scheduled: number; completed: number; rate: number }
+interface Insights {
+  stats: {
+    days: number; activeDays: number; totalTasks: number; totalDone: number
+    overallRate: number; streak: number
+    habits: HabitStat[]
+    series: { date: string; pct: number; total: number; done: number }[]
+  }
+  analysis: string
+}
+
+function AICoach() {
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<Insights | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const run = async () => {
+    setLoading(true); setErr(null)
+    try {
+      const r = await fetch('/api/planner/insights?days=30')
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error ?? 'Analysis failed')
+      setData(j as Insights)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Analysis failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card className="p-4 border-primary/15 bg-gradient-to-br from-primary/[0.05] to-secondary/[0.04]">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Brain className="w-4.5 h-4.5 text-primary" />
+          </div>
+          <div>
+            <div className="font-semibold text-sm">AI Coach</div>
+            <div className="text-xs text-muted-foreground">Trends · effort · consistency — last 30 days</div>
+          </div>
+        </div>
+        <button
+          onClick={run}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {data ? 'Refresh' : 'Analyze'}
+        </button>
+      </div>
+
+      {err && <p className="text-xs text-rose-500 mt-2">{err}</p>}
+
+      {data && (
+        <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            <CoachStat icon={TrendingUp} label="Completion" value={`${data.stats.overallRate}%`} />
+            <CoachStat icon={Flame} label="Streak" value={`${data.stats.streak}d`} />
+            <CoachStat icon={CalendarDays} label="Active days" value={`${data.stats.activeDays}/${data.stats.days}`} />
+          </div>
+
+          {data.stats.habits.length > 0 && (
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Habit consistency</div>
+              <div className="space-y-1.5">
+                {data.stats.habits.map((h) => (
+                  <div key={h.title} className="flex items-center gap-2 text-xs">
+                    <span className="w-36 truncate shrink-0">{h.title}</span>
+                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className={cn('h-full rounded-full', h.rate >= 70 ? 'bg-emerald-500' : h.rate >= 40 ? 'bg-amber-500' : 'bg-rose-500')} style={{ width: `${h.rate}%` }} />
+                    </div>
+                    <span className="w-14 text-right tabular-nums text-muted-foreground shrink-0">{h.completed}/{h.scheduled}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.analysis
+            ? <div className="rounded-xl bg-background/60 border border-border p-3"><MarkdownRenderer content={data.analysis} /></div>
+            : <p className="text-xs text-muted-foreground">Add and complete a few plans, then analyze again for a written review.</p>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function CoachStat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-background/60 border border-border p-3">
+      <Icon className="w-4 h-4 text-primary mb-1" />
+      <div className="text-lg font-bold tabular-nums leading-none">{value}</div>
+      <div className="text-[10px] text-muted-foreground mt-1">{label}</div>
     </div>
   )
 }
@@ -417,6 +510,8 @@ function DayView({
         </div>
       </Card>
 
+      <AICoach />
+
       <div className="grid lg:grid-cols-2 gap-5 items-start">
         {/* ════ LEFT ════ */}
         <div className="space-y-5">
@@ -489,7 +584,7 @@ function DayView({
                     {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
                   </button>
                   <span className="text-base shrink-0">{routineEmoji(e.title)}</span>
-                  <span className={cn('flex-1 text-sm truncate', e.status === 'done' && 'line-through text-muted-foreground')}>{e.title}</span>
+                  <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('flex-1 bg-transparent text-sm focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
                   {e.startTime && <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{e.startTime}</span>}
                   <button onClick={() => removeEntry(e.id)} className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
