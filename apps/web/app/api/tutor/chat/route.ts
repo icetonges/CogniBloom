@@ -68,9 +68,12 @@ export async function POST(request: NextRequest) {
     const examplesHint = userPrefs?.includeExamples === false
       ? '\n\nDo not include worked examples unless the student explicitly asks for one.'
       : ''
+    const gradeHint = userPrefs?.grade
+      ? `\n\nThe student is at ${userPrefs.grade} level. Pitch your vocabulary, depth, pacing, and examples to that level — challenge them appropriately without overwhelming or oversimplifying.`
+      : ''
     const systemPrompt = ragContext
-      ? `${baseSystemPrompt}${lengthHint}${examplesHint}\n\n${ragContext}\n\nUse the student's notes above as context when relevant. Reference them naturally in your response.`
-      : `${baseSystemPrompt}${lengthHint}${examplesHint}`
+      ? `${baseSystemPrompt}${gradeHint}${lengthHint}${examplesHint}\n\n${ragContext}\n\nUse the student's notes above as context when relevant. Reference them naturally in your response.`
+      : `${baseSystemPrompt}${gradeHint}${lengthHint}${examplesHint}`
 
     // Prepend system message
     const messages: ChatMessage[] = [

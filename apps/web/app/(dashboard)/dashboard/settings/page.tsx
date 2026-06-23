@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Check, Loader2, User, Brain, BookOpen, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MODELS as MODEL_REGISTRY, DEFAULT_MODEL_ID } from '@/lib/ai/models'
 
 interface Settings {
   grade: string
@@ -20,7 +21,7 @@ interface Settings {
 
 const DEFAULT_SETTINGS: Settings = {
   grade: 'Year 9',
-  preferredModel: 'gemini-2.5-flash',
+  preferredModel: DEFAULT_MODEL_ID,
   subjects: ['Math', 'Science'],
   responseLength: 'medium',
   includeExamples: true,
@@ -28,12 +29,11 @@ const DEFAULT_SETTINGS: Settings = {
 }
 
 const GRADES = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12']
-const MODELS = [
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Fast, smart, and recommended' },
-  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', note: 'Cheaper and quick for simple help' },
-  { id: 'claude-3-5-haiku-20241022', label: 'Claude Haiku 3.5', note: 'Concise and precise' },
-  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', note: 'Open-source, very fast' },
-]
+const MODELS = MODEL_REGISTRY.map((m) => ({
+  id: m.id,
+  label: `${m.name} · ${m.providerLabel}`,
+  note: m.badge ? `${m.badge} — ${m.description}` : m.description,
+}))
 const MODEL_IDS = new Set(MODELS.map((model) => model.id))
 const ALL_SUBJECTS = ['Math', 'Science', 'English', 'History', 'Coding', 'Language', 'Geography', 'Art', 'Music', 'PE']
 const RESPONSE_LENGTHS = [

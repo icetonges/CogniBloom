@@ -674,12 +674,12 @@ function DayView({
         <div className="space-y-5">
           {focus}
           {schedule}
+          {wellness}
         </div>
         {/* RIGHT */}
         <div className="space-y-5">
           {highlight}
           {habits}
-          {wellness}
           {meals}
         </div>
       </div>
