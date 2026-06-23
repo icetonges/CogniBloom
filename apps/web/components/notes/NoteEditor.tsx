@@ -21,6 +21,7 @@ interface NoteEditorProps {
 const SUBJECT_PRESETS = [
   'Math', 'AMC Math', 'Science', 'Physics', 'Chemistry', 'Biology',
   'English', 'History', 'Coding', 'Language', 'Geography', 'Economics',
+  'Investment', 'Language and Art', 'Study Method',
 ]
 
 export function NoteEditor({ note, onClose, onSave, existingSubjects = [] }: NoteEditorProps) {

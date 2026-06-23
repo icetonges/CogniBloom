@@ -38,6 +38,8 @@ model User {
   uploads              Upload[]
   quizzes              Quiz[]
   flashcards           Flashcard[]
+  recallStates         NoteRecallState[]
+  plannerEntries       PlannerEntry[]
   subscriptions        Subscription[]
   preferences          UserPreferences?
   learningProfile      LearningProfile?
@@ -174,6 +176,7 @@ model Note {
   uploads              Upload[]
   reviews              NoteReview[]
   flashcards           Flashcard[]
+  recallState          NoteRecallState?
 
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
@@ -184,6 +187,72 @@ model Note {
   @@index([slug])
   @@index([subject])
   @@index([userId, createdAt])
+}
+
+// ============ DAILY REVIEW — NOTE-LEVEL SPACED REPETITION ============
+
+/// Per-note spaced-repetition state. One row per note that has entered the
+/// daily review schedule. Uses the same SM-2 algorithm as Flashcard, but at
+/// the granularity of a whole note — surfacing it for active recall on the
+/// Ebbinghaus forgetting curve. Created lazily on the first review.
+model NoteRecallState {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteId                String      @unique
+  note                  Note        @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  // SM-2 spaced repetition fields (note granularity)
+  easeFactor            Float       @default(2.5)
+  interval              Int         @default(0)      // days until next review
+  repetitions           Int         @default(0)
+  nextReviewAt          DateTime    @default(now())
+  lastReviewedAt        DateTime?
+
+  // Retention stats
+  totalReviews          Int         @default(0)
+  correctReviews        Int         @default(0)
+  lastRating            Int?                          // most recent 0–5 self-grade
+
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([nextReviewAt])
+  @@index([userId, nextReviewAt])
+}
+
+// ============ DAILY / MONTHLY PLANNER ============
+
+/// A standalone planner entry (daily task or monthly goal) with user-defined
+/// tags. Not linked to notes — a flexible scheduler for any activity.
+model PlannerEntry {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scope                 String      @default("day")  // "day" | "month"
+  // Anchor date. For scope="day" this is the calendar day; for scope="month"
+  // it is the first day of that month. Stored at Eastern midnight (UTC).
+  date                  DateTime
+
+  title                 String
+  details               String?     @db.Text
+  tags                  String[]    @default([])
+
+  status                String      @default("pending") // "pending" | "done"
+  priority              String      @default("normal")   // "low" | "normal" | "high"
+  color                 String?                          // optional hex/label for the tag chip
+  startTime             String?                          // optional "HH:mm" for day entries
+  sortOrder             Int         @default(0)
+
+  completedAt           DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([userId, scope, date])
+  @@index([date])
 }
 
 model NoteReview {

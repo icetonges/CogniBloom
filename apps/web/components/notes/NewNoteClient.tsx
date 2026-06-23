@@ -23,6 +23,8 @@ const SUBJECT_PRESETS = [
   '中文 (Chinese)', 'Japanese 日本語', 'Korean 한국어',
   'Spanish', 'French', 'German',
   'Language (Other)',
+  // Life & skills 💡
+  'Investment', 'Language and Art', 'Study Method',
 ]
 
 const AI_PREVIEWS = [

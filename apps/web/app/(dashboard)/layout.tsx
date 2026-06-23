@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
+  CalendarDays,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,8 @@ import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 
 const navItems = [
   { href: '/dashboard/notes/new',       icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
+  { href: '/dashboard/review',          icon: Brain,         label: 'Daily Review',      color: 'text-fuchsia-400', badge: 'review-due' },
+  { href: '/dashboard/planner',         icon: CalendarDays,  label: 'Planner',           color: 'text-cyan-400'   },
   { href: '/dashboard/overview',         icon: BarChart3,     label: 'Dashboard',        color: 'text-blue-400'   },
   { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',          color: 'text-violet-400' },
   { href: '/dashboard/flashcards',      icon: Layers,        label: 'Flashcards',        color: 'text-rose-400',   badge: 'flashcards-due' },
@@ -29,8 +32,8 @@ const navItems = [
 interface UserStats { level: number; pct: number; streak: number }
 
 function Sidebar({
-  onClose, flashcardsDue, userStats,
-}: { onClose?: () => void; flashcardsDue: number; userStats: UserStats | null }) {
+  onClose, flashcardsDue, reviewDue, userStats,
+}: { onClose?: () => void; flashcardsDue: number; reviewDue: number; userStats: UserStats | null }) {
   const pathname = usePathname()
 
   return (
@@ -66,7 +69,8 @@ function Sidebar({
           const active = notesItem
             ? pathname.startsWith('/dashboard/notes')
             : pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
-          const showBadge = badge === 'flashcards-due' && flashcardsDue > 0
+          const badgeCount = badge === 'flashcards-due' ? flashcardsDue : badge === 'review-due' ? reviewDue : 0
+          const showBadge = !!badge && badgeCount > 0
 
           return (
             <div key={href}>
@@ -103,7 +107,7 @@ function Sidebar({
                 )}
                 {showBadge && (
                   <span className="min-w-[1.25rem] h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center px-1 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
-                    {flashcardsDue > 99 ? '99+' : flashcardsDue}
+                    {badgeCount > 99 ? '99+' : badgeCount}
                   </span>
                 )}
               </Link>
@@ -191,15 +195,21 @@ function Sidebar({
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [flashcardsDue, setFlashcardsDue] = useState(0)
+  const [reviewDue, setReviewDue] = useState(0)
   const [userStats, setUserStats] = useState<UserStats | null>(null)
 
-  // Flashcard due count — refreshed every 2 min
+  // Flashcard + note-review due counts — refreshed every 2 min
   useEffect(() => {
-    const load = () =>
+    const load = () => {
       fetch('/api/flashcards?due=true')
         .then((r) => r.json())
         .then(({ dueCount }) => { if (typeof dueCount === 'number') setFlashcardsDue(dueCount) })
         .catch(() => {})
+      fetch('/api/review')
+        .then((r) => r.json())
+        .then((res) => { if (res?.stats && typeof res.stats.dueCount === 'number') setReviewDue(res.stats.dueCount) })
+        .catch(() => {})
+    }
     load()
     const t = setInterval(load, 120_000)
     return () => clearInterval(t)
@@ -236,6 +246,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar
           onClose={() => setSidebarOpen(false)}
           flashcardsDue={flashcardsDue}
+          reviewDue={reviewDue}
           userStats={userStats}
         />
       </aside>
