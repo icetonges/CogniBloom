@@ -499,7 +499,6 @@ function DayView({
   const timed = real.filter((e) => e.startTime)
   const tasks = [...routine, ...real]
   const habitList = [...routine].sort((a, b) => a.sortOrder - b.sortOrder)
-  const maxSort = routine.reduce((m, r) => Math.max(m, r.sortOrder), -1)
   const reorderHabit = (e: Entry, dir: number) => {
     const idx = habitList.findIndex((x) => x.id === e.id)
     const j = idx + dir
