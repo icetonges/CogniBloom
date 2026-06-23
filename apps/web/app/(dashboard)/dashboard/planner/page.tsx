@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import {
   Loader2, CalendarDays, CalendarRange, ChevronLeft, ChevronRight,
   Plus, X, Check, Trash2, Tag as TagIcon, Clock, Target, Flag,
-  AlignLeft, Pen, Repeat,
+  AlignLeft, Pen, Repeat, ListChecks, Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
@@ -40,11 +40,40 @@ const hourOf = (t: string) => parseInt(t.split(':')[0] ?? '0', 10)
 const fmtHour = (h: number) => { const ampm = h < 12 ? 'AM' : 'PM'; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr} ${ampm}` }
 const ROUTINE_EMOJI: Record<string, string> = {
   'Duolingo': '🦉',
-  'Ball touches — set 1': '⚽', 'Ball touches — set 2': '⚽', 'Ball touches — set 3': '⚽',
-  'Investment review': '📈', 'Reflection / mindfulness': '🧘',
+  'Workout — set 1': '💪', 'Workout — set 2': '💪', 'Workout — set 3': '💪', 'Workout': '💪',
+  '$5 daily investment': '💵', 'Reflection / mindfulness': '🧘',
 }
 const routineEmoji = (title: string) => ROUTINE_EMOJI[title] ?? '✨'
 const isRoutine = (e: Entry) => e.tags.includes('routine')
+
+// ── checklist encoding inside the free-text details field ──
+const CHECK_RE = /^- \[( |x|X)\] (.*)$/
+interface ChecklistItem { text: string; done: boolean }
+function parseDetails(raw: string | null): { notes: string; checklist: ChecklistItem[] } {
+  const checklist: ChecklistItem[] = []
+  const noteLines: string[] = []
+  for (const ln of (raw ?? '').split('\n')) {
+    const m = CHECK_RE.exec(ln.trim())
+    if (m) checklist.push({ text: m[2], done: m[1].toLowerCase() === 'x' })
+    else noteLines.push(ln)
+  }
+  return { notes: noteLines.join('\n').trim(), checklist }
+}
+function serializeDetails(notes: string, checklist: ChecklistItem[]): string {
+  const cl = checklist.filter((c) => c.text.trim()).map((c) => `- [${c.done ? 'x' : ' '}] ${c.text.trim()}`)
+  return [notes.trim(), ...cl].filter(Boolean).join('\n')
+}
+
+// One-tap starters for the entry editor
+interface Template { label: string; title: string; time: string; notes: string; tags: string[]; routine: boolean }
+const QUICK_TEMPLATES: Template[] = [
+  { label: '🦉 Duolingo',  title: 'Duolingo',                 time: '07:30', notes: '15 min lesson', tags: ['language'],   routine: true },
+  { label: '💪 Workout',   title: 'Workout',                  time: '',      notes: '5 min',         tags: ['fitness'],    routine: true },
+  { label: '💵 $5 invest', title: '$5 daily investment',      time: '09:00', notes: 'Invest $5',     tags: ['investment'], routine: true },
+  { label: '🧘 Reflect',   title: 'Reflection / mindfulness', time: '21:00', notes: '10 min',        tags: ['mind'],       routine: true },
+  { label: '📚 Study',     title: 'Study session',            time: '',      notes: '',              tags: ['study'],      routine: false },
+  { label: '📖 Read',      title: 'Reading',                  time: '',      notes: '',              tags: ['reading'],    routine: false },
+]
 
 const PRIORITY_STYLE: Record<string, string> = {
   high: 'border-l-rose-500',
@@ -115,6 +144,13 @@ export default function PlannerPage() {
 
   const afterSave = () => { setEditor(null); load() }
 
+  const restoreRoutine = () => {
+    fetch('/api/planner/seed-day', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: dayKey(cursor), force: true }),
+    }).then(() => load()).catch(() => {})
+  }
+
   return (
     <div className="space-y-5">
       {/* header */}
@@ -180,6 +216,7 @@ export default function PlannerPage() {
           onAddAt={(time) => setEditor({ entry: null, scope: 'day', date: cursor, time })}
           onOpen={(e) => setEditor({ entry: e, scope: e.scope, date: cursor })}
           onToggle={toggleDone}
+          onRestoreRoutine={restoreRoutine}
         />
       ) : (
         <MonthView
@@ -206,13 +243,14 @@ export default function PlannerPage() {
 
 // ============ DAY VIEW (full-page planner) ============
 function DayView({
-  entries, cursor, onAddAt, onOpen, onToggle,
+  entries, cursor, onAddAt, onOpen, onToggle, onRestoreRoutine,
 }: {
   entries: Entry[]
   cursor: Date
   onAddAt: (time?: string) => void
   onOpen: (e: Entry) => void
   onToggle: (e: Entry) => void
+  onRestoreRoutine: () => void
 }) {
   const dayItems = entries.filter((e) => e.scope === 'day')
   const routine = dayItems.filter(isRoutine)
@@ -243,9 +281,14 @@ function DayView({
 
       {/* daily routine */}
       <div>
-        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-          <Repeat className="w-4 h-4 text-primary" /> Daily routine
-        </h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Repeat className="w-4 h-4 text-primary" /> Daily routine
+          </h3>
+          <button onClick={onRestoreRoutine} className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+            <Plus className="w-3 h-3" /> Add routine
+          </button>
+        </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {routine.map((e) => (
             <Card key={e.id} className={cn('p-3 flex items-center gap-3', e.status === 'done' && 'opacity-60')}>
@@ -447,7 +490,20 @@ function EntryRow({ entry, onOpen, onToggle }: { entry: Entry; onOpen: (e: Entry
           )}
           <span className={cn('font-medium', done && 'line-through text-muted-foreground')}>{entry.title}</span>
         </div>
-        {entry.details && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 whitespace-pre-wrap">{entry.details}</p>}
+        {(() => {
+          const { notes, checklist } = parseDetails(entry.details)
+          const doneCount = checklist.filter((c) => c.done).length
+          return (
+            <>
+              {notes && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 whitespace-pre-wrap">{notes}</p>}
+              {checklist.length > 0 && (
+                <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-medium text-muted-foreground">
+                  <ListChecks className="w-3 h-3" /> {doneCount}/{checklist.length}
+                </span>
+              )}
+            </>
+          )
+        })()}
         {entry.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {entry.tags.map((t) => (
@@ -472,36 +528,44 @@ function EntryEditor({
   const isEdit = !!initial.entry
   const scope = initial.scope
   const dateObj = initial.date
+  const initParsed = parseDetails(initial.entry?.details ?? '')
 
   const [title, setTitle] = useState(initial.entry?.title ?? '')
-  const [details, setDetails] = useState(initial.entry?.details ?? '')
+  const [notes, setNotes] = useState(initParsed.notes)
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(initParsed.checklist)
+  const [subInput, setSubInput] = useState('')
   const [startTime, setStartTime] = useState(initial.entry?.startTime ?? initial.time ?? '')
   const [priority, setPriority] = useState<string>(initial.entry?.priority ?? 'normal')
-  const [tags, setTags] = useState<string[]>(initial.entry?.tags ?? [])
+  const [tags, setTags] = useState<string[]>((initial.entry?.tags ?? []).filter((t) => t !== 'routine'))
+  const [repeatDaily, setRepeatDaily] = useState((initial.entry?.tags ?? []).includes('routine'))
   const [tagInput, setTagInput] = useState('')
   const [status, setStatus] = useState<string>(initial.entry?.status ?? 'pending')
   const [saving, setSaving] = useState(false)
   const [hwOpen, setHwOpen] = useState(false)
 
-  const addTag = (t: string) => {
-    const v = t.trim()
-    if (v && !tags.includes(v)) setTags([...tags, v])
-    setTagInput('')
-  }
+  const addTag = (t: string) => { const v = t.trim(); if (v && !tags.includes(v)) setTags([...tags, v]); setTagInput('') }
+  const addSub = (t: string) => { const v = t.trim(); if (v) setChecklist((c) => [...c, { text: v, done: false }]); setSubInput('') }
+  const onHandwriting = (r: HandwritingResult) => { if (r.text && r.text.trim()) setNotes((d) => (d ? `${d}\n${r.text}` : r.text!)) }
 
-  const onHandwriting = (r: HandwritingResult) => {
-    if (r.text && r.text.trim()) setDetails((d) => (d ? `${d}\n${r.text}` : r.text!))
+  const applyTemplate = (t: Template) => {
+    setTitle(t.title)
+    if (t.time) setStartTime(t.time)
+    if (t.notes) setNotes((n) => (n ? n : t.notes))
+    setTags((prev) => Array.from(new Set([...prev, ...t.tags])))
+    setRepeatDaily(t.routine)
   }
 
   const submit = async () => {
     if (!title.trim() || saving) return
     setSaving(true)
     try {
+      const details = serializeDetails(notes, checklist)
+      const finalTags = repeatDaily ? Array.from(new Set(['routine', ...tags])) : tags
       if (isEdit) {
         await fetch('/api/planner', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: initial.entry!.id, title, details, tags, priority, status,
+            id: initial.entry!.id, title, details, tags: finalTags, priority, status,
             startTime: scope === 'day' ? startTime : undefined,
           }),
         })
@@ -512,7 +576,7 @@ function EntryEditor({
           body: JSON.stringify({
             scope, date, title, details: details || undefined,
             startTime: scope === 'day' ? startTime || undefined : undefined,
-            priority, tags,
+            priority, tags: finalTags,
           }),
         })
       }
@@ -529,21 +593,22 @@ function EntryEditor({
     onSaved()
   }
 
-  const suggestions = knownTags.filter((t) => !tags.includes(t)).slice(0, 10)
+  const suggestions = knownTags.filter((t) => t !== 'routine' && !tags.includes(t)).slice(0, 10)
+  const doneCount = checklist.filter((c) => c.done).length
   const dateLabel = scope === 'month'
     ? dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto bg-background/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-background/70 backdrop-blur-sm"
       onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <Card className="w-full max-w-lg my-auto shadow-2xl">
+      <Card className="w-full max-w-2xl my-auto shadow-2xl">
         {/* header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
-            <h2 className="font-bold text-lg">
+            <h2 className="font-bold text-xl">
               {isEdit ? 'Edit' : 'New'} {scope === 'month' ? 'monthly goal' : 'plan'}
             </h2>
             <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -554,47 +619,61 @@ function EntryEditor({
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+          {/* quick templates */}
+          {!isEdit && scope === 'day' && (
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1 mb-2">
+                <Sparkles className="w-3 h-3" /> Quick add
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_TEMPLATES.map((t) => (
+                  <button
+                    key={t.label}
+                    onClick={() => applyTemplate(t)}
+                    className="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-border bg-muted/40 hover:bg-primary/10 hover:border-primary/40 transition-colors"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* title */}
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Title</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Title</label>
             <input
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={scope === 'month' ? 'e.g. Finish reading 2 books' : 'e.g. Study session — AMC geometry'}
-              className="mt-1 w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1.5 w-full px-3.5 py-3 rounded-xl bg-background border border-border text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
 
           {/* time + priority */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-2 gap-4">
             {scope === 'day' && (
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Time
-                </label>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> Time</label>
                 <input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
             )}
-            <div className={scope === 'day' ? '' : 'col-span-2'}>
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Flag className="w-3 h-3" /> Priority
-              </label>
-              <div className="mt-1 inline-flex rounded-lg border border-border p-0.5 w-full">
+            <div className={scope === 'day' ? '' : 'sm:col-span-2'}>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><Flag className="w-3 h-3" /> Priority</label>
+              <div className="mt-1.5 inline-flex rounded-xl border border-border p-0.5 w-full">
                 {PRIORITY_OPTS.map((o) => (
                   <button
                     key={o.v}
                     onClick={() => setPriority(o.v)}
-                    className={cn(
-                      'flex-1 text-xs font-medium py-1.5 rounded-md transition-colors',
-                      priority === o.v ? cn(o.cls, 'text-white') : 'text-muted-foreground hover:text-foreground'
-                    )}
+                    className={cn('flex-1 text-sm font-medium py-2 rounded-lg transition-colors',
+                      priority === o.v ? cn(o.cls, 'text-white') : 'text-muted-foreground hover:text-foreground')}
                   >
                     {o.label}
                   </button>
@@ -603,38 +682,78 @@ function EntryEditor({
             </div>
           </div>
 
-          {/* details + handwrite */}
+          {/* repeat daily */}
+          {scope === 'day' && (
+            <button
+              onClick={() => setRepeatDaily((v) => !v)}
+              className={cn('w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-colors text-left',
+                repeatDaily ? 'border-primary/40 bg-primary/10' : 'border-border bg-background hover:bg-muted/40')}
+            >
+              <span className={cn('w-9 h-5 rounded-full relative shrink-0 transition-colors', repeatDaily ? 'bg-primary' : 'bg-muted-foreground/30')}>
+                <span className={cn('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', repeatDaily ? 'left-[18px]' : 'left-0.5')} />
+              </span>
+              <span className="flex items-center gap-1.5 text-sm font-medium"><Repeat className="w-3.5 h-3.5" /> Repeat as daily routine</span>
+            </button>
+          )}
+
+          {/* notes + handwrite */}
           <div>
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <AlignLeft className="w-3 h-3" /> Details
-              </label>
-              <button
-                onClick={() => setHwOpen(true)}
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <Pen className="w-3 h-3" /> Handwrite
-              </button>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><AlignLeft className="w-3 h-3" /> Notes</label>
+              <button onClick={() => setHwOpen(true)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline"><Pen className="w-3 h-3" /> Handwrite</button>
             </div>
             <textarea
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              placeholder="Notes, checklist, anything…  (or use Handwrite)"
-              rows={4}
-              className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-border text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/40 whitespace-pre-wrap"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes, context, anything…  (or use Handwrite)"
+              rows={5}
+              className="mt-1.5 w-full px-3.5 py-3 rounded-xl bg-background border border-border text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/40 whitespace-pre-wrap"
             />
+          </div>
+
+          {/* checklist */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+              <ListChecks className="w-3 h-3" /> Checklist
+              {checklist.length > 0 && <span className="text-muted-foreground/70">· {doneCount}/{checklist.length}</span>}
+            </label>
+            <div className="mt-1.5 space-y-1.5">
+              {checklist.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 group">
+                  <button
+                    onClick={() => setChecklist((cl) => cl.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))}
+                    className={cn('w-4 h-4 rounded border-2 flex items-center justify-center shrink-0', c.done ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary')}
+                  >
+                    {c.done && <Check className="w-3 h-3 text-white" />}
+                  </button>
+                  <input
+                    value={c.text}
+                    onChange={(e) => setChecklist((cl) => cl.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                    className={cn('flex-1 bg-transparent text-sm focus:outline-none', c.done && 'line-through text-muted-foreground')}
+                  />
+                  <button onClick={() => setChecklist((cl) => cl.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-rose-500 opacity-0 group-hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  value={subInput}
+                  onChange={(e) => setSubInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSub(subInput) } }}
+                  placeholder="Add a checklist item…"
+                  className="flex-1 bg-transparent text-sm focus:outline-none py-1"
+                />
+              </div>
+            </div>
           </div>
 
           {/* tags */}
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-              <TagIcon className="w-3 h-3" /> Tags
-            </label>
-            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><TagIcon className="w-3 h-3" /> Tags</label>
+            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
               {tags.map((t) => (
                 <span key={t} className={cn('inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full', tagColor(t))}>
-                  {t}
-                  <button onClick={() => setTags(tags.filter((x) => x !== t))}><X className="w-3 h-3" /></button>
+                  {t}<button onClick={() => setTags(tags.filter((x) => x !== t))}><X className="w-3 h-3" /></button>
                 </span>
               ))}
               <input
@@ -642,15 +761,13 @@ function EntryEditor({
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput) } }}
                 placeholder="add tag…"
-                className="bg-transparent text-xs focus:outline-none px-1 py-1 min-w-[80px] flex-1"
+                className="bg-transparent text-xs focus:outline-none px-1 py-1 min-w-[90px] flex-1"
               />
             </div>
             {suggestions.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {suggestions.map((t) => (
-                  <button key={t} onClick={() => addTag(t)} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary">
-                    + {t}
-                  </button>
+                  <button key={t} onClick={() => addTag(t)} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary">+ {t}</button>
                 ))}
               </div>
             )}
@@ -659,40 +776,26 @@ function EntryEditor({
           {/* status (edit only) */}
           {isEdit && (
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={status === 'done'}
-                onChange={(e) => setStatus(e.target.checked ? 'done' : 'pending')}
-                className="w-4 h-4 accent-emerald-500"
-              />
+              <input type="checkbox" checked={status === 'done'} onChange={(e) => setStatus(e.target.checked ? 'done' : 'pending')} className="w-4 h-4 accent-emerald-500" />
               Mark as done
             </label>
           )}
         </div>
 
         {/* footer */}
-        <div className="flex items-center gap-2 px-5 py-4 border-t border-border">
+        <div className="flex items-center gap-2 px-6 py-4 border-t border-border">
           {isEdit && (
-            <Button variant="ghost" size="sm" onClick={del} disabled={saving} className="text-rose-500 hover:text-rose-600 gap-1.5">
-              <Trash2 className="w-4 h-4" /> Delete
-            </Button>
+            <Button variant="ghost" size="sm" onClick={del} disabled={saving} className="text-rose-500 hover:text-rose-600 gap-1.5"><Trash2 className="w-4 h-4" /> Delete</Button>
           )}
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
           <Button size="sm" onClick={submit} disabled={!title.trim() || saving} className="gap-1.5">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {isEdit ? 'Save' : 'Add'}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}{isEdit ? 'Save' : 'Add'}
           </Button>
         </div>
       </Card>
 
-      <HandwritingPad
-        open={hwOpen}
-        onClose={() => setHwOpen(false)}
-        onResult={onHandwriting}
-        textOnly
-        title="Handwrite details"
-      />
+      <HandwritingPad open={hwOpen} onClose={() => setHwOpen(false)} onResult={onHandwriting} textOnly title="Handwrite details" />
     </div>
   )
 }

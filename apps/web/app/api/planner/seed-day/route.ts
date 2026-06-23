@@ -8,12 +8,12 @@ export const dynamic = 'force-dynamic'
 // Marked with the reserved tag 'routine' so the UI can render them distinctly
 // and so seeding stays idempotent.
 const DEFAULT_ROUTINE = [
-  { title: 'Duolingo',                 time: '07:30', minutes: 15, tag: 'language' },
-  { title: 'Ball touches — set 1',     time: '08:00', minutes: 5,  tag: 'skill' },
-  { title: 'Investment review',        time: '12:30', minutes: 10, tag: 'investment' },
-  { title: 'Ball touches — set 2',     time: '15:00', minutes: 5,  tag: 'skill' },
-  { title: 'Ball touches — set 3',     time: '18:00', minutes: 5,  tag: 'skill' },
-  { title: 'Reflection / mindfulness', time: '21:00', minutes: 10, tag: 'mind' },
+  { title: 'Duolingo',                 time: '07:30', details: '15 min lesson', tag: 'language' },
+  { title: 'Workout — set 1',          time: '08:00', details: '5 min',         tag: 'fitness' },
+  { title: '$5 daily investment',      time: '09:00', details: 'Invest $5',     tag: 'investment' },
+  { title: 'Workout — set 2',          time: '12:30', details: '5 min',         tag: 'fitness' },
+  { title: 'Workout — set 3',          time: '18:00', details: '5 min',         tag: 'fitness' },
+  { title: 'Reflection / mindfulness', time: '21:00', details: '10 min',        tag: 'mind' },
 ]
 
 function parseDay(value: string): Date | null {
@@ -27,21 +27,28 @@ function parseDay(value: string): Date | null {
 export async function POST(request: NextRequest) {
   try {
     const userId = DANIEL_USER_ID
-    const body = (await request.json()) as { date?: string }
+    const body = (await request.json()) as { date?: string; force?: boolean }
     const anchor = parseDay(body.date ?? '')
     if (!anchor) return NextResponse.json({ error: 'date (YYYY-MM-DD) required' }, { status: 400 })
 
     const existing = await db.plannerEntry.findMany({
       where: { userId, scope: 'day', date: anchor },
-      select: { tags: true },
+      select: { title: true, tags: true },
     })
 
-    // Seed only when this day has never been seeded (no routine-tagged entry yet),
-    // so the user's later deletions on an already-seeded day are respected.
+    // Auto mode (force=false): seed only when this day has never been seeded,
+    // so later deletions on an already-seeded day are respected.
+    // Restore mode (force=true): add back any routine item missing by title.
+    const existingTitles = new Set(existing.map((e) => e.title))
     const alreadySeeded = existing.some((e) => e.tags.includes('routine'))
-    if (!alreadySeeded) {
+    const toCreate = body.force === true
+      ? DEFAULT_ROUTINE.filter((r) => !existingTitles.has(r.title))
+      : alreadySeeded ? [] : DEFAULT_ROUTINE
+
+    if (toCreate.length > 0) {
+      const base = existing.length
       await db.$transaction(
-        DEFAULT_ROUTINE.map((r, i) =>
+        toCreate.map((r, i) =>
           db.plannerEntry.create({
             data: {
               userId,
@@ -49,10 +56,10 @@ export async function POST(request: NextRequest) {
               date: anchor,
               title: r.title,
               startTime: r.time,
-              details: `${r.minutes} min`,
+              details: r.details,
               tags: ['routine', r.tag],
               priority: 'normal',
-              sortOrder: i,
+              sortOrder: base + i,
             },
           })
         )
