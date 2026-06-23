@@ -409,11 +409,11 @@ export default function FlashcardsPage() {
                 <select
                   value={selectedNoteId}
                   onChange={(e) => setSelectedNoteId(e.target.value)}
-                  className="w-full text-sm bg-background border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full text-sm bg-background text-foreground border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-ring"
                 >
-                  <option value="">Choose a note…</option>
+                  <option value="" style={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))' }}>Choose a note…</option>
                   {notes.map((n) => (
-                    <option key={n.id} value={n.id}>
+                    <option key={n.id} value={n.id} style={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))' }}>
                       {n.title}{n.subject ? ` (${n.subject})` : ''}
                     </option>
                   ))}

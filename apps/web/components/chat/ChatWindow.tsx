@@ -114,11 +114,11 @@ export function ChatWindow({ options, initialMode, resumeSessionId }: ChatWindow
               style={{
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                color: 'inherit',
+                color: 'hsl(var(--foreground))',
               }}
             >
               {MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
+                <option key={m.id} value={m.id} style={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))' }}>
                   {m.name} ({m.providerLabel}){m.badge ? ` · ${m.badge}` : ''}
                 </option>
               ))}

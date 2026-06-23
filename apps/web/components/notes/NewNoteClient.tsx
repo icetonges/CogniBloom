@@ -9,6 +9,7 @@ import {
 import { RichEditor, type RichEditorRef } from '@/components/notes/RichEditor'
 import { DocumentImport } from '@/components/notes/DocumentImport'
 import { cn } from '@/lib/utils'
+import { ModelCompare } from '@/components/chat/ModelCompare'
 import type { Note } from '@/hooks/useNotes'
 
 const SUBJECT_PRESETS = [
@@ -371,55 +372,26 @@ export function NewNoteClient() {
         </div>
       )}
 
-      {/* ── Two-column body ── */}
-      <div className="flex flex-1 gap-0 overflow-hidden">
+      {/* ── Single-column body ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto w-full px-4 sm:px-8 py-6 space-y-5">
 
-        {/* ════ LEFT: Editor column ════ */}
-        <div
-          className="flex flex-col flex-1 min-w-0 overflow-y-auto"
-          style={{ borderRight: '1px solid rgba(255,255,255,0.05)' }}
-        >
-          {/* Title input — large, document-style */}
-          <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-3">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Note title…"
-              disabled={isSaving}
-              autoFocus
-              className="w-full bg-transparent text-2xl md:text-3xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40"
-              style={{ color: 'inherit', lineHeight: '1.2' }}
-            />
-            {subject && (
-              <p className="mt-1 text-sm font-semibold text-primary/70">{subject}</p>
-            )}
-          </div>
+          {/* Title */}
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Note title…"
+            disabled={isSaving}
+            autoFocus
+            className="w-full bg-transparent text-3xl md:text-4xl font-black tracking-tight focus:outline-none placeholder:text-muted-foreground/40"
+            style={{ color: 'inherit', lineHeight: '1.2' }}
+          />
 
-          {/* Divider */}
-          <div className="mx-4 sm:mx-8 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-
-          {/* Rich editor — full-page feel */}
-          <div className="flex-1 px-2 sm:px-4 pb-4 sm:pb-8">
-            <RichEditor
-              ref={editorRef}
-              content={content}
-              onChange={setContent}
-              disabled={isSaving}
-              fullPage
-            />
-          </div>
-        </div>
-
-        {/* ════ RIGHT: Metadata + AI sidebar ════ */}
-        <div
-          className="hidden lg:flex flex-col w-80 xl:w-96 overflow-y-auto flex-shrink-0"
-          style={{ background: 'rgba(0,0,0,0.15)' }}
-        >
-          <div className="p-5 space-y-6">
-
-            {/* ── Subject ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-3">
+          {/* Subject (left) + Tags (right) */}
+          <div className="grid md:grid-cols-[1.5fr_1fr] gap-4">
+            {/* Subject */}
+            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
                 <BookOpen className="w-3.5 h-3.5" /> Subject
               </label>
               <input
@@ -429,17 +401,11 @@ export function NewNoteClient() {
                 placeholder="AMC Math, AP Chemistry…"
                 disabled={isSaving}
                 className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none transition-all"
-                style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  color: 'inherit',
-                }}
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: 'inherit' }}
               />
               <datalist id="subject-list">
                 {allSubjects.map((s) => <option key={s} value={s} />)}
               </datalist>
-
-              {/* Quick-pick chips */}
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {visibleSubjects.map((s) => (
                   <button
@@ -465,21 +431,14 @@ export function NewNoteClient() {
                   className="text-[11px] px-2.5 py-1 rounded-full font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center gap-1"
                   style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
                 >
-                  {showAllSubjects ? (
-                    <><ChevronDown className="w-3 h-3" /> Less</>
-                  ) : (
-                    <><ChevronRight className="w-3 h-3" /> More</>
-                  )}
+                  {showAllSubjects ? (<><ChevronDown className="w-3 h-3" /> Less</>) : (<><ChevronRight className="w-3 h-3" /> More</>)}
                 </button>
               </div>
             </div>
 
-            {/* Divider */}
-            <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-
-            {/* ── Tags ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-3">
+            {/* Tags */}
+            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
                 <Tag className="w-3.5 h-3.5" /> Tags
               </label>
               <input
@@ -488,14 +447,10 @@ export function NewNoteClient() {
                 placeholder="practice, exam, review…"
                 disabled={isSaving}
                 className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none transition-all"
-                style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  color: 'inherit',
-                }}
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: 'inherit' }}
               />
               {tagList.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
+                <div className="flex flex-wrap gap-1.5 mt-3">
                   {tagList.map((tag) => (
                     <span
                       key={tag}
@@ -508,124 +463,94 @@ export function NewNoteClient() {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Divider */}
-            <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          {/* Editor — stretched, document-style */}
+          <RichEditor
+            ref={editorRef}
+            content={content}
+            onChange={setContent}
+            disabled={isSaving}
+          />
 
-            {/* ── AI Teaser panel ── */}
+          {/* Editor Tips — below the editor */}
+          <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-2.5">Editor Tips</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {[
+                { key: '∑', tip: 'Open math input' },
+                { key: 'Ω', tip: 'Symbol picker' },
+                { key: 'Paste', tip: 'Drop/paste images directly' },
+                { key: '```', tip: 'Code block (type then space)' },
+                { key: '$$', tip: 'Math block (type then space)' },
+                { key: 'Ctrl+B', tip: 'Bold' },
+                { key: 'Ctrl+K', tip: 'Link' },
+              ].map(({ key, tip }) => (
+                <div key={key} className="flex items-center gap-2">
+                  <kbd
+                    className="text-[10px] px-1.5 py-0.5 rounded font-mono flex-shrink-0"
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    {key}
+                  </kbd>
+                  <span className="text-[11px] text-muted-foreground">{tip}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* AI Tutor — under the tips */}
+          <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.18)' }}>
             <div
-              className="rounded-2xl overflow-hidden"
-              style={{ background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.18)' }}
+              className="flex items-center gap-2.5 px-4 py-3"
+              style={{ borderBottom: '1px solid rgba(99,102,241,0.12)', background: 'rgba(99,102,241,0.08)' }}
             >
               <div
-                className="flex items-center gap-2.5 px-4 py-3"
-                style={{ borderBottom: '1px solid rgba(99,102,241,0.12)', background: 'rgba(99,102,241,0.08)' }}
+                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 10px rgba(99,102,241,0.4)' }}
               >
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 10px rgba(99,102,241,0.4)' }}
-                >
-                  <Bot className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold leading-none">AI Tutor</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Unlocks after saving</p>
-                </div>
+                <Bot className="w-4 h-4 text-white" />
               </div>
+              <div>
+                <p className="text-sm font-bold leading-none">AI Tutor</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Analyze this note, or ask & compare two models</p>
+              </div>
+            </div>
 
-              <div className="p-4">
+            <div className="p-4 space-y-5">
+              {/* Save & analyze */}
+              <div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Save your note and the AI tutor will instantly be able to:
+                  Save your note and the AI tutor will instantly generate:
                 </p>
-                <div className="space-y-2">
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
                   {AI_PREVIEWS.map(({ emoji, text }) => (
-                    <div key={text} className="flex items-center gap-2.5">
+                    <div key={text} className="flex items-center gap-2">
                       <span className="text-base leading-none">{emoji}</span>
                       <span className="text-xs text-muted-foreground">{text}</span>
                     </div>
                   ))}
                 </div>
-
                 <button
                   onClick={() => handleSave(true)}
                   disabled={isSaving || !title.trim()}
-                  className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-40 hover:scale-[1.02]"
-                  style={{
-                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                    boxShadow: '0 4px 14px rgba(99,102,241,0.4)',
-                  }}
+                  className="mt-4 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-40 hover:scale-[1.02]"
+                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 14px rgba(99,102,241,0.4)' }}
                 >
                   {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                   Save & Start AI Analysis
                 </button>
               </div>
-            </div>
 
-            {/* ── Tips ── */}
-            <div
-              className="rounded-xl p-4"
-              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
-            >
-              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Editor Tips</p>
-              <div className="space-y-1.5">
-                {[
-                  { key: '∑', tip: 'Open math input' },
-                  { key: 'Ω', tip: 'Symbol picker' },
-                  { key: 'Paste', tip: 'Drop/paste images directly' },
-                  { key: '```', tip: 'Code block (type then space)' },
-                  { key: '$$', tip: 'Math block (type then space)' },
-                ].map(({ key, tip }) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <kbd
-                      className="text-[10px] px-1.5 py-0.5 rounded font-mono flex-shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
-                    >
-                      {key}
-                    </kbd>
-                    <span className="text-[11px] text-muted-foreground">{tip}</span>
-                  </div>
-                ))}
+              {/* Ask & compare two models */}
+              <div className="pt-5 border-t" style={{ borderColor: 'rgba(99,102,241,0.12)' }}>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-3">Ask &amp; compare two models</p>
+                <ModelCompare />
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* ── Mobile bottom action bar (visible < lg) ── */}
-      <div
-        className="lg:hidden flex items-center gap-2 px-4 py-3 flex-shrink-0"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.3)' }}
-      >
-        {/* Subject chip for mobile */}
-        <div className="flex-1 overflow-x-auto flex gap-1.5 no-scrollbar">
-          {SUBJECT_PRESETS.slice(0, 8).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSubject(subject === s ? '' : s)}
-              className={cn(
-                'text-[11px] px-2.5 py-1 rounded-full font-semibold whitespace-nowrap transition-all flex-shrink-0',
-                subject === s ? 'text-white' : 'text-muted-foreground'
-              )}
-              style={
-                subject === s
-                  ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }
-                  : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }
-              }
-            >
-              {s}
-            </button>
-          ))}
         </div>
-        <button
-          onClick={() => handleSave(true)}
-          disabled={isSaving}
-          className="flex-shrink-0 flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl font-bold text-white transition-all disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 2px 10px rgba(99,102,241,0.4)' }}
-        >
-          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-          Save
-        </button>
       </div>
     </div>
   )

@@ -21,10 +21,10 @@ function ModelSelect({ value, onChange, label }: { value: string; onChange: (v: 
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full text-sm rounded-lg px-2.5 py-2 bg-background border border-border cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
+        className="mt-1 w-full text-sm rounded-lg px-2.5 py-2 bg-background text-foreground border border-border cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
       >
         {MODELS.map((m) => (
-          <option key={m.id} value={m.id}>
+          <option key={m.id} value={m.id} style={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))' }}>
             {m.name} · {m.providerLabel}{m.badge ? ` · ${m.badge}` : ''}
           </option>
         ))}
