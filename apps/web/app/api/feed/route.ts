@@ -99,10 +99,30 @@ export async function GET(request: NextRequest) {
     const refresh = searchParams.get('refresh') === 'true'
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
 
-    // ── History pages (page 2+): return older items from DB, no generation ────
+    // ── History pages (page 2+): older CategoryFeedItems + legacy DailyFeedItems ──
     if (page > 1) {
       const today = easternMidnight()
-      const skip = (page - 2) * PAGE_SIZE   // page 2 → offset 0 before today
+      const skip = (page - 2) * PAGE_SIZE
+
+      // Try CategoryFeedItem history first
+      try {
+        const history = await db.categoryFeedItem.findMany({
+          where: { createdAt: { lt: today } },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: PAGE_SIZE,
+        })
+        const total = await db.categoryFeedItem.count({ where: { createdAt: { lt: today } } })
+        if (history.length > 0) {
+          return NextResponse.json({
+            success: true,
+            data: history.map(mapCategoryItem),
+            meta: { page, pageSize: PAGE_SIZE, total, hasMore: skip + history.length < total },
+          })
+        }
+      } catch { /* table may not exist yet — fall through */ }
+
+      // Legacy fallback
       const history = await db.dailyFeedItem.findMany({
         where: { createdAt: { lt: today } },
         orderBy: { createdAt: 'desc' },
@@ -113,18 +133,47 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: history.map(mapDbItem),
-        meta: {
-          page,
-          pageSize: PAGE_SIZE,
-          total,
-          hasMore: skip + history.length < total,
-        },
+        meta: { page, pageSize: PAGE_SIZE, total, hasMore: skip + history.length < total },
       })
     }
 
-    // ── Page 1: today's feed ──────────────────────────────────────────────────
+    // ── Page 1: today's feed — prefer CategoryFeedItem (real sourced content) ──
     if (!refresh) {
       const today = easternMidnight()
+
+      // 1. Try the new ingested category feed (real sources)
+      try {
+        const sourced = await db.categoryFeedItem.findMany({
+          where: { createdAt: { gte: today } },
+          orderBy: { createdAt: 'desc' },
+          take: 60, // fetch more, then sample across categories
+        })
+        if (sourced.length >= 4) {
+          // Pick up to 2 items per category for a diverse mix, cap at PAGE_SIZE
+          const byCategory: Record<string, typeof sourced> = {}
+          for (const item of sourced) {
+            byCategory[item.category] ??= []
+            byCategory[item.category]!.push(item)
+          }
+          const diverse: typeof sourced = []
+          const groups = Object.values(byCategory)
+          let round = 0
+          while (diverse.length < PAGE_SIZE && round < 3) {
+            for (const group of groups) {
+              if (diverse.length >= PAGE_SIZE) break
+              if (group[round]) diverse.push(group[round]!)
+            }
+            round++
+          }
+          return NextResponse.json({
+            success: true,
+            data: diverse.map(mapCategoryItem),
+            meta: { cached: true, sourced: true, page: 1, generatedAt: sourced[0]?.createdAt },
+          })
+        }
+      } catch { /* CategoryFeedItem table not yet migrated — fall through */ }
+
+      // 2. Fall back to legacy DailyFeedItem cache
       const cached = await db.dailyFeedItem.findMany({
         where: { createdAt: { gte: today } },
         take: PAGE_SIZE,
@@ -138,7 +187,7 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      // Fallback: serve yesterday's items while we regenerate
+      // 3. Serve yesterday's items while we regenerate
       const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
       const recent = await db.dailyFeedItem.findMany({
         where: { createdAt: { gte: yesterday, lt: today } },
@@ -284,4 +333,47 @@ function mapDbItem(item: {
 
 function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5)
+}
+
+/** Map a CategoryFeedItem (new sourced system) → FeedItem (UI interface) */
+function mapCategoryItem(item: {
+  id: string
+  category: string
+  title: string
+  summary: string
+  url: string | null
+  emoji: string
+  difficulty: string
+  estimatedMinutes: number
+  contentType: string
+  isAiGenerated: boolean
+  createdAt: Date
+}): FeedItem {
+  // Map contentType → FeedItem type
+  const typeMap: Record<string, FeedItem['type']> = {
+    challenge: 'challenge',
+    vocabulary: 'vocabulary',
+    puzzle: 'puzzle',
+    tip: 'tip',
+    article: 'fact',
+    fact: 'fact',
+  }
+  // Capitalise category slug for display ("growth-mindset" → "Growth Mindset")
+  const subject = item.category
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+
+  return {
+    id: item.id,
+    type: typeMap[item.contentType] ?? 'fact',
+    emoji: item.emoji || '📚',
+    title: item.title,
+    body: item.summary,
+    subject,
+    difficulty: (item.difficulty as FeedItem['difficulty']) ?? 'medium',
+    estimatedMinutes: item.estimatedMinutes ?? 3,
+    sourceUrl: item.url ?? undefined,
+    createdAt: item.createdAt.toISOString(),
+  }
 }
