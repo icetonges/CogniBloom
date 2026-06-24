@@ -113,7 +113,7 @@ function Sidebar({
                   </span>
                 )}
               </Link>
-              {href === '/dashboard/notes/new' && (
+              {notesItem && (
                 <>
                   {/* Quick-create links — own ml-3 wrapper, same indent as SubjectGroupList items */}
                   <div className="ml-3 mt-0.5 space-y-0.5">
