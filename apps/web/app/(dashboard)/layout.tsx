@@ -26,6 +26,7 @@ const navItems = [
   { href: '/dashboard/analytics',       icon: Brain,         label: 'Analytics',         color: 'text-pink-400'   },
   { href: '/dashboard/knowledge-graph', icon: GitBranch,     label: 'Knowledge Graph',   color: 'text-teal-400'   },
   { href: '/dashboard/achievements',    icon: Medal,         label: 'Achievements',      color: 'text-yellow-400' },
+  { href: '/dashboard/award-wall',      icon: Trophy,        label: 'Award Wall',        color: 'text-amber-500'  },
   { href: '/dashboard/uploads',         icon: Upload,        label: 'Uploads',           color: 'text-orange-400' },
   { href: '/dashboard/settings',        icon: Settings,      label: 'Settings',          color: 'text-slate-400'  },
 ]

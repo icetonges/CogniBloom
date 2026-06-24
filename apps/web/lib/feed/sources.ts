@@ -410,6 +410,30 @@ export const FEED_SOURCES: SourceDef[] = [
   // ══════════════════════════════ WRITING ════════════════════════════════════
 
   {
+    id: 'write-practice-writing',
+    name: 'The Write Practice',
+    category: 'writing',
+    url: 'https://thewritepractice.com/feed/',
+    type: 'rss',
+    description: 'Practical writing craft articles and exercises for aspiring writers',
+    async pull() {
+      const items = await fetchRss('https://thewritepractice.com/feed/', ITEMS_PER_SOURCE)
+      return rssToItems(items, 'writing', '✍️', 'article', ['craft', 'writing-tips', 'storytelling'])
+    },
+  },
+  {
+    id: 'writing-forward',
+    name: 'Writing Forward',
+    category: 'writing',
+    url: 'https://www.writingforward.com/feed',
+    type: 'rss',
+    description: 'Creative writing prompts, tips, and exercises from Writing Forward',
+    async pull() {
+      const items = await fetchRss('https://www.writingforward.com/feed', ITEMS_PER_SOURCE)
+      return rssToItems(items, 'writing', '📝', 'article', ['creative-writing', 'prompts', 'craft'])
+    },
+  },
+  {
     id: 'ai-writing-prompt',
     name: 'AI Creative Writing Prompt',
     category: 'writing',
@@ -478,6 +502,30 @@ export const FEED_SOURCES: SourceDef[] = [
 
   // ══════════════════════════════ PUBLIC SPEAKING ═══════════════════════════════
 
+  {
+    id: 'six-minutes-speaking',
+    name: 'Six Minutes — Speaking Skills',
+    category: 'public-speaking',
+    url: 'https://sixminutes.dlugan.com/feed/',
+    type: 'rss',
+    description: 'In-depth public speaking and presentation skills from Six Minutes blog',
+    async pull() {
+      const items = await fetchRss('https://sixminutes.dlugan.com/feed/', ITEMS_PER_SOURCE)
+      return rssToItems(items, 'public-speaking', '🎤', 'article', ['speaking', 'presentation', 'communication'])
+    },
+  },
+  {
+    id: 'manner-of-speaking',
+    name: 'Manner of Speaking',
+    category: 'public-speaking',
+    url: 'https://mannerofspeaking.org/feed/',
+    type: 'rss',
+    description: 'Public speaking techniques and speech analysis — Toastmasters-style coaching',
+    async pull() {
+      const items = await fetchRss('https://mannerofspeaking.org/feed/', ITEMS_PER_SOURCE)
+      return rssToItems(items, 'public-speaking', '🎙️', 'article', ['speaking', 'toastmasters', 'rhetoric'])
+    },
+  },
   {
     id: 'ai-public-speaking',
     name: 'AI Speaking Coach',
