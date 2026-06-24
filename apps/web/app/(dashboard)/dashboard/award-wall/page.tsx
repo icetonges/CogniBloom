@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/button'
 import {
   Loader2, Plus, Trash2, Trophy, Star, Flame, Zap,
   BookOpen, Medal, Award, GraduationCap, X, Check,
-  ZoomIn, FileText, Sparkles,
-  Upload,
+  ZoomIn, FileText, Sparkles, Upload, Pencil, RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { extractCertificateInfo } from './actions'
@@ -32,11 +31,11 @@ interface CustomAward {
   title: string
   description: string
   emoji: string
-  date: string            // ISO string
-  fileData?: string       // base64 data URL (full file — images or small PDFs)
-  fileThumbnail?: string  // base64 PNG of first page (always generated for PDFs)
+  date: string
+  fileData?: string       // base64 data URL (full file — images / small PDFs)
+  fileThumbnail?: string  // base64 PNG rendered from first page
   fileName?: string
-  fileType?: string       // 'image' | 'pdf'
+  fileType?: 'image' | 'pdf'
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -48,7 +47,7 @@ const LEVEL_TITLES: Record<number, string> = {
 }
 const AWARD_EMOJIS = ['🏆','🥇','🎖️','🌟','⭐','🎓','🏅','💡','🚀','🔥','💎','🎯','📚','✍️','🧠','🎤']
 const STORAGE_KEY = 'cognibloom_award_wall'
-const MAX_PREVIEW_BYTES = 3 * 1024 * 1024  // 3 MB — store as data URL; above this show icon only
+const MAX_FULL_BYTES = 3 * 1024 * 1024  // store full file only if ≤ 3 MB
 
 const MILESTONE_BADGES = [
   { xp: 100,   emoji: '🌱', label: 'First 100 XP',     desc: 'Earned your first 100 XP' },
@@ -75,24 +74,317 @@ function loadCustomAwards(): CustomAward[] {
 }
 function saveCustomAwards(awards: CustomAward[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(awards)) }
-  catch { alert('Storage full — try removing some older awards to make room.') }
+  catch { alert('Storage full — try removing older awards to make room.') }
 }
 function fileToBase64(file: File): Promise<string> {
   return new Promise((res, rej) => {
-    const r = new FileReader()
-    r.onload = () => res(r.result as string)
-    r.onerror = rej
-    r.readAsDataURL(file)
+    const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(file)
   })
 }
 
-// ─── PDF / Image Viewer (Lightbox) ────────────────────────────────────────────
+// ─── File processor (shared between Add and Edit) ──────────────────────────────
+
+interface ProcessedFile {
+  fileData?: string
+  fileThumbnail?: string
+  fileName: string
+  fileType: 'image' | 'pdf'
+  extractedTitle?: string
+  extractedDescription?: string
+  extractedDate?: string
+}
+
+async function processUploadedFile(
+  file: File,
+  onProgress: (msg: string) => void
+): Promise<ProcessedFile> {
+  const isPdf = file.type === 'application/pdf'
+  const isImage = file.type.startsWith('image/')
+  if (!isPdf && !isImage) throw new Error('Upload a PDF or image file')
+
+  const result: ProcessedFile = {
+    fileName: file.name,
+    fileType: isPdf ? 'pdf' : 'image',
+  }
+
+  if (isImage) {
+    onProgress('Reading image…')
+    result.fileData = await fileToBase64(file)
+    result.fileThumbnail = result.fileData
+  } else {
+    // Generate thumbnail via server (renders actual page 1)
+    onProgress('Rendering certificate preview…')
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const res = await fetch('/api/award-wall/thumbnail', { method: 'POST', body: fd })
+      if (res.ok) {
+        const { thumbnail } = await res.json() as { thumbnail: string }
+        result.fileThumbnail = thumbnail
+      }
+    } catch { /* continue without thumbnail */ }
+
+    // Store full PDF only if small enough
+    if (file.size <= MAX_FULL_BYTES) {
+      result.fileData = await fileToBase64(file)
+    }
+  }
+
+  // AI extraction
+  onProgress('Extracting certificate info with AI…')
+  const fd2 = new FormData(); fd2.append('file', file)
+  const extracted = await extractCertificateInfo(fd2)
+  if (!extracted.error) {
+    result.extractedTitle = extracted.title
+    result.extractedDescription = extracted.description
+    result.extractedDate = extracted.date
+  }
+
+  return result
+}
+
+// ─── Award Modal (Add + Edit) ─────────────────────────────────────────────────
+
+function AwardModal({
+  initial,
+  onSave,
+  onClose,
+}: {
+  initial?: CustomAward
+  onSave: (award: Omit<CustomAward, 'id'>) => void
+  onClose: () => void
+}) {
+  const isEdit = !!initial
+
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [emoji, setEmoji] = useState(initial?.emoji ?? '🏆')
+  const [date, setDate] = useState(initial?.date ? initial.date.slice(0, 10) : new Date().toISOString().slice(0, 10))
+
+  const [fileThumbnail, setFileThumbnail] = useState<string | undefined>(initial?.fileThumbnail)
+  const [fileData, setFileData] = useState<string | undefined>(initial?.fileData)
+  const [fileName, setFileName] = useState<string | undefined>(initial?.fileName)
+  const [fileType, setFileType] = useState<'image' | 'pdf' | undefined>(initial?.fileType)
+
+  const [status, setStatus] = useState<'idle' | 'processing' | 'done' | 'error'>('idle')
+  const [statusMsg, setStatusMsg] = useState('')
+
+  const inputRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Set name/type immediately so the processing UI renders before async work starts
+    setFileName(file.name)
+    setFileType(file.type.startsWith('image/') ? 'image' : 'pdf')
+    setStatus('processing')
+    setStatusMsg('Reading file…')
+    try {
+      const processed = await processUploadedFile(file, setStatusMsg)
+      setFileThumbnail(processed.fileThumbnail)
+      setFileData(processed.fileData)
+      setFileName(processed.fileName)
+      setFileType(processed.fileType)
+      // Auto-fill only if fields are empty (don't overwrite manual edits)
+      if (processed.extractedTitle && !title) setTitle(processed.extractedTitle)
+      if (processed.extractedDescription && !description) setDescription(processed.extractedDescription)
+      if (processed.extractedDate && date === new Date().toISOString().slice(0, 10))
+        setDate(processed.extractedDate.slice(0, 10))
+      setStatus('done')
+      setStatusMsg('Certificate info extracted ✓')
+    } catch (err) {
+      setStatus('error')
+      setStatusMsg(String(err))
+    }
+  }, [title, description, date])
+
+  const clearFile = () => {
+    setFileThumbnail(undefined); setFileData(undefined)
+    setFileName(undefined); setFileType(undefined)
+    setStatus('idle'); setStatusMsg('')
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleSave = () => {
+    if (!title.trim()) return
+    onSave({
+      title: title.trim(),
+      description: description.trim(),
+      emoji,
+      date: new Date(date).toISOString(),
+      fileData,
+      fileThumbnail,
+      fileName,
+      fileType,
+    })
+    onClose()
+  }
+
+  const busy = status === 'processing'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl p-6 space-y-5 my-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            {isEdit
+              ? <><Pencil className="w-5 h-5 text-primary" /> Edit Award</>
+              : <><Award className="w-5 h-5 text-primary" /> Add Accomplishment</>
+            }
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+
+        {/* ── File / certificate upload ── */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+            Certificate / Document
+            <span className="ml-1 font-normal opacity-70">(PDF or image — AI auto-fills fields)</span>
+          </label>
+
+          {fileThumbnail ? (
+            /* Show rendered preview */
+            <div className="relative rounded-xl overflow-hidden border border-border bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={fileThumbnail} alt="Certificate preview" className="w-full max-h-64 object-contain" />
+              <div className="absolute top-2 right-2 flex gap-1">
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy}
+                  className="p-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-colors"
+                  title="Replace file"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={clearFile}
+                  className="p-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-colors"
+                  title="Remove file"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {fileName && <p className="text-[10px] text-muted-foreground px-3 py-1.5 truncate">📎 {fileName}</p>}
+            </div>
+          ) : fileName ? (
+            /* File selected but no thumbnail yet */
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                {busy
+                  ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  : <FileText className="w-4 h-4 text-red-500" />
+                }
+                <span className="text-sm font-medium truncate flex-1">{fileName}</span>
+                {!busy && <button onClick={clearFile} className="p-1 hover:bg-muted rounded"><X className="w-3.5 h-3.5" /></button>}
+              </div>
+              {statusMsg && (
+                <p className={cn('text-xs flex items-center gap-1.5',
+                  status === 'done' ? 'text-green-500' : status === 'error' ? 'text-amber-500' : 'text-muted-foreground'
+                )}>
+                  {busy && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {status === 'done' && <Sparkles className="w-3 h-3" />}
+                  {statusMsg}
+                </p>
+              )}
+            </div>
+          ) : (
+            /* Drop zone */
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              className="w-full border-2 border-dashed border-border hover:border-primary/50 rounded-xl p-8 flex flex-col items-center gap-3 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Upload className="w-8 h-8 opacity-50" />
+              <div className="text-center">
+                <p className="text-sm font-semibold">Click to upload certificate</p>
+                <p className="text-xs opacity-60 mt-0.5">PDF, JPG, PNG · max 20 MB</p>
+              </div>
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={handleFile} />
+        </div>
+
+        {/* Status message (when no file selected but processing) */}
+        {statusMsg && !fileName && (
+          <p className="text-xs text-muted-foreground">{statusMsg}</p>
+        )}
+
+        {/* ── Emoji ── */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Icon</label>
+          <div className="flex flex-wrap gap-2">
+            {AWARD_EMOJIS.map((e) => (
+              <button key={e} onClick={() => setEmoji(e)} className={cn(
+                'text-xl w-9 h-9 rounded-lg transition-all flex items-center justify-center',
+                emoji === e ? 'bg-primary/20 border-2 border-primary scale-110' : 'bg-muted hover:bg-muted/70 border border-transparent'
+              )}>{e}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Title ── */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+            Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            ref={inputRef}
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSave()}
+            placeholder="e.g. Introduction to Python Programming"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            maxLength={120}
+          />
+        </div>
+
+        {/* ── Description ── */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+            Description <span className="font-normal text-muted-foreground/70">(optional)</span>
+          </label>
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="e.g. Completed with distinction — CodeWizards"
+            rows={2}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+            maxLength={300}
+          />
+        </div>
+
+        {/* ── Date ── */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+
+        {/* ── Actions ── */}
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+          <Button onClick={handleSave} disabled={!title.trim() || busy} className="flex-1 gap-2">
+            <Check className="w-3.5 h-3.5" />
+            {isEdit ? 'Save Changes' : 'Add to Wall'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── File Viewer (lightbox) ───────────────────────────────────────────────────
 
 function FileViewer({ award, onClose }: { award: CustomAward; onClose: () => void }) {
-  const isPdf = award.fileType === 'pdf'
   const hasFullData = award.fileData && award.fileData !== 'pdf:too-large'
-  // Use full PDF data if available, else fall back to rendered thumbnail image
-  const hasData = hasFullData || !!award.fileThumbnail
+  const displaySrc = award.fileThumbnail ?? (hasFullData ? award.fileData : undefined)
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -101,45 +393,33 @@ function FileViewer({ award, onClose }: { award: CustomAward; onClose: () => voi
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-sm" onClick={onClose}>
-      {/* Top bar */}
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/95" onClick={onClose}>
       <div className="flex items-center justify-between px-4 py-3 bg-black/60 shrink-0" onClick={e => e.stopPropagation()}>
-        <div className="text-white">
-          <p className="font-bold text-sm">{award.emoji} {award.title}</p>
+        <div>
+          <p className="font-bold text-white text-sm">{award.emoji} {award.title}</p>
           {award.description && <p className="text-xs text-white/60 mt-0.5">{award.description}</p>}
           {award.fileName && <p className="text-[10px] text-white/40 mt-0.5">📎 {award.fileName}</p>}
         </div>
-        <button onClick={onClose} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
-          <X className="w-5 h-5" />
-        </button>
+        <button onClick={onClose} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"><X className="w-5 h-5" /></button>
       </div>
-
-      {/* Content */}
       <div className="flex-1 min-h-0 flex items-center justify-center p-4" onClick={e => e.stopPropagation()}>
-        {!hasData ? (
-          /* No preview */
+        {displaySrc ? (
+          award.fileType === 'pdf' && hasFullData ? (
+            <iframe src={award.fileData!} title={award.title}
+              className="w-full rounded-lg border border-white/10 bg-white"
+              style={{ maxWidth: '900px', height: '80vh' }} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={displaySrc} alt={award.title}
+              className="max-w-full object-contain rounded-xl shadow-2xl bg-white"
+              style={{ maxHeight: '80vh' }} />
+          )
+        ) : (
           <div className="text-center text-white/60 space-y-3">
             <FileText className="w-16 h-16 mx-auto opacity-40" />
-            <p className="font-semibold">{award.fileName}</p>
-            <p className="text-sm opacity-70">Preview not available.</p>
+            <p className="font-semibold">{award.fileName ?? 'No file'}</p>
+            <p className="text-sm opacity-70">No preview — re-upload the file to generate one.</p>
           </div>
-        ) : isPdf && hasFullData ? (
-          /* Full PDF embed in iframe */
-          <iframe
-            src={award.fileData!}
-            title={award.title}
-            className="w-full rounded-lg border border-white/10 bg-white"
-            style={{ maxWidth: '900px', height: '80vh' }}
-          />
-        ) : (
-          /* Rendered thumbnail image (for large PDFs or direct image uploads) */
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={(award.fileThumbnail ?? award.fileData)!}
-            alt={award.title}
-            className="max-w-full object-contain rounded-xl shadow-2xl border border-white/10 bg-white"
-            style={{ maxHeight: '80vh' }}
-          />
         )}
       </div>
     </div>
@@ -148,87 +428,97 @@ function FileViewer({ award, onClose }: { award: CustomAward; onClose: () => voi
 
 // ─── Award Card ───────────────────────────────────────────────────────────────
 
-function CustomAwardCard({ award, onDelete, onView }: {
-  award: CustomAward; onDelete: () => void; onView: () => void
+function AwardCard({ award, onDelete, onEdit, onView }: {
+  award: CustomAward
+  onDelete: () => void
+  onEdit: () => void
+  onView: () => void
 }) {
-  const hasFile = !!award.fileData || !!award.fileThumbnail
+  const thumbnail = award.fileThumbnail
+  const hasViewable = !!thumbnail || !!(award.fileData && award.fileData !== 'pdf:too-large')
   const isPdf = award.fileType === 'pdf'
-  // Prefer thumbnail (actual rendered page) for display; fall back to raw image data
-  const previewSrc = award.fileThumbnail ?? (award.fileData !== 'pdf:too-large' ? award.fileData : undefined)
 
   return (
-    <div className="group flex flex-col rounded-2xl overflow-hidden border border-primary/20 hover:border-primary/50 transition-all bg-gradient-to-br from-primary/5 to-secondary/5">
-      {/* Preview area */}
+    <div className="group flex flex-col rounded-2xl overflow-hidden border border-primary/20 hover:border-primary/40 transition-all">
+      {/* ── Visual preview ── */}
       <button
-        onClick={hasFile ? onView : undefined}
+        onClick={hasViewable ? onView : undefined}
+        disabled={!hasViewable}
         className={cn(
-          'relative w-full overflow-hidden transition-colors',
-          hasFile ? 'hover:opacity-90 cursor-pointer bg-white dark:bg-white/5' : 'cursor-default bg-muted/20'
+          'relative w-full overflow-hidden transition-all',
+          hasViewable ? 'cursor-pointer' : 'cursor-default',
         )}
         style={{ aspectRatio: '4/3' }}
-        disabled={!hasFile}
-        title={hasFile ? 'View document' : undefined}
       >
-        {previewSrc ? (
-          /* Actual rendered certificate image */
+        {thumbnail ? (
+          /* Actual rendered certificate page */
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={previewSrc}
+            src={thumbnail}
             alt={award.title}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-contain bg-white"
           />
         ) : (
-          /* No preview available */
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-            <span className="text-6xl">{award.emoji}</span>
+          /* No thumbnail — show emoji + upload prompt */
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">
+            <span className="text-5xl">{award.emoji}</span>
+            <p className="text-xs opacity-60 flex items-center gap-1">
+              <Upload className="w-3 h-3" /> Edit to add certificate
+            </p>
           </div>
         )}
 
         {/* Hover overlay */}
-        {hasFile && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+        {hasViewable && (
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
             <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
           </div>
         )}
 
-        {/* File type ribbon */}
+        {/* Ribbon */}
         {isPdf && (
           <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
             <FileText className="w-2.5 h-2.5" /> PDF
           </div>
         )}
+
+        {/* Action buttons — always visible on hover */}
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={e => { e.stopPropagation(); onEdit() }}
+            className="p-1.5 rounded-lg bg-black/60 hover:bg-primary text-white transition-colors"
+            title="Edit"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            className="p-1.5 rounded-lg bg-black/60 hover:bg-red-500 text-white transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </button>
 
-      {/* Info */}
-      <div className="flex items-start gap-3 p-4">
-        {!hasFile && <span className="text-2xl shrink-0">{award.emoji}</span>}
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm leading-tight">
-            {hasFile && <span className="mr-1">{award.emoji}</span>}
-            {award.title}
-          </p>
-          {award.description && (
-            <p className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{award.description}</p>
-          )}
-          <p className="text-[10px] text-primary/70 mt-1">{formatDate(award.date)}</p>
-        </div>
-        <button
-          onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-red-500/10 hover:text-red-500 text-muted-foreground shrink-0"
-          title="Remove"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+      {/* ── Info row ── */}
+      <div className="p-4 bg-card">
+        <p className="font-bold text-sm leading-tight">
+          <span className="mr-1">{award.emoji}</span>
+          {award.title}
+        </p>
+        {award.description && (
+          <p className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{award.description}</p>
+        )}
+        <p className="text-[10px] text-primary/70 mt-1.5">{formatDate(award.date)}</p>
       </div>
     </div>
   )
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Stat pill + badge components ────────────────────────────────────────────
 
-function StatPill({ icon, value, label, color }: {
-  icon: React.ReactNode; value: string | number; label: string; color: string
-}) {
+function StatPill({ icon, value, label, color }: { icon: React.ReactNode; value: string | number; label: string; color: string }) {
   return (
     <div className={cn('flex flex-col items-center gap-1 rounded-2xl px-5 py-4 border', color)}>
       <div className="text-2xl">{icon}</div>
@@ -245,9 +535,7 @@ function BadgeTrophy({ badge }: { badge: BadgeItem }) {
       <div className="text-center">
         <p className="text-sm font-bold leading-tight">{badge.name}</p>
         <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{badge.description}</p>
-        {badge.earnedAt && (
-          <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-medium">{formatDate(badge.earnedAt)}</p>
-        )}
+        {badge.earnedAt && <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-medium">{formatDate(badge.earnedAt)}</p>}
       </div>
     </div>
   )
@@ -255,8 +543,7 @@ function BadgeTrophy({ badge }: { badge: BadgeItem }) {
 
 function MilestoneBadge({ milestone, earned }: { milestone: typeof MILESTONE_BADGES[0]; earned: boolean }) {
   return (
-    <div className={cn(
-      'flex flex-col items-center gap-2 p-3 rounded-xl border transition-all',
+    <div className={cn('flex flex-col items-center gap-2 p-3 rounded-xl border transition-all',
       earned ? 'bg-primary/10 border-primary/40' : 'bg-muted/30 border-border opacity-50'
     )}>
       <span className="text-3xl">{milestone.emoji}</span>
@@ -266,367 +553,84 @@ function MilestoneBadge({ milestone, earned }: { milestone: typeof MILESTONE_BAD
   )
 }
 
-// ─── Add Award Modal ──────────────────────────────────────────────────────────
-
-function AddAwardModal({ onAdd, onClose }: {
-  onAdd: (award: Omit<CustomAward, 'id'>) => void
-  onClose: () => void
-}) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [emoji, setEmoji] = useState('🏆')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [fileData, setFileData] = useState<string | undefined>()
-  const [fileThumbnail, setFileThumbnail] = useState<string | undefined>()
-  const [fileName, setFileName] = useState<string | undefined>()
-  const [fileType, setFileType] = useState<'image' | 'pdf' | undefined>()
-
-  const [uploadState, setUploadState] = useState<'idle' | 'loading' | 'extracting' | 'done' | 'error'>('idle')
-  const [uploadMsg, setUploadMsg] = useState('')
-
-  const inputRef = useRef<HTMLInputElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => { inputRef.current?.focus() }, [])
-
-  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const isPdf = file.type === 'application/pdf'
-    const isImage = file.type.startsWith('image/')
-    if (!isPdf && !isImage) {
-      setUploadMsg('Please upload a PDF or image file')
-      setUploadState('error')
-      return
-    }
-
-    setUploadState('loading')
-    setUploadMsg('Reading file…')
-    setFileName(file.name)
-    setFileType(isPdf ? 'pdf' : 'image')
-
-    // For images: store full base64. For PDFs: generate thumbnail via server, store full only if small.
-    if (isImage) {
-      try {
-        const dataUrl = await fileToBase64(file)
-        setFileData(dataUrl)
-        setFileThumbnail(dataUrl)
-      } catch { /* ignore */ }
-    } else if (isPdf) {
-      // Generate rendered thumbnail (first page PNG) via server — always, regardless of size
-      setUploadMsg('Rendering PDF thumbnail…')
-      try {
-        const fd2 = new FormData()
-        fd2.append('file', file)
-        const res = await fetch('/api/award-wall/thumbnail', { method: 'POST', body: fd2 })
-        if (res.ok) {
-          const { thumbnail } = await res.json() as { thumbnail: string }
-          setFileThumbnail(thumbnail)
-        }
-      } catch { /* thumbnail generation failed — continue without it */ }
-
-      // Also store full PDF if small enough for inline viewing
-      if (file.size <= MAX_PREVIEW_BYTES) {
-        try {
-          const dataUrl = await fileToBase64(file)
-          setFileData(dataUrl)
-        } catch { /* ignore */ }
-      } else {
-        setFileData('pdf:too-large')
-      }
-    }
-
-    // Extract certificate info via AI
-    setUploadState('extracting')
-    setUploadMsg('Extracting certificate info with AI…')
-
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const result = await extractCertificateInfo(fd)
-
-      if (result.error) {
-        setUploadMsg(`Could not auto-fill: ${result.error}`)
-        setUploadState('error')
-      } else {
-        if (result.title) setTitle(result.title)
-        if (result.description) setDescription(result.description)
-        if (result.date) setDate(result.date.slice(0, 10))
-        setUploadMsg('Fields auto-filled from document ✓')
-        setUploadState('done')
-      }
-    } catch {
-      setUploadMsg('Extraction failed — fill in fields manually')
-      setUploadState('error')
-    }
-  }, [])
-
-  const handleSubmit = () => {
-    if (!title.trim()) return
-    onAdd({
-      title: title.trim(),
-      description: description.trim(),
-      emoji,
-      date: new Date(date).toISOString(),
-      fileData,
-      fileThumbnail,
-      fileName,
-      fileType,
-    })
-    onClose()
-  }
-
-  const removeFile = () => {
-    setFileData(undefined)
-    setFileThumbnail(undefined)
-    setFileName(undefined)
-    setFileType(undefined)
-    setUploadState('idle')
-    setUploadMsg('')
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
-  const isLoading = uploadState === 'loading' || uploadState === 'extracting'
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm overflow-y-auto">
-      <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl p-6 space-y-5 my-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <Award className="w-5 h-5 text-primary" /> Add Accomplishment
-          </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* ── File upload zone ── */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-            Certificate / Document
-            <span className="ml-1 font-normal opacity-70">(PDF or image — fields auto-filled by AI)</span>
-          </label>
-
-          {fileName ? (
-            /* File chosen */
-            <div className={cn(
-              'rounded-xl border p-4 space-y-2',
-              uploadState === 'done' ? 'border-green-500/40 bg-green-500/5'
-                : uploadState === 'error' ? 'border-amber-500/40 bg-amber-500/5'
-                : 'border-primary/30 bg-primary/5'
-            )}>
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  {isLoading
-                    ? <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
-                    : fileType === 'pdf'
-                      ? <FileText className="w-4 h-4 text-red-500 shrink-0" />
-                      : <span className="text-lg shrink-0">🖼️</span>
-                  }
-                  <span className="text-sm font-medium truncate">{fileName}</span>
-                </div>
-                {!isLoading && (
-                  <button onClick={removeFile} className="p-1 rounded hover:bg-muted text-muted-foreground shrink-0">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {uploadMsg && (
-                <div className={cn(
-                  'flex items-center gap-1.5 text-xs',
-                  uploadState === 'done' ? 'text-green-600 dark:text-green-400'
-                    : uploadState === 'error' ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-muted-foreground'
-                )}>
-                  {isLoading && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
-                  {uploadState === 'done' && <Sparkles className="w-3 h-3 shrink-0" />}
-                  {uploadMsg}
-                </div>
-              )}
-
-              {/* Certificate / image preview */}
-              {fileThumbnail && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={fileThumbnail} alt="Preview" className="w-full max-h-56 object-contain rounded-lg border border-border mt-1 bg-white" />
-              )}
-            </div>
-          ) : (
-            /* Drop zone */
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={isLoading}
-              className="w-full border-2 border-dashed border-border hover:border-primary/50 rounded-xl p-8 flex flex-col items-center gap-3 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Upload className="w-8 h-8 opacity-50" />
-              <div className="text-center">
-                <p className="text-sm font-semibold">Click to upload certificate</p>
-                <p className="text-xs opacity-60 mt-0.5">PDF, JPG, PNG, WEBP · max 10 MB</p>
-              </div>
-            </button>
-          )}
-
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/pdf,image/*"
-            className="hidden"
-            onChange={handleFile}
-          />
-        </div>
-
-        {/* ── Emoji ── */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Icon</label>
-          <div className="flex flex-wrap gap-2">
-            {AWARD_EMOJIS.map((e) => (
-              <button
-                key={e}
-                onClick={() => setEmoji(e)}
-                className={cn(
-                  'text-xl w-9 h-9 rounded-lg transition-all flex items-center justify-center',
-                  emoji === e
-                    ? 'bg-primary/20 border-2 border-primary scale-110'
-                    : 'bg-muted hover:bg-muted/70 border border-transparent'
-                )}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Title ── */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-            Title <span className="text-red-500">*</span>
-          </label>
-          <input
-            ref={inputRef}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            placeholder="e.g. Introduction to Python Programming"
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            maxLength={120}
-          />
-        </div>
-
-        {/* ── Description ── */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-            Description <span className="text-muted-foreground font-normal">(optional)</span>
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g. Completed with distinction — University of Cape Town"
-            rows={2}
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-            maxLength={300}
-          />
-        </div>
-
-        {/* ── Date ── */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
-        </div>
-
-        {/* ── Actions ── */}
-        <div className="flex gap-2 pt-1">
-          <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!title.trim() || isLoading} className="flex-1 gap-2">
-            <Check className="w-3.5 h-3.5" /> Add to Wall
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AwardWallPage() {
   const [data, setData] = useState<GamificationData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [customAwards, setCustomAwards] = useState<CustomAward[]>([])
-  const [showModal, setShowModal] = useState(false)
+  const [awards, setAwards] = useState<CustomAward[]>([])
+  const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; award: CustomAward } | null>(null)
   const [viewingAward, setViewingAward] = useState<CustomAward | null>(null)
 
   useEffect(() => {
-    fetch('/api/gamification')
-      .then((r) => r.json())
-      .then(({ data: d }) => setData(d))
-      .finally(() => setLoading(false))
+    fetch('/api/gamification').then(r => r.json()).then(({ data: d }) => setData(d)).finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { setCustomAwards(loadCustomAwards()) }, [])
+  useEffect(() => { setAwards(loadCustomAwards()) }, [])
 
   const addAward = useCallback((award: Omit<CustomAward, 'id'>) => {
-    const newAward: CustomAward = { ...award, id: Date.now().toString() }
-    const updated = [newAward, ...customAwards]
-    setCustomAwards(updated)
-    saveCustomAwards(updated)
-  }, [customAwards])
+    const updated = [{ ...award, id: Date.now().toString() }, ...awards]
+    setAwards(updated); saveCustomAwards(updated)
+  }, [awards])
+
+  const updateAward = useCallback((id: string, updates: Omit<CustomAward, 'id'>) => {
+    const updated = awards.map(a => a.id === id ? { ...updates, id } : a)
+    setAwards(updated); saveCustomAwards(updated)
+    // If currently viewing the edited award, refresh it
+    setViewingAward(prev => prev?.id === id ? { ...updates, id } : prev)
+  }, [awards])
 
   const deleteAward = useCallback((id: string) => {
-    const updated = customAwards.filter((a) => a.id !== id)
-    setCustomAwards(updated)
-    saveCustomAwards(updated)
-  }, [customAwards])
+    const updated = awards.filter(a => a.id !== id)
+    setAwards(updated); saveCustomAwards(updated)
+  }, [awards])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    )
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  )
 
   const levelTitle = data ? getLevelTitle(data.level) : 'Seedling'
-  const earnedMilestones = MILESTONE_BADGES.filter((m) => (data?.xp ?? 0) >= m.xp)
+  const earnedMilestones = MILESTONE_BADGES.filter(m => (data?.xp ?? 0) >= m.xp)
 
   return (
     <div className="space-y-8 pb-10">
-      {showModal && <AddAwardModal onAdd={addAward} onClose={() => setShowModal(false)} />}
+      {/* Modals */}
+      {modal?.mode === 'add' && (
+        <AwardModal onSave={addAward} onClose={() => setModal(null)} />
+      )}
+      {modal?.mode === 'edit' && (
+        <AwardModal
+          initial={modal.award}
+          onSave={updates => updateAward(modal.award.id, updates)}
+          onClose={() => setModal(null)}
+        />
+      )}
       {viewingAward && <FileViewer award={viewingAward} onClose={() => setViewingAward(null)} />}
 
       {/* ── Hero Banner ── */}
-      <div className="relative rounded-3xl overflow-hidden p-8"
-        style={{
-          background: 'linear-gradient(135deg,rgba(99,102,241,.15) 0%,rgba(139,92,246,.12) 50%,rgba(236,72,153,.08) 100%)',
-          border: '1px solid rgba(99,102,241,.25)',
-        }}
-      >
+      <div className="relative rounded-3xl overflow-hidden p-8" style={{
+        background: 'linear-gradient(135deg,rgba(99,102,241,.15) 0%,rgba(139,92,246,.12) 50%,rgba(236,72,153,.08) 100%)',
+        border: '1px solid rgba(99,102,241,.25)',
+      }}>
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10"
           style={{ background: 'radial-gradient(circle,#8b5cf6,transparent)', transform: 'translate(30%,-30%)' }} />
-
         <div className="relative flex flex-col sm:flex-row items-center gap-6">
           <div className="relative shrink-0">
             <div className="w-24 h-24 rounded-full flex items-center justify-center text-white font-black text-4xl shadow-2xl"
-              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 0 40px rgba(99,102,241,.5)' }}>
-              D
-            </div>
+              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 0 40px rgba(99,102,241,.5)' }}>D</div>
             {data && (
               <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm font-black border-2 border-card shadow">
                 {data.level}
               </div>
             )}
           </div>
-
           <div className="text-center sm:text-left">
             <h1 className="text-4xl font-black tracking-tight">Daniel&apos;s Award Wall</h1>
             <p className="text-primary font-bold text-lg mt-0.5">{levelTitle}</p>
             <p className="text-muted-foreground text-sm mt-1">Every badge earned, every milestone reached — all in one place.</p>
           </div>
-
           {data && (
             <div className="sm:ml-auto flex gap-3 shrink-0 flex-wrap justify-center">
               <StatPill icon={<Zap className="w-5 h-5 text-primary" />} value={data.xp.toLocaleString()} label="Total XP" color="border-primary/20 bg-primary/5" />
@@ -635,7 +639,6 @@ export default function AwardWallPage() {
             </div>
           )}
         </div>
-
         {data && (
           <div className="relative mt-6">
             <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
@@ -656,35 +659,36 @@ export default function AwardWallPage() {
           <div className="flex items-center gap-3">
             <GraduationCap className="w-5 h-5 text-secondary" />
             <h2 className="text-xl font-bold">Certificates &amp; Accomplishments</h2>
-            {customAwards.length > 0 && (
-              <span className="text-sm text-muted-foreground">{customAwards.length} award{customAwards.length !== 1 ? 's' : ''}</span>
+            {awards.length > 0 && (
+              <span className="text-sm text-muted-foreground">{awards.length} award{awards.length !== 1 ? 's' : ''}</span>
             )}
           </div>
-          <Button size="sm" onClick={() => setShowModal(true)} className="gap-2">
+          <Button size="sm" onClick={() => setModal({ mode: 'add' })} className="gap-2">
             <Plus className="w-3.5 h-3.5" /> Add Award
           </Button>
         </div>
 
-        {customAwards.length === 0 ? (
+        {awards.length === 0 ? (
           <Card className="p-8 text-center space-y-3 border-dashed">
             <p className="text-5xl">🏅</p>
             <div>
               <p className="font-semibold">Your award wall is empty</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Upload a PDF or photo of any certificate — AI will auto-fill the title, description, and date for you.
+                Upload any certificate PDF or photo — AI reads it and fills in the details automatically.
               </p>
             </div>
-            <Button variant="outline" onClick={() => setShowModal(true)} className="gap-2">
+            <Button variant="outline" onClick={() => setModal({ mode: 'add' })} className="gap-2">
               <Plus className="w-3.5 h-3.5" /> Add Your First Award
             </Button>
           </Card>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customAwards.map((award) => (
-              <CustomAwardCard
+            {awards.map(award => (
+              <AwardCard
                 key={award.id}
                 award={award}
                 onDelete={() => deleteAward(award.id)}
+                onEdit={() => setModal({ mode: 'edit', award })}
                 onView={() => setViewingAward(award)}
               />
             ))}
@@ -701,7 +705,7 @@ export default function AwardWallPage() {
             <span className="text-sm text-muted-foreground">{data.earnedBadges.length} earned</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {data.earnedBadges.map((badge) => <BadgeTrophy key={badge.id} badge={badge} />)}
+            {data.earnedBadges.map(badge => <BadgeTrophy key={badge.id} badge={badge} />)}
           </div>
         </section>
       )}
@@ -722,9 +726,7 @@ export default function AwardWallPage() {
           <span className="text-sm text-muted-foreground">{earnedMilestones.length}/{MILESTONE_BADGES.length} reached</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-          {MILESTONE_BADGES.map((m) => (
-            <MilestoneBadge key={m.xp} milestone={m} earned={(data?.xp ?? 0) >= m.xp} />
-          ))}
+          {MILESTONE_BADGES.map(m => <MilestoneBadge key={m.xp} milestone={m} earned={(data?.xp ?? 0) >= m.xp} />)}
         </div>
       </section>
 
