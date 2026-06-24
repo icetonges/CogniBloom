@@ -6,6 +6,9 @@ import { Card } from '@/components/ui/card'
 import { Upload, File, Loader2, CheckCircle2, X, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// Vercel serverless body limit — files above this go via Vercel Blob direct upload
+const DIRECT_UPLOAD_THRESHOLD = 4 * 1024 * 1024  // 4 MB
+
 interface UploadedFile {
   id: string
   filename: string
@@ -31,13 +34,10 @@ export function FileUpload({ noteId, onComplete }: FileUploadProps) {
       setError('Unsupported file type. Please upload a PDF, TXT, or MD file.')
       return
     }
-    // Vercel serverless functions enforce a 4.5 MB request-body limit at the
-    // infrastructure level — this client check prevents the cryptic 413 error.
-    if (file.size > 4 * 1024 * 1024) {
-      setError(
-        `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). ` +
-        'Maximum is 4 MB. For larger PDFs, try compressing with Smallpdf or splitting into chapters.'
-      )
+    // No hard upper limit — we route large files through Vercel Blob.
+    // The practical cap is 50 MB (configured in /api/uploads/blob-token).
+    if (file.size > 50 * 1024 * 1024) {
+      setError('File too large. Maximum is 50 MB.')
       return
     }
 
@@ -45,23 +45,66 @@ export function FileUpload({ noteId, onComplete }: FileUploadProps) {
     setError(null)
     setUploaded(null)
 
-    const formData = new FormData()
-    formData.append('file', file)
-    if (noteId) formData.append('noteId', noteId)
-
     try {
-      const res = await fetch('/api/uploads', { method: 'POST', body: formData })
-      // Guard: Vercel returns a plain-text HTML 413 page, not JSON
-      let json: { success: boolean; data: UploadedFile; error?: string } = { success: false, data: null! }
-      try {
-        json = await res.json() as typeof json
-      } catch {
-        if (res.status === 413) {
-          throw new Error('File too large — the server rejected it. Max 4 MB.')
+      let json: { success: boolean; data: UploadedFile; error?: string }
+
+      if (file.size > DIRECT_UPLOAD_THRESHOLD) {
+        // ── Large file: upload directly to Vercel Blob, then process ──────
+        // Dynamic import so the blob client code is not bundled for small uploads
+        const { upload } = await import('@vercel/blob/client')
+
+        let blobUrl: string
+        try {
+          const blob = await upload(file.name, file, {
+            access: 'public',
+            handleUploadUrl: '/api/uploads/blob-token',
+          })
+          blobUrl = blob.url
+        } catch (blobErr) {
+          // Blob not set up yet — show a clear setup message
+          const msg = String(blobErr)
+          if (msg.includes('503') || msg.includes('not configured') || msg.includes('BLOB_READ_WRITE_TOKEN')) {
+            throw new Error(
+              'Large-file upload requires Vercel Blob. ' +
+              'Go to vercel.com → your project → Storage → Create a Blob store, ' +
+              'then redeploy. For now, use a PDF compressed under 4 MB.'
+            )
+          }
+          throw blobErr
         }
-        throw new Error(`Server error (HTTP ${res.status}). Please try again.`)
+
+        // Tell the server to download from blob and process
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blobUrl,
+            filename: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            noteId: noteId ?? undefined,
+          }),
+        })
+        json = await res.json() as typeof json
+        if (!res.ok) throw new Error(json.error ?? 'Processing failed')
+
+      } else {
+        // ── Small file: standard binary multipart upload ──────────────────
+        const formData = new FormData()
+        formData.append('file', file)
+        if (noteId) formData.append('noteId', noteId)
+
+        const res = await fetch('/api/uploads', { method: 'POST', body: formData })
+        // Guard: Vercel returns a plain-text HTML 413 on body-size violation
+        try {
+          json = await res.json() as typeof json
+        } catch {
+          if (res.status === 413) throw new Error('File too large — server rejected it. Try compressing the PDF.')
+          throw new Error(`Server error (HTTP ${res.status}). Please try again.`)
+        }
+        if (!res.ok) throw new Error(json.error ?? 'Upload failed')
       }
-      if (!res.ok) throw new Error(json.error ?? 'Upload failed')
+
       setUploaded(json.data)
       onComplete?.(json.data)
     } catch (err) {
@@ -109,7 +152,7 @@ export function FileUpload({ noteId, onComplete }: FileUploadProps) {
           <div className="flex flex-col items-center gap-2">
             <Upload className="w-8 h-8 text-muted-foreground" />
             <p className="text-sm font-medium">Drop a file here or click to browse</p>
-            <p className="text-xs text-muted-foreground">PDF, TXT, or Markdown · max 4 MB</p>
+            <p className="text-xs text-muted-foreground">PDF, TXT, or Markdown · up to 50 MB</p>
             <p className="text-xs text-primary">Text is extracted and added to your AI knowledge base</p>
           </div>
         )}

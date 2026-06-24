@@ -126,10 +126,115 @@ function parsePagedOutput(raw: string): PageContent[] {
 }
 
 
-// POST /api/uploads — accepts multipart form with a file
+/**
+ * Shared processing logic — used by both upload paths (binary form + blob URL).
+ */
+async function processBuffer(
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+  fileSize: number,
+  noteId: string | null,
+  userId: string,
+): Promise<NextResponse> {
+  let pages: PageContent[] = []
+  let extractedText = ''
+
+  if (mimeType === 'application/pdf') {
+    pages = await extractPdfPages(buffer)
+    extractedText = pages.map(p => p.text).join('\n\n')
+  } else {
+    extractedText = buffer.toString('utf-8')
+    pages = [{ pageIndex: 0, text: extractedText }]
+  }
+
+  if (!extractedText.trim()) {
+    return NextResponse.json({ error: 'Could not extract text from file' }, { status: 422 })
+  }
+
+  const upload = await db.upload.create({
+    data: {
+      userId,
+      noteId: noteId ?? undefined,
+      filename,
+      mimeType,
+      fileSize,
+      fileType: mimeType === 'application/pdf' ? 'pdf' : 'text',
+      r2Url: `local://${Date.now()}_${filename}`,
+      status: 'processing',
+      extractedText,
+      extractedMetadata: { pageCount: pages.length },
+    },
+  })
+
+  const isPdf = mimeType === 'application/pdf'
+  after(async () => {
+    await embedUpload(upload.id, pages)
+    if (isPdf) await embedFigures(upload.id, buffer, pages)
+  })
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      id: upload.id,
+      filename: upload.filename,
+      fileSize: upload.fileSize,
+      status: 'processing',
+      charsExtracted: extractedText.length,
+      pageCount: pages.length,
+    },
+  }, { status: 201 })
+}
+
+/**
+ * POST /api/uploads
+ *
+ * Accepts two request shapes:
+ *
+ * 1. multipart/form-data { file }
+ *    — standard path for files ≤ 4 MB (Vercel serverless body limit)
+ *
+ * 2. application/json { blobUrl, filename, fileSize, mimeType, noteId? }
+ *    — large-file path: browser already uploaded to Vercel Blob; server
+ *      downloads from the blob URL (no body-size constraint) and processes.
+ */
 export async function POST(request: NextRequest) {
   try {
     const userId = DANIEL_USER_ID
+    const contentType = request.headers.get('content-type') ?? ''
+
+    // ── Path 2: process a file already in Vercel Blob ──────────────────────
+    if (contentType.includes('application/json')) {
+      const { blobUrl, filename, fileSize, mimeType, noteId } =
+        await request.json() as {
+          blobUrl: string; filename: string; fileSize: number
+          mimeType: string; noteId?: string
+        }
+
+      if (!blobUrl || !filename) {
+        return NextResponse.json({ error: 'blobUrl and filename required' }, { status: 400 })
+      }
+      if (!ALLOWED_TYPES.includes(mimeType)) {
+        return NextResponse.json({ error: 'Unsupported file type' }, { status: 415 })
+      }
+
+      // Download from Vercel Blob — no size restriction here
+      const blobRes = await fetch(blobUrl)
+      if (!blobRes.ok) {
+        return NextResponse.json({ error: 'Could not download blob' }, { status: 502 })
+      }
+      const buffer = Buffer.from(await blobRes.arrayBuffer())
+
+      // Delete the blob after downloading — we don't need it anymore
+      try {
+        const { del } = await import('@vercel/blob')
+        await del(blobUrl)
+      } catch { /* non-critical — blob will expire on its own */ }
+
+      return processBuffer(buffer, filename, mimeType, fileSize, noteId ?? null, userId)
+    }
+
+    // ── Path 1: binary multipart upload (≤ 4 MB) ───────────────────────────
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const noteId = formData.get('noteId') as string | null
@@ -137,85 +242,20 @@ export async function POST(request: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024} MB)` },
+        { error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024} MB). Use the large-file upload path.` },
         { status: 413 }
       )
     }
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        { error: 'Unsupported file type. Allowed: PDF, TXT, MD' },
-        { status: 415 }
-      )
+      return NextResponse.json({ error: 'Unsupported file type. Allowed: PDF, TXT, MD' }, { status: 415 })
     }
 
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-    let pages: PageContent[] = []
-    let extractedText = ''
+    const buffer = Buffer.from(await file.arrayBuffer())
+    return processBuffer(buffer, file.name, file.type, file.size, noteId, userId)
 
-    if (file.type === 'application/pdf') {
-      pages = await extractPdfPages(buffer)
-      extractedText = pages.map(p => p.text).join('\n\n')
-    } else {
-      // TXT / Markdown — treat as single page
-      extractedText = buffer.toString('utf-8')
-      pages = [{ pageIndex: 0, text: extractedText }]
-    }
-
-    if (!extractedText.trim()) {
-      return NextResponse.json(
-        { error: 'Could not extract text from file' },
-        { status: 422 }
-      )
-    }
-
-    // Persist the upload record immediately — embedding happens in background
-    const upload = await db.upload.create({
-      data: {
-        userId,
-        noteId: noteId ?? undefined,
-        filename: file.name,
-        mimeType: file.type,
-        fileSize: file.size,
-        fileType: file.type === 'application/pdf' ? 'pdf' : 'text',
-        r2Url: `local://${Date.now()}_${file.name}`, // placeholder until R2 is wired
-        status: 'processing',
-        extractedText,
-        extractedMetadata: { pageCount: pages.length },
-      },
-    })
-
-    // Run chunking + embedding AFTER the HTTP response is sent.
-    // after() callbacks still respect maxDuration (300 s above) — no timeout risk.
-    // Errors are persisted to the DB (status: 'failed') so the uploads list can
-    // surface them without needing to stay in the request window.
-    const isPdf = file.type === 'application/pdf'
-    after(async () => {
-      await embedUpload(upload.id, pages)
-      if (isPdf) {
-        await embedFigures(upload.id, buffer, pages)
-      }
-    })
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: upload.id,
-        filename: upload.filename,
-        fileSize: upload.fileSize,
-        // Embedding is async — the actual status will become 'ready' or 'failed'
-        // once the background job completes. The uploads list polls GET /api/uploads.
-        status: 'processing',
-        charsExtracted: extractedText.length,
-        pageCount: pages.length,
-      },
-    }, { status: 201 })
   } catch (error) {
     console.error('[POST /api/uploads]', error)
-    return NextResponse.json(
-      { error: 'Upload failed: ' + String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Upload failed: ' + String(error) }, { status: 500 })
   }
 }
 
