@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
-  CalendarDays,
+  CalendarDays, BookMarked, FileText,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -112,9 +112,32 @@ function Sidebar({
                 )}
               </Link>
               {href === '/dashboard/notes/new' && (
-                <Suspense fallback={null}>
-                  <SubjectGroupList />
-                </Suspense>
+                <>
+                  {/* Quick-create links — own ml-3 wrapper, same indent as SubjectGroupList items */}
+                  <div className="ml-3 mt-0.5 space-y-0.5">
+                    <Link
+                      href="/dashboard/notes/new?template=reflection"
+                      onClick={onClose}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors"
+                    >
+                      <BookMarked className="w-3.5 h-3.5 text-primary shrink-0" />
+                      Daily Reflection
+                    </Link>
+                    <Link
+                      href="/dashboard/notes/new"
+                      onClick={onClose}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5 shrink-0" />
+                      Regular Note
+                    </Link>
+                    <div className="h-px mx-1 my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                  </div>
+                  {/* SubjectGroupList has its own ml-3 — not nested inside the div above */}
+                  <Suspense fallback={null}>
+                    <SubjectGroupList />
+                  </Suspense>
+                </>
               )}
             </div>
           )
