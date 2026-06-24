@@ -171,6 +171,7 @@ export function NewNoteClient() {
   const [content, setContent] = useState('')
   const [subject, setSubject] = useState('')
   const [tags, setTags] = useState('')
+  const [isReflection, setIsReflection] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [existingSubjects, setExistingSubjects] = useState<string[]>([])
@@ -197,6 +198,7 @@ export function NewNoteClient() {
       setSubject(tpl.subject)
       setTags(tpl.tags)
       setContent(tpl.html)
+      setIsReflection(true)
       setTimeout(() => editorRef.current?.setContent(tpl.html), 100)
       return
     }
@@ -296,6 +298,7 @@ export function NewNoteClient() {
     setSubject(tpl.subject)
     setTags(tpl.tags)
     setContent(tpl.html)
+    setIsReflection(true)
     setTimeout(() => editorRef.current?.setContent(tpl.html), 50)
   }, [title, content])
 
@@ -545,81 +548,127 @@ export function NewNoteClient() {
             style={{ color: 'inherit', lineHeight: '1.2' }}
           />
 
-          {/* Subject (left) + Tags (right) */}
-          <div className="grid md:grid-cols-[1.5fr_1fr] gap-4">
-            {/* Subject */}
-            <div className="cb-field-card rounded-2xl p-4">
-              <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
-                <BookOpen className="w-3.5 h-3.5" /> Subject
-              </label>
-              <input
-                list="subject-list"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="AMC Math, AP Chemistry…"
-                disabled={isSaving}
-                className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none"
-              />
-              <datalist id="subject-list">
-                {allSubjects.map((s) => <option key={s} value={s} />)}
-              </datalist>
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {visibleSubjects.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSubject(subject === s ? '' : s)}
-                    className={cn(
-                      'text-[11px] px-2.5 py-1 rounded-full font-semibold transition-all',
-                      subject === s ? 'text-white' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                    style={
-                      subject === s
-                        ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 2px 8px rgba(99,102,241,0.35)' }
-                        : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }
-                    }
+          {/* Subject + Tags — OR motivational card for Daily Reflection */}
+          {isReflection ? (
+            /* ── Daily Reflection motivational card ── */
+            <div
+              className="rounded-2xl p-5 relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.07), rgba(139,92,246,0.07))',
+                border: '1px solid rgba(99,102,241,0.22)',
+              }}
+            >
+              {/* decorative background glows */}
+              <div className="pointer-events-none absolute -top-6 -right-6 w-32 h-32 rounded-full opacity-10"
+                style={{ background: 'radial-gradient(circle, #a78bfa, transparent)' }} />
+              <div className="pointer-events-none absolute -bottom-4 -left-4 w-24 h-24 rounded-full opacity-8"
+                style={{ background: 'radial-gradient(circle, #6366f1, transparent)' }} />
+
+              <p className="text-sm font-semibold leading-relaxed mb-4" style={{ color: '#c4b5fd' }}>
+                Successful students are not magic. They usually do small things every day:
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { emoji: '🚀', text: 'I try.' },
+                  { emoji: '🔍', text: 'I notice my mistakes.' },
+                  { emoji: '🤔', text: 'I ask why.' },
+                  { emoji: '🔧', text: 'I fix one thing.' },
+                  { emoji: '📖', text: 'I review a little.' },
+                  { emoji: '🌅', text: 'I come back tomorrow.' },
+                ].map(({ emoji, text }) => (
+                  <div
+                    key={text}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
                   >
-                    {s}
-                  </button>
+                    <span className="text-lg leading-none">{emoji}</span>
+                    <span className="text-xs font-semibold text-muted-foreground">{text}</span>
+                  </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => setShowAllSubjects((v) => !v)}
-                  className="text-[11px] px-2.5 py-1 rounded-full font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center gap-1"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-                >
-                  {showAllSubjects ? (<><ChevronDown className="w-3 h-3" /> Less</>) : (<><ChevronRight className="w-3 h-3" /> More</>)}
-                </button>
+              </div>
+
+              <p className="text-[11px] text-right mt-4 font-medium" style={{ color: '#a78bfa' }}>
+                That&apos;s you. Keep going. 💪
+              </p>
+            </div>
+          ) : (
+            /* ── Standard Subject + Tags grid ── */
+            <div className="grid md:grid-cols-[1.5fr_1fr] gap-4">
+              {/* Subject */}
+              <div className="cb-field-card rounded-2xl p-4">
+                <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
+                  <BookOpen className="w-3.5 h-3.5" /> Subject
+                </label>
+                <input
+                  list="subject-list"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="AMC Math, AP Chemistry…"
+                  disabled={isSaving}
+                  className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none"
+                />
+                <datalist id="subject-list">
+                  {allSubjects.map((s) => <option key={s} value={s} />)}
+                </datalist>
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {visibleSubjects.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSubject(subject === s ? '' : s)}
+                      className={cn(
+                        'text-[11px] px-2.5 py-1 rounded-full font-semibold transition-all',
+                        subject === s ? 'text-white' : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      style={
+                        subject === s
+                          ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 2px 8px rgba(99,102,241,0.35)' }
+                          : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }
+                      }
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSubjects((v) => !v)}
+                    className="text-[11px] px-2.5 py-1 rounded-full font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center gap-1"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                  >
+                    {showAllSubjects ? (<><ChevronDown className="w-3 h-3" /> Less</>) : (<><ChevronRight className="w-3 h-3" /> More</>)}
+                  </button>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="cb-field-card rounded-2xl p-4">
+                <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
+                  <Tag className="w-3.5 h-3.5" /> Tags
+                </label>
+                <input
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="practice, exam, review…"
+                  disabled={isSaving}
+                  className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none"
+                />
+                {tagList.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {tagList.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                        style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.25)' }}
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Tags */}
-            <div className="cb-field-card rounded-2xl p-4">
-              <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
-                <Tag className="w-3.5 h-3.5" /> Tags
-              </label>
-              <input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="practice, exam, review…"
-                disabled={isSaving}
-                className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none"
-              />
-              {tagList.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {tagList.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
-                      style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.25)' }}
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          )}
 
           {/* Editor — stretched, document-style */}
           <RichEditor
