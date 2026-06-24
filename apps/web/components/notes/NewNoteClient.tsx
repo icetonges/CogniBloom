@@ -47,7 +47,7 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
 
   const html = `
 <h1>📘 Daily Learning Reflection</h1>
-<blockquote>Fill this out at the end of each learning day. Keep answers short and honest — a few words or a bullet is enough. Delete the example lines and write your own.</blockquote>
+<blockquote>Fill this out at the end of each learning day. Short, honest answers — a few words or one bullet per point is enough.</blockquote>
 
 <h2>1. Date &amp; Check-In</h2>
 <ul>
@@ -59,104 +59,98 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
 </ul>
 
 <h2>2. Subjects Practiced Today</h2>
-<blockquote>Check the boxes you worked on and note how long. <em>Example below — replace with your own.</em></blockquote>
+<blockquote>Change ☐ to ☑ for subjects you worked on, fill in time and what you did. <em>e.g. ☑ Math — 45 min | Worked through AMC 8 problems 1–10, focused on geometry.</em></blockquote>
 <ul>
-  <li>☑ <strong>Math</strong> — 45 min &nbsp;|&nbsp; Worked through AMC 8 2023 problems 1–10, focused on geometry and probability.</li>
-  <li>☑ <strong>Coding</strong> — 30 min &nbsp;|&nbsp; Built a bubble-sort function in Python and tested it on a sample list.</li>
-  <li>☐ <strong>Language Learning</strong> — &nbsp;|&nbsp; What I did: </li>
-  <li>☐ <strong>Reading / Writing</strong> — &nbsp;|&nbsp; What I did: </li>
-  <li>☐ <strong>Other:</strong> — &nbsp;|&nbsp; What I did: </li>
+  <li>☐ <strong>Math</strong> — </li>
+  <li>☐ <strong>Coding / Technology</strong> — </li>
+  <li>☐ <strong>Language Learning</strong> — </li>
+  <li>☐ <strong>Reading / Writing</strong> — </li>
+  <li>☐ <strong>Other:</strong> — </li>
 </ul>
 
 <h2>3. What I Learned Today</h2>
-<blockquote>The big ideas — one bullet per subject. <em>Example:</em></blockquote>
+<blockquote>One bullet per subject. <em>e.g. "Math: the area of a trapezoid is (b1+b2)×h÷2 — I kept forgetting to divide by 2."</em></blockquote>
 <ul>
-  <li><em>Math: The area of a trapezoid is (b1 + b2) × h ÷ 2 — I kept forgetting to divide by 2.</em></li>
-  <li><em>Coding: list.sort() modifies the list in place; sorted() returns a new list and leaves the original unchanged.</em></li>
+  <li></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>4. Important Knowledge Points</h2>
-<blockquote>Facts, rules, formulas, or vocabulary worth remembering. Highlight or bold the ones you most need to memorize. <em>Example:</em></blockquote>
+<blockquote>Facts, rules, formulas, or vocabulary to memorize. Bold the most important ones. <em>e.g. "Pythagorean theorem: a²+b²=c² — only works for right triangles."</em></blockquote>
 <ul>
-  <li><em>Pythagorean theorem: a² + b² = c² (only for right triangles — check for the right-angle symbol first).</em></li>
-  <li><em>Python: range(n) gives 0 … n-1, NOT 0 … n.</em></li>
+  <li></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>5. Problems or Questions I Got Wrong</h2>
-<blockquote>Write the subject, the question, your answer, and the correct answer. <em>Example:</em></blockquote>
+<blockquote>Format: Subject — Question | My answer | Correct answer. <em>e.g. "Math — AMC 8 #7: shaded area? | My answer: 12 | Correct: 18"</em></blockquote>
 <ul>
-  <li><strong>Math</strong> — AMC 8 2023 #7: "What is the area of the shaded region?" &nbsp;|&nbsp; My answer: 12 sq units &nbsp;|&nbsp; Correct: 18 sq units</li>
-  <li><strong>Coding</strong> — "What does len('hello') return?" &nbsp;|&nbsp; My answer: 6 &nbsp;|&nbsp; Correct: 5 (I miscounted the letters)</li>
+  <li></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>6. Why I Got Them Wrong</h2>
-<blockquote>Be specific — "careless" is okay, but "didn't draw a diagram before solving" is better. <em>Example:</em></blockquote>
+<blockquote>Be specific — "careless" is okay; "didn't draw a diagram first" is better. <em>e.g. "Rushed and skipped drawing a diagram — obvious once I drew it."</em></blockquote>
 <ul>
-  <li><em>Rushed and skipped drawing a diagram — the answer became obvious once I drew it.</em></li>
-  <li><em>Misread the question; it asked for area but I calculated perimeter.</em></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>7. Concepts I Still Don't Fully Understand</h2>
-<blockquote>Be specific — "fractions" is too vague; "dividing a fraction by a fraction" is useful. <em>Example:</em></blockquote>
+<blockquote>Be specific — "fractions" is too vague; "dividing a fraction by a fraction" is useful. <em>e.g. "Why does Python's 'is' sometimes equal True for strings and sometimes not?"</em></blockquote>
 <ul>
-  <li><em>Why does Python's "is" sometimes give True for equal strings and sometimes not? (string interning?)</em></li>
-  <li><em>How do I decide when to use a while-loop vs a for-loop?</em></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>8. Improvement Notes</h2>
-<blockquote>What will you do differently next time? Concrete actions work best. <em>Example:</em></blockquote>
+<blockquote>What will you do differently next time? Concrete actions only. <em>e.g. "Always draw a diagram before solving geometry — even if it looks simple."</em></blockquote>
 <ul>
-  <li><em>Always draw a diagram before solving any geometry problem — even if it looks simple.</em></li>
-  <li><em>Read every question twice before writing anything down.</em></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>9. Questions I Want to Ask Later</h2>
-<blockquote>Save these for a parent, teacher, or future research session. <em>Example:</em></blockquote>
+<blockquote>Save for a parent, teacher, or future research session. <em>e.g. "Look up: difference between mean, median, and mode — when to use each?"</em></blockquote>
 <ul>
-  <li><em>Ask: Why does the AMC use 5 multiple-choice options instead of open-answer format?</em></li>
-  <li><em>Look up: difference between mean, median, and mode — when should I use each one?</em></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>10. Connections to Things I Learned Before</h2>
-<blockquote>Linking ideas across days and subjects is how knowledge becomes permanent. <em>Example:</em></blockquote>
+<blockquote>How does today link to earlier days or other subjects? <em>e.g. "Fraction division reminds me of last week's ratios — dividing by a fraction = multiplying by its reciprocal."</em></blockquote>
 <ul>
-  <li><em>Today's fraction division reminds me of last week's ratios — dividing by a fraction is the same as multiplying by its reciprocal, just like flipping a ratio.</em></li>
-  <li><em>The Python for-loop feels similar to the AMC "list all cases" strategy — both go through every item one at a time.</em></li>
+  <li></li>
   <li></li>
 </ul>
 
 <h2>11. One Small Win Today 🎉</h2>
-<blockquote>Something to be proud of, even if it's tiny. <em>Example:</em></blockquote>
+<blockquote>Something to be proud of, even if it's tiny. <em>e.g. "Got 3 AMC problems correct in a row without any hints!"</em></blockquote>
 <ul>
-  <li><em>Got 3 AMC problems correct in a row without any hints — that's a personal best!</em></li>
+  <li></li>
 </ul>
 
 <h2>12. What I Should Review Tomorrow</h2>
-<blockquote>Tick these off at the start of tomorrow's session. <em>Example:</em></blockquote>
+<blockquote>Tick these off at the start of tomorrow's session. <em>e.g. "☐ AMC 8 2023 problems 7–10 (the ones I got wrong today)"</em></blockquote>
 <ul>
-  <li>☐ <em>AMC 8 2023 problems 7–10 (the ones I got wrong today)</em></li>
-  <li>☐ <em>Python: re-read the difference between is and == with examples</em></li>
+  <li>☐ </li>
+  <li>☐ </li>
   <li>☐ </li>
 </ul>
 
 <h2>13. Self-Check Quiz (3 Questions)</h2>
-<blockquote>Write 3 questions from today's learning. Cover the answers and test yourself tomorrow. <em>Example:</em></blockquote>
+<blockquote>Write 3 questions from today. Cover the answers and test yourself tomorrow. <em>e.g. Q: "Area formula for a trapezoid?" A: "(b1+b2)×h÷2"</em></blockquote>
 <ol>
-  <li><strong>Q:</strong> <em>What is the formula for the area of a trapezoid?</em><br><strong>A:</strong> <em>(b1 + b2) × h ÷ 2</em></li>
-  <li><strong>Q:</strong> <em>What does sorted([3,1,2]) return, and does it change the original list?</em><br><strong>A:</strong> <em>[1, 2, 3] — and no, the original list is unchanged.</em></li>
+  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
+  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
   <li><strong>Q:</strong> <br><strong>A:</strong> </li>
 </ol>
 
 <h2>14. Progress Summary</h2>
-<blockquote>A few sentences describing how today went — write it as if you were telling a teacher or parent. <em>Example:</em></blockquote>
-<p><em>Today I worked on AMC 8 geometry problems for 45 minutes and practiced Python for 30 minutes. I struggled with shaded-area problems but improved after I started drawing diagrams first. Tomorrow I should re-do problems 7–10 and look up the difference between Python's "is" and "==" operators.</em></p>
+<blockquote>A few sentences as if telling a teacher or parent. <em>e.g. "Today [Name] worked on AMC 8 geometry for 45 min. Struggled with shaded-area problems but improved after drawing diagrams. Tomorrow: review problems 7–10."</em></blockquote>
 <p></p>
 `.trim()
 
