@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { StudyCoachAI } from '@/components/study-coach/StudyCoachAI'
 import {
   Sparkles, CheckCircle2, Circle, BookOpen, Code2,
   Languages, PenLine, Brain, AlertTriangle,
@@ -144,6 +145,9 @@ export function StudyCoachClient() {
           <Tip>They <strong>ask &quot;why&quot;</strong> — not just &quot;what is the answer.&quot;</Tip>
         </ul>
       </SectionCard>
+
+      {/* ── Coach Bloom AI ── */}
+      <StudyCoachAI />
 
       {/* ── Section 2 & 3: Why + Why it works ── */}
       <SectionCard color="#10b981" emoji="🔬" title="2–3 · Why Those Habits Work (The Science Behind It)">
