@@ -16,7 +16,7 @@ import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 const navItems = [
   { href: '/dashboard/planner',         icon: CalendarDays,  label: 'Planner',           color: 'text-cyan-400'   },
   { href: '/dashboard/study-coach',     icon: GraduationCap, label: '🌟 Study Coach',    color: 'text-lime-400'   },
-  { href: '/dashboard/notes/new',       icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
+  { href: '/dashboard/notes',            icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
   { href: '/dashboard/review',          icon: Brain,         label: 'Daily Review',      color: 'text-fuchsia-400', badge: 'review-due' },
   { href: '/dashboard/overview',         icon: BarChart3,     label: 'Dashboard',        color: 'text-blue-400'   },
   { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',          color: 'text-violet-400' },
@@ -66,7 +66,7 @@ function Sidebar({
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ href, icon: Icon, label, badge, color }) => {
           // Notes nav item is special: active whenever pathname is under /dashboard/notes
-          const notesItem = href === '/dashboard/notes/new'
+          const notesItem = href === '/dashboard/notes'
           const active = notesItem
             ? pathname.startsWith('/dashboard/notes')
             : pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
@@ -97,11 +97,12 @@ function Sidebar({
                   )}
                 />
                 <span className="flex-1">{label}</span>
-                {/* Notes: show inline + button so label click = new note, + = new note too */}
+                {/* Notes: + button navigates to new note without bubbling to the list link */}
                 {notesItem && (
                   <span
                     className="w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20"
                     title="New note"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = '/dashboard/notes/new' }}
                   >
                     <Plus className="w-3 h-3" />
                   </span>

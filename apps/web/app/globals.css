@@ -71,9 +71,15 @@
 .tiptap blockquote {
   border-left: 3px solid #6366f1;
   padding-left: 16px;
-  color: #94a3b8;
+  color: hsl(215 18% 70%);
   font-style: italic;
   margin: 10px 0;
+}
+
+/* Tiptap body text — readable but not glaring white */
+.tiptap p,
+.tiptap li {
+  color: hsl(213 25% 86%);
 }
 
 .tiptap h1 { font-size: 1.6rem; font-weight: 800; margin: 16px 0 8px; color: #e2e8f0; }
@@ -102,7 +108,7 @@
     --popover-foreground: 24 25% 12%;
 
     --muted: 34 18% 88%;
-    --muted-foreground: 27 12% 40%;
+    --muted-foreground: 27 12% 35%;
 
     --accent: 221 75% 55%;
     --accent-foreground: 0 0% 100%;
@@ -135,7 +141,7 @@
     --popover-foreground: 213 31% 91%;
 
     --muted: 224 20% 18%;
-    --muted-foreground: 215 16% 57%;
+    --muted-foreground: 215 18% 68%;
 
     --accent: 217 91% 60%;
     --accent-foreground: 224 27% 10%;
