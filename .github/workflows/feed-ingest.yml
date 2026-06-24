@@ -18,16 +18,21 @@ on:
         required: false
         default: 'true'
 
+permissions:
+  contents: read
+
 jobs:
   ingest:
     name: Ingest Feed Content
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    env:
+      APP_URL: https://cognibloom.vercel.app
+
     steps:
       - name: Trigger feed ingestion
         env:
-          INGEST_URL: ${{ secrets.INGEST_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           # Build query params
@@ -37,14 +42,14 @@ jobs:
             PARAMS="${PARAMS}&category=${CAT}"
           fi
 
-          echo "Calling: ${INGEST_URL}/api/feed/ingest?${PARAMS}"
+          echo "Calling: ${APP_URL}/api/feed/ingest?${PARAMS}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -X POST \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Content-Type: application/json" \
             --max-time 540 \
-            "${INGEST_URL}/api/feed/ingest?${PARAMS}")
+            "${APP_URL}/api/feed/ingest?${PARAMS}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | head -n -1)
@@ -75,4 +80,4 @@ jobs:
         if: failure()
         run: |
           echo "::warning::Feed ingestion failed. Check the logs above."
-          echo "Make sure INGEST_URL and CRON_SECRET are set in repository secrets."
+          echo "Make sure CRON_SECRET is set in repository secrets."

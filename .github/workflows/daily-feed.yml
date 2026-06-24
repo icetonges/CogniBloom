@@ -2,11 +2,24 @@ name: Daily Feed & Summary
 
 on:
   schedule:
-    # 7 AM New York (11:00 UTC during EDT) every day — morning summary
-    # covering the previous 24 hours. Note: GitHub cron is fixed UTC, so
-    # during EST (winter) this fires at 6 AM New York instead.
+    # 7 AM New York time — two crons cover the DST shift:
+    #   EDT (Mar–Nov, UTC-4): 7 AM ET = 11:00 UTC
+    #   EST (Nov–Mar, UTC-5): 7 AM ET = 12:00 UTC
+    # GitHub de-dupes if both fire within the same minute, so this is safe.
     - cron: '0 11 * * *'
+    - cron: '0 12 * * *'
+
+  # Manual trigger — optionally target a single category
   workflow_dispatch:
+    inputs:
+      category:
+        description: 'Single category to ingest (leave blank for all)'
+        required: false
+        default: ''
+      cleanup:
+        description: 'Delete expired items after ingesting'
+        required: false
+        default: 'true'
 
 permissions:
   contents: read
@@ -16,44 +29,71 @@ jobs:
     name: Generate Feed + Send Summary Email
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       APP_URL: https://cognibloom.vercel.app
 
     steps:
       - name: Refresh daily knowledge feed
+        # Skip on manual single-category runs — not needed for targeted ingests
+        if: github.event.inputs.category == ''
         run: |
           echo "Refreshing daily feed..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "$APP_URL/api/feed?refresh=true")
           echo "Feed refresh status: $STATUS"
 
-      - name: Ingest multi-source category feeds
+      - name: Ingest category feeds
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          echo "Ingesting category feeds (math, coding, science, etc.)..."
+          CLEANUP="${{ github.event.inputs.cleanup || 'true' }}"
+          PARAMS="cleanup=${CLEANUP}"
+          CAT="${{ github.event.inputs.category }}"
+          if [ -n "$CAT" ]; then
+            PARAMS="${PARAMS}&category=${CAT}"
+            echo "Ingesting single category: ${CAT}"
+          else
+            echo "Ingesting all categories (math, coding, science, etc.)..."
+          fi
+
           RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
-            -X POST "$APP_URL/api/feed/ingest?cleanup=true" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -X POST "${APP_URL}/api/feed/ingest?${PARAMS}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Content-Type: application/json" \
             --max-time 290)
+
           HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
           BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
           echo "Status: $HTTP_STATUS"
           echo "Response: $BODY"
+
           if [ "$HTTP_STATUS" = "200" ]; then
-            TOTAL_NEW=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('summary',{}).get('totalNewItems',0))" 2>/dev/null || echo "?")
-            echo "✅ Category ingest complete — $TOTAL_NEW new items"
+            echo "$BODY" | python3 -c "
+          import sys, json
+          try:
+            d = json.load(sys.stdin)
+            s = d.get('summary', {})
+            print(f\"Categories: {s.get('categoriesProcessed','?')}  |  New items: {s.get('totalNewItems','?')}  |  Cleaned: {s.get('cleanedUpExpired','?')}  |  Duration: {s.get('durationMs','?')}ms\")
+          except Exception as e:
+            print('Could not parse summary:', e)
+          " 2>/dev/null || true
+            echo "✅ Category ingest complete"
           else
             echo "⚠️  Category ingest returned HTTP $HTTP_STATUS (non-blocking)"
           fi
 
       - name: Send daily summary email
+        # Only send on scheduled runs — skip for manual on-demand ingests
+        if: github.event_name == 'schedule'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           echo "Sending daily summary to Daniel and parents..."
           RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
             -X POST "$APP_URL/api/email/daily-summary" \
             -H "Content-Type: application/json" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
+            -H "x-cron-secret: ${CRON_SECRET}")
           HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
           BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
           echo "Status: $HTTP_STATUS"
@@ -63,3 +103,9 @@ jobs:
             exit 1
           fi
           echo "✅ Daily summary sent successfully"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::warning::Daily feed or summary step failed. Check logs above."
+          echo "Ensure CRON_SECRET is set in repository secrets."
