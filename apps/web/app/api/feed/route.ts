@@ -15,7 +15,8 @@ export interface FeedItem {
   subject: string
   difficulty: 'easy' | 'medium' | 'hard'
   estimatedMinutes: number
-  sourceUrl?: string    // Wikipedia / Khan Academy search link
+  sourceUrl?: string    // Original article URL or Wikipedia search
+  sourceName?: string   // Human-readable source name (e.g. "FreeCodeCamp", "arXiv")
   createdAt?: string    // ISO date — used for date grouping in the UI
 }
 
@@ -341,12 +342,14 @@ function mapCategoryItem(item: {
   category: string
   title: string
   summary: string
+  body: string | null
   url: string | null
   emoji: string
   difficulty: string
   estimatedMinutes: number
   contentType: string
   isAiGenerated: boolean
+  sourceName: string | null
   createdAt: Date
 }): FeedItem {
   // Map contentType → FeedItem type
@@ -364,16 +367,20 @@ function mapCategoryItem(item: {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 
+  // Use full body if available, else fall back to summary
+  const bodyText = item.body?.trim() || item.summary
+
   return {
     id: item.id,
     type: typeMap[item.contentType] ?? 'fact',
     emoji: item.emoji || '📚',
     title: item.title,
-    body: item.summary,
+    body: bodyText,
     subject,
     difficulty: (item.difficulty as FeedItem['difficulty']) ?? 'medium',
     estimatedMinutes: item.estimatedMinutes ?? 3,
     sourceUrl: item.url ?? undefined,
+    sourceName: item.sourceName ?? undefined,
     createdAt: item.createdAt.toISOString(),
   }
 }

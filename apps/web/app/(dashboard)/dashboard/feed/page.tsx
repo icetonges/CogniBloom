@@ -256,7 +256,7 @@ export default function FeedPage() {
       )}
 
       <p className="text-xs text-center text-muted-foreground pb-4">
-        🤖 All content is AI-generated for educational purposes. Always verify important facts.
+        📡 Content sourced from real feeds and AI generation. Click any source link to read the full article.
       </p>
     </div>
   )
@@ -368,7 +368,16 @@ function FeedCard({ item }: { item: FeedItem }) {
           className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-600 hover:underline self-start -mt-1"
         >
           <ExternalLink className="w-3 h-3 flex-shrink-0" />
-          Learn more on Wikipedia
+          {item.sourceName
+            ? `Read on ${item.sourceName}`
+            : (() => {
+                try {
+                  const host = new URL(item.sourceUrl).hostname.replace(/^www\./, '')
+                  return host.includes('wikipedia') ? 'Learn more on Wikipedia' : `Read on ${host}`
+                } catch {
+                  return 'Read full article'
+                }
+              })()}
         </a>
       )}
 
