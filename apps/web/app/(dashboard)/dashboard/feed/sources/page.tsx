@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { CATEGORY_META } from '@/lib/feed/meta'
+import { triggerIngest } from './actions'
 
 interface SourceRow {
   id: string
@@ -168,17 +169,16 @@ export default function FeedSourcesPage() {
     }
   }
 
-  const triggerIngest = async () => {
+  const runIngest = async () => {
     setIngesting(true)
     setIngestResult(null)
     try {
-      const res = await fetch('/api/feed/ingest', { method: 'POST' })
-      const json = await res.json()
-      if (json.success) {
-        setIngestResult(`✅ Ingested ${json.summary?.totalNewItems ?? 0} new items across ${json.summary?.categoriesProcessed ?? 0} categories.`)
+      const result = await triggerIngest()
+      if (result.success) {
+        setIngestResult(`✅ Ingested ${result.summary?.totalNewItems ?? 0} new items across ${result.summary?.categoriesProcessed ?? 0} categories in ${result.summary?.durationMs ?? 0}ms.`)
         await loadSources(true)
       } else {
-        setIngestResult(`❌ ${json.error ?? 'Ingest failed'}`)
+        setIngestResult(`❌ ${result.error ?? 'Ingest failed'}`)
       }
     } catch (e) {
       setIngestResult(`❌ ${e instanceof Error ? e.message : 'Unknown error'}`)
@@ -224,7 +224,7 @@ export default function FeedSourcesPage() {
           </Button>
           <Button
             size="sm"
-            onClick={triggerIngest}
+            onClick={runIngest}
             disabled={ingesting}
             className="gap-2"
           >
