@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import {
   Sparkles, CheckCircle2, Circle, BookOpen, Code2,
-  Languages, PenLine, Brain, Zap, AlertTriangle,
-  Clock, Sun, Sunset, Moon, Trophy, RotateCcw,
-  ChevronDown, ChevronUp, Star, Lightbulb, Heart,
+  Languages, PenLine, Brain, AlertTriangle,
+  Clock, Sun, Moon, RotateCcw,
+  ChevronDown, ChevronUp, Star, Heart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -89,7 +89,7 @@ const CHECKLIST = [
 export function StudyCoachClient() {
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const toggle = (id: string) =>
-    setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+    setChecked(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id) } else { n.add(id) }; return n })
   const doneCount = checked.size
 
   return (
