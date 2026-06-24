@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Plus, Search, X, Loader2, Calendar, ArrowUpDown,
-  Clock, BookOpen, Brain, Tag as TagIcon,
+  Clock, BookOpen, Brain, Tag as TagIcon, ChevronDown, BookMarked, FileText,
 } from 'lucide-react'
 import { formatNoteTitle, formatTimelineHeading, getDateGroupKey } from '@/lib/note-format'
 import { cn } from '@/lib/utils'
@@ -168,8 +168,10 @@ export function NotesIndexClient() {
   const [searchInput, setSearchInput] = useState('')
   const [sort, setSort] = useState<SortOption>('newest')
   const [showSortMenu, setShowSortMenu] = useState(false)
+  const [showNewMenu, setShowNewMenu] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sortMenuRef = useRef<HTMLDivElement>(null)
+  const newMenuRef = useRef<HTMLDivElement>(null)
 
   // Close sort dropdown on outside click
   useEffect(() => {
@@ -182,6 +184,18 @@ export function NotesIndexClient() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [showSortMenu])
+
+  // Close new-note menu on outside click
+  useEffect(() => {
+    if (!showNewMenu) return
+    const handler = (e: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) {
+        setShowNewMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showNewMenu])
 
   // Active filters from URL
   const activeSubject = searchParams.get('subject') || ''
@@ -287,16 +301,49 @@ export function NotesIndexClient() {
             {hasActiveFilters && ' (filtered)'}
           </p>
         </div>
-        <Link
-          href="/dashboard/notes/new"
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105 shrink-0"
-          style={{
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
-          }}
-        >
-          <Plus className="h-4 w-4" /> New Note
-        </Link>
+        {/* ── New Note dropdown ── */}
+        <div ref={newMenuRef} className="relative shrink-0">
+          <button
+            onClick={() => setShowNewMenu((v) => !v)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
+            style={{
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
+            }}
+          >
+            <Plus className="h-4 w-4" /> New Note <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+          </button>
+          {showNewMenu && (
+            <div
+              className="absolute right-0 top-full mt-2 w-60 rounded-2xl overflow-hidden shadow-2xl z-50"
+              style={{ background: '#0d1117', border: '1px solid rgba(99,102,241,0.25)' }}
+            >
+              <Link
+                href="/dashboard/notes/new"
+                onClick={() => setShowNewMenu(false)}
+                className="flex items-start gap-3 p-4 hover:bg-white/[0.04] transition-colors"
+                style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <FileText className="h-5 w-5 mt-0.5 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-bold">Regular Note</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Blank canvas — any topic</p>
+                </div>
+              </Link>
+              <Link
+                href="/dashboard/notes/new?template=reflection"
+                onClick={() => setShowNewMenu(false)}
+                className="flex items-start gap-3 p-4 hover:bg-white/[0.04] transition-colors"
+              >
+                <BookMarked className="h-5 w-5 mt-0.5 shrink-0 text-primary" />
+                <div>
+                  <p className="text-sm font-bold">Daily Reflection</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Guided end-of-day review</p>
+                </div>
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Search + Filters ── */}
@@ -482,16 +529,22 @@ export function NotesIndexClient() {
               <X className="h-4 w-4" /> Clear filters
             </button>
           ) : (
-            <Link
-              href="/dashboard/notes/new"
-              className="mx-auto flex items-center gap-2 w-fit px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
-              }}
-            >
-              <Plus className="h-4 w-4" /> Create your first note
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center">
+              <Link
+                href="/dashboard/notes/new"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
+              >
+                <FileText className="h-4 w-4" /> Regular Note
+              </Link>
+              <Link
+                href="/dashboard/notes/new?template=reflection"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 16px rgba(99,102,241,0.4)' }}
+              >
+                <BookMarked className="h-4 w-4" /> Daily Reflection
+              </Link>
+            </div>
           )}
         </div>
       ) : (
