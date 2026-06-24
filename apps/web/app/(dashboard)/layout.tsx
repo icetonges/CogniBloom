@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
-  CalendarDays, BookMarked, FileText,
+  CalendarDays, BookMarked, FileText, GraduationCap,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 
 const navItems = [
   { href: '/dashboard/planner',         icon: CalendarDays,  label: 'Planner',           color: 'text-cyan-400'   },
+  { href: '/dashboard/study-coach',     icon: GraduationCap, label: '🌟 Study Coach',    color: 'text-lime-400'   },
   { href: '/dashboard/notes/new',       icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
   { href: '/dashboard/review',          icon: Brain,         label: 'Daily Review',      color: 'text-fuchsia-400', badge: 'review-due' },
   { href: '/dashboard/overview',         icon: BarChart3,     label: 'Dashboard',        color: 'text-blue-400'   },
