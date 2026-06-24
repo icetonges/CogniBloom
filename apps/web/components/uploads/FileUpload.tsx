@@ -31,8 +31,13 @@ export function FileUpload({ noteId, onComplete }: FileUploadProps) {
       setError('Unsupported file type. Please upload a PDF, TXT, or MD file.')
       return
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File too large. Maximum size is 10 MB.')
+    // Vercel serverless functions enforce a 4.5 MB request-body limit at the
+    // infrastructure level — this client check prevents the cryptic 413 error.
+    if (file.size > 4 * 1024 * 1024) {
+      setError(
+        `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). ` +
+        'Maximum is 4 MB. For larger PDFs, try compressing with Smallpdf or splitting into chapters.'
+      )
       return
     }
 
@@ -46,7 +51,16 @@ export function FileUpload({ noteId, onComplete }: FileUploadProps) {
 
     try {
       const res = await fetch('/api/uploads', { method: 'POST', body: formData })
-      const json = await res.json() as { success: boolean; data: UploadedFile; error?: string }
+      // Guard: Vercel returns a plain-text HTML 413 page, not JSON
+      let json: { success: boolean; data: UploadedFile; error?: string } = { success: false, data: null! }
+      try {
+        json = await res.json() as typeof json
+      } catch {
+        if (res.status === 413) {
+          throw new Error('File too large — the server rejected it. Max 4 MB.')
+        }
+        throw new Error(`Server error (HTTP ${res.status}). Please try again.`)
+      }
       if (!res.ok) throw new Error(json.error ?? 'Upload failed')
       setUploaded(json.data)
       onComplete?.(json.data)
@@ -95,7 +109,7 @@ export function FileUpload({ noteId, onComplete }: FileUploadProps) {
           <div className="flex flex-col items-center gap-2">
             <Upload className="w-8 h-8 text-muted-foreground" />
             <p className="text-sm font-medium">Drop a file here or click to browse</p>
-            <p className="text-xs text-muted-foreground">PDF, TXT, or Markdown · max 10 MB</p>
+            <p className="text-xs text-muted-foreground">PDF, TXT, or Markdown · max 4 MB</p>
             <p className="text-xs text-primary">Text is extracted and added to your AI knowledge base</p>
           </div>
         )}

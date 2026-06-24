@@ -258,7 +258,7 @@ export default function UploadsPage() {
         </button>
         {howItWorksOpen && (
           <div className="mt-2 space-y-1">
-            <p>1. Upload a PDF, TXT, or Markdown file (max 10 MB)</p>
+            <p>1. Upload a PDF, TXT, or Markdown file (max 4 MB — compress larger PDFs first)</p>
             <p>2. Text is extracted and split into sentence-window chunks for precise retrieval</p>
             <p>3. Each chunk is embedded with Google&apos;s text-embedding-004 (document-optimised task type)</p>
             <p>4. At query time, HyDE + hybrid search finds the most relevant passages from your uploads</p>

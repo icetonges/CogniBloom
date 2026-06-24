@@ -8,7 +8,9 @@ import { renderPdfPages, pageHasFigures } from '@/lib/pdf-renderer'
 import { MODELS } from '@/lib/ai/models'
 import { chunkTextWithWindows } from '@/lib/content'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+// Vercel serverless functions enforce a 4.5 MB request-body limit at infrastructure level.
+// The client validates before upload; this is the server-side safety net.
+const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4 MB
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'text/markdown']
 // 300 s covers Gemini extraction + background embedding on Vercel Pro.
 // after() callbacks also run within this budget.
