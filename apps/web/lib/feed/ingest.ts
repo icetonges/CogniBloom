@@ -19,7 +19,7 @@ import {
   getSourcesForCategory,
 } from './sources'
 
-const ITEMS_PER_CATEGORY = 8   // target items to have for each category per day
+const ITEMS_PER_CATEGORY = 15  // target items to have for each category per day
 const ITEM_TTL_DAYS = 30       // keep items for 30 days
 
 // ─── Result types ─────────────────────────────────────────────────────────────
@@ -110,22 +110,9 @@ export async function ingestCategory(category: Category): Promise<IngestResult> 
   const existingTitles = new Set(existing.map((e) => e.title.toLowerCase()))
   const alreadyHave = existing.length
 
-  // Skip if we already have enough for today
-  if (alreadyHave >= ITEMS_PER_CATEGORY) {
-    const sources = getSourcesForCategory(category)
-    for (const src of sources) {
-      sourceResults.push({
-        sourceId: src.id,
-        sourceName: src.name,
-        category,
-        status: 'skipped',
-        count: 0,
-      })
-    }
-    return { category, sources: sourceResults, totalNew: 0, durationMs: Date.now() - t0 }
-  }
-
-  const needed = ITEMS_PER_CATEGORY - alreadyHave
+  // Always pull fresh content — deduplication by title prevents re-saving existing items.
+  // The `needed` cap limits total saves if the target is already met.
+  const needed = Math.max(ITEMS_PER_CATEGORY - alreadyHave, 3) // always ingest at least 3 fresh items
   const sources = getSourcesForCategory(category)
 
   // Pull from real sources first (non-AI), then AI if still short
