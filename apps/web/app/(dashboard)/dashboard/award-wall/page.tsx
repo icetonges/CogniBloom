@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import {
   Loader2, Plus, Trash2, Trophy, Star, Flame, Zap,
   BookOpen, Medal, Award, GraduationCap, X, Check,
-  ZoomIn, ChevronLeft, ChevronRight, FileText, Sparkles,
+  ZoomIn, FileText, Sparkles,
   Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
