@@ -101,6 +101,10 @@ async function processUploadedFile(
   const isPdf = file.type === 'application/pdf'
   const isImage = file.type.startsWith('image/')
   if (!isPdf && !isImage) throw new Error('Upload a PDF or image file')
+  if (file.size > MAX_FULL_BYTES + 1024 * 1024) {
+    // > 4 MB — Vercel will reject the thumbnail request with 413
+    throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max 4 MB — try compressing the PDF.`)
+  }
 
   const result: ProcessedFile = {
     fileName: file.name,
@@ -300,7 +304,7 @@ function AwardModal({
               <Upload className="w-8 h-8 opacity-50" />
               <div className="text-center">
                 <p className="text-sm font-semibold">Click to upload certificate</p>
-                <p className="text-xs opacity-60 mt-0.5">PDF, JPG, PNG · max 20 MB</p>
+                <p className="text-xs opacity-60 mt-0.5">PDF, JPG, PNG · max 4 MB</p>
               </div>
             </button>
           )}

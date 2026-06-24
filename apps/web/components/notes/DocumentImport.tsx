@@ -23,6 +23,9 @@ interface DocumentImportProps {
 }
 
 const ACCEPTED = '.pdf,.docx,.doc,.txt,image/png,image/jpeg,image/webp,image/gif'
+// Vercel serverless functions enforce a 4.5 MB request-body limit at the infrastructure
+// level (before the route handler runs). Keep our client limit just below that ceiling.
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024  // 4 MB
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -63,6 +66,15 @@ export function DocumentImport({ onImport, compact = false }: DocumentImportProp
       }
       setDocs((prev) => [...prev, doc])
 
+      // Enforce client-side size limit before hitting Vercel's 4.5 MB body limit
+      if (file.size > MAX_UPLOAD_BYTES) {
+        updateDoc(id, {
+          status: 'error',
+          error: `File too large (${formatBytes(file.size)}). Max 4 MB — try compressing the PDF or splitting it into smaller files.`,
+        })
+        return
+      }
+
       try {
         if (type === 'image') {
           // Upload image and get URL
@@ -94,6 +106,10 @@ export function DocumentImport({ onImport, compact = false }: DocumentImportProp
           try {
             json = await res.json() as typeof json
           } catch {
+            // Server returned non-JSON (e.g. Vercel HTML error page)
+            if (res.status === 413) {
+              throw new Error('File too large — Vercel enforces a 4 MB upload limit. Try compressing the PDF.')
+            }
             throw new Error(`Server error (HTTP ${res.status}) — please try again`)
           }
           if (!res.ok || !json.html) throw new Error(json.error ?? 'Processing failed')
@@ -203,7 +219,7 @@ export function DocumentImport({ onImport, compact = false }: DocumentImportProp
           <p className="text-sm font-semibold">
             {isDragging ? 'Drop files here' : 'Drag & drop or click to browse'}
           </p>
-          <p className="text-xs text-muted-foreground">PDF, DOCX, TXT, PNG, JPG · Max 25 MB each</p>
+          <p className="text-xs text-muted-foreground">PDF, DOCX, TXT, PNG, JPG · Max 4 MB each</p>
           <input
             ref={fileInputRef}
             type="file"

@@ -4,7 +4,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 export const runtime = 'nodejs'
 export const maxDuration = 120
 
-const MAX_SIZE = 25 * 1024 * 1024 // 25 MB
+// Vercel serverless functions enforce a 4.5 MB request-body limit at infrastructure level.
+// Client validates before upload, but we also check here as a safety net.
+const MAX_SIZE = 4 * 1024 * 1024 // 4 MB
 
 function escapeHtml(text: string): string {
   return text

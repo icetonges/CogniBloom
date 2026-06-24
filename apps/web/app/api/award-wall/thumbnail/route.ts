@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 60
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024  // 20 MB
+// Vercel serverless functions hard-limit request bodies to 4.5 MB at the infrastructure level.
+const MAX_FILE_SIZE = 4 * 1024 * 1024  // 4 MB
 
 /**
  * POST /api/award-wall/thumbnail
