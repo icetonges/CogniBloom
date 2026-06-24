@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Loader2, Save, Sparkles, ArrowLeft, FilePlus, X,
-  Tag, BookOpen, Bot, ChevronDown, ChevronRight, Clock, Trash2, Check,
+  Tag, BookOpen, Bot, ChevronDown, ChevronRight, Clock, Trash2, Check, BookMarked,
 } from 'lucide-react'
 import { RichEditor, type RichEditorRef } from '@/components/notes/RichEditor'
 import { DocumentImport } from '@/components/notes/DocumentImport'
@@ -38,6 +38,81 @@ const AI_PREVIEWS = [
 
 const DRAFT_KEY = 'cognibloom:new-note-draft'
 interface NoteDraft { title: string; content: string; subject: string; tags: string; savedAt: number }
+
+function buildReflectionTemplate(): { title: string; subject: string; tags: string; html: string } {
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  const isoDate = now.toISOString().slice(0, 10)
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
+
+  const html = `
+<h1>📘 Daily Learning Reflection</h1>
+<blockquote>Fill this out at the end of each learning day. Keep answers short and honest — a few words or a bullet is enough.</blockquote>
+<h2>1. Date &amp; Check-In</h2>
+<ul>
+  <li><strong>Date:</strong> ${isoDate}</li>
+  <li><strong>Day of week:</strong> ${dayName}</li>
+  <li><strong>Overall mood:</strong> _____ (😀 / 🙂 / 😐 / 😕 / 😣)</li>
+  <li><strong>Focus level (1–5):</strong> _____</li>
+  <li><strong>Energy level (1–5):</strong> _____</li>
+  <li><strong>One word for today:</strong> _____</li>
+</ul>
+<h2>2. Subjects Practiced Today</h2>
+<ul>
+  <li>☐ <strong>Math</strong> — time: _____ &nbsp; What I did: </li>
+  <li>☐ <strong>Language Arts / Writing / Reading</strong> — time: _____ &nbsp; What I did: </li>
+  <li>☐ <strong>Duolingo / Language Learning</strong> — time: _____ &nbsp; What I did: </li>
+  <li>☐ <strong>Coding / AI / Technology</strong> — time: _____ &nbsp; What I did: </li>
+  <li>☐ <strong>Other</strong> — time: _____ &nbsp; What I did: </li>
+</ul>
+<h2>3. What I Learned Today</h2>
+<ul><li></li><li></li><li></li></ul>
+<h2>4. Important Knowledge Points</h2>
+<blockquote>Facts, rules, formulas, or words worth remembering. Star ⭐ the ones to memorize.</blockquote>
+<ul><li></li><li></li><li></li></ul>
+<h2>5. Problems or Questions I Got Wrong</h2>
+<ul>
+  <li><strong>Subject:</strong> ___ &nbsp;|&nbsp; <strong>Question:</strong> ___ &nbsp;|&nbsp; <strong>My answer:</strong> ___ &nbsp;|&nbsp; <strong>Correct:</strong> ___</li>
+  <li><strong>Subject:</strong> ___ &nbsp;|&nbsp; <strong>Question:</strong> ___ &nbsp;|&nbsp; <strong>My answer:</strong> ___ &nbsp;|&nbsp; <strong>Correct:</strong> ___</li>
+  <li><strong>Subject:</strong> ___ &nbsp;|&nbsp; <strong>Question:</strong> ___ &nbsp;|&nbsp; <strong>My answer:</strong> ___ &nbsp;|&nbsp; <strong>Correct:</strong> ___</li>
+</ul>
+<h2>6. Why I Got Them Wrong</h2>
+<ul><li></li><li></li><li></li></ul>
+<h2>7. Concepts I Still Don't Fully Understand</h2>
+<ul><li></li><li></li><li></li></ul>
+<h2>8. Improvement Notes</h2>
+<ul><li></li><li></li><li></li></ul>
+<h2>9. Questions I Want to Ask Later</h2>
+<ul><li></li><li></li><li></li></ul>
+<h2>10. Connections to Things I Learned Before</h2>
+<ul>
+  <li>Today's _____ reminds me of _____ because _____</li>
+  <li></li>
+  <li></li>
+</ul>
+<h2>11. One Small Win Today 🎉</h2>
+<ul><li></li></ul>
+<h2>12. What I Should Review Tomorrow</h2>
+<ul><li>☐ </li><li>☐ </li><li>☐ </li></ul>
+<h2>13. Self-Check Quiz (3 Questions)</h2>
+<blockquote>Write 3 questions from today's learning. Cover the answers and test yourself tomorrow.</blockquote>
+<ol>
+  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
+  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
+  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
+</ol>
+<h2>14. Progress Summary</h2>
+<blockquote>A few sentences describing how today went, in the third person, as a grown-up would write it.</blockquote>
+<p></p>
+`.trim()
+
+  return {
+    title: `Daily Learning Reflection — ${dateStr}`,
+    subject: 'Daily Reflection',
+    tags: 'reflection,daily',
+    html,
+  }
+}
 
 export function NewNoteClient() {
   const router = useRouter()
@@ -154,6 +229,16 @@ export function NewNoteClient() {
     setDraftSavedAt(null)
     setDraftRestored(false)
   }
+
+  const handleLoadTemplate = useCallback(() => {
+    if ((title || content) && !confirm('Load the Daily Reflection template? This will replace current content.')) return
+    const tpl = buildReflectionTemplate()
+    setTitle(tpl.title)
+    setSubject(tpl.subject)
+    setTags(tpl.tags)
+    setContent(tpl.html)
+    setTimeout(() => editorRef.current?.setContent(tpl.html), 50)
+  }, [title, content])
 
   useEffect(() => {
     fetch('/api/notes/subjects')
@@ -297,6 +382,17 @@ export function NewNoteClient() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {/* Daily Reflection template */}
+          <button
+            type="button"
+            onClick={handleLoadTemplate}
+            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            title="Load Daily Reflection template"
+          >
+            <BookMarked className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Daily Reflection</span>
+          </button>
           {/* Delete / discard */}
           <button
             type="button"
