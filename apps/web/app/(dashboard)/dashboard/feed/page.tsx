@@ -7,8 +7,9 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Loader2, RefreshCw, BookOpen, Trophy, Layers, CheckCircle2,
-  ChevronDown, ChevronUp, ExternalLink, History, Settings2,
+  ChevronDown, ChevronUp, ExternalLink, History, Settings2, Zap, AlertCircle,
 } from 'lucide-react'
+import { triggerIngest } from './sources/actions'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import type { FeedItem } from '@/app/api/feed/route'
@@ -48,6 +49,9 @@ export default function FeedPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [generatedAt, setGeneratedAt] = useState<string | null>(null)
+  const [isStale, setIsStale] = useState(false)
+  const [isSourced, setIsSourced] = useState(false)
+  const [ingesting, setIngesting] = useState(false)
 
   // History state
   const [historyItems, setHistoryItems] = useState<FeedItem[]>([])
@@ -66,6 +70,8 @@ export default function FeedPage() {
       const { data, meta } = await res.json()
       setItems(data)
       setGeneratedAt(meta.generatedAt)
+      setIsStale(!!(meta.stale))
+      setIsSourced(!!(meta.sourced))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
@@ -89,6 +95,16 @@ export default function FeedPage() {
   }
 
   useEffect(() => { loadFeed() }, [])
+
+  const runIngestNow = async () => {
+    setIngesting(true)
+    try {
+      await triggerIngest()
+      await loadFeed(true)
+    } finally {
+      setIngesting(false)
+    }
+  }
 
   const handleShowHistory = () => {
     if (!showHistory) {
@@ -165,15 +181,39 @@ export default function FeedPage() {
         </div>
       </div>
 
+      {/* Stale content warning */}
+      {isStale && !isSourced && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">Showing older content</p>
+            <p className="text-xs opacity-80 mt-0.5">
+              Today&apos;s feed hasn&apos;t been generated yet. Run ingest to pull fresh articles from all categories.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={runIngestNow}
+            disabled={ingesting}
+            className="gap-1.5 shrink-0 bg-amber-500 hover:bg-amber-600 text-white border-0"
+          >
+            {ingesting
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Zap className="w-3.5 h-3.5" />}
+            {ingesting ? 'Ingesting…' : 'Run Ingest Now'}
+          </Button>
+        </div>
+      )}
+
       {/* Category feed navigation */}
       <div className="space-y-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Browse by Category</p>
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted">
+        <div className="flex flex-wrap gap-2">
           {CATEGORY_META.map((cat) => (
             <button
               key={cat.slug}
               onClick={() => router.push(`/dashboard/feed/category/${cat.slug}`)}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
             >
               <span>{cat.emoji}</span>
               {cat.label}

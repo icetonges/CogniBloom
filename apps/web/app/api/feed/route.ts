@@ -174,7 +174,39 @@ export async function GET(request: NextRequest) {
         }
       } catch { /* CategoryFeedItem table not yet migrated — fall through */ }
 
-      // 2. Fall back to legacy DailyFeedItem cache
+      // 2. Try recent CategoryFeedItem (last 7 days) — much better than old AI Wikipedia content
+      try {
+        const week = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const recent = await db.categoryFeedItem.findMany({
+          where: { createdAt: { gte: week } },
+          orderBy: { createdAt: 'desc' },
+          take: 60,
+        })
+        if (recent.length >= 4) {
+          const byCategory: Record<string, typeof recent> = {}
+          for (const item of recent) {
+            byCategory[item.category] ??= []
+            byCategory[item.category]!.push(item)
+          }
+          const diverse: typeof recent = []
+          const groups = Object.values(byCategory)
+          let round = 0
+          while (diverse.length < PAGE_SIZE && round < 3) {
+            for (const group of groups) {
+              if (diverse.length >= PAGE_SIZE) break
+              if (group[round]) diverse.push(group[round]!)
+            }
+            round++
+          }
+          return NextResponse.json({
+            success: true,
+            data: diverse.map(mapCategoryItem),
+            meta: { cached: true, sourced: true, stale: true, page: 1, generatedAt: diverse[0]?.createdAt },
+          })
+        }
+      } catch { /* table not yet migrated */ }
+
+      // 3. Fall back to legacy DailyFeedItem cache (today)
       const cached = await db.dailyFeedItem.findMany({
         where: { createdAt: { gte: today } },
         take: PAGE_SIZE,
@@ -188,18 +220,18 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      // 3. Serve yesterday's items while we regenerate
+      // 4. Legacy yesterday
       const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
-      const recent = await db.dailyFeedItem.findMany({
+      const recentLegacy = await db.dailyFeedItem.findMany({
         where: { createdAt: { gte: yesterday, lt: today } },
         take: PAGE_SIZE,
         orderBy: { createdAt: 'desc' },
       })
-      if (recent.length >= 4) {
+      if (recentLegacy.length >= 4) {
         return NextResponse.json({
           success: true,
-          data: recent.map(mapDbItem),
-          meta: { cached: true, stale: true, page: 1, generatedAt: recent[0]?.createdAt },
+          data: recentLegacy.map(mapDbItem),
+          meta: { cached: true, stale: true, page: 1, generatedAt: recentLegacy[0]?.createdAt },
         })
       }
     }
@@ -282,8 +314,22 @@ Return ONLY a JSON object — no explanation, no markdown fences, no preamble:
       console.warn(`[feed] ${failures.length}/${items.length} items failed to generate`)
     }
 
-    // Last resort: serve most recent DB items
+    // Last resort: serve most recent CategoryFeedItem items, then legacy AI
     if (feed.length === 0) {
+      try {
+        const anyCatItems = await db.categoryFeedItem.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: PAGE_SIZE,
+        })
+        if (anyCatItems.length > 0) {
+          return NextResponse.json({
+            success: true,
+            data: anyCatItems.map(mapCategoryItem),
+            meta: { cached: true, sourced: true, stale: true, page: 1, generatedAt: anyCatItems[0]?.createdAt },
+          })
+        }
+      } catch { /* table not yet migrated */ }
+
       const stale = await db.dailyFeedItem.findMany({
         orderBy: { createdAt: 'desc' },
         take: PAGE_SIZE,
