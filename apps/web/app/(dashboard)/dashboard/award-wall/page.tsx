@@ -32,10 +32,11 @@ interface CustomAward {
   title: string
   description: string
   emoji: string
-  date: string           // ISO string
-  fileData?: string      // base64 data URL (images) or 'pdf:too-large'
+  date: string            // ISO string
+  fileData?: string       // base64 data URL (full file — images or small PDFs)
+  fileThumbnail?: string  // base64 PNG of first page (always generated for PDFs)
   fileName?: string
-  fileType?: string      // 'image' | 'pdf'
+  fileType?: string       // 'image' | 'pdf'
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -89,7 +90,9 @@ function fileToBase64(file: File): Promise<string> {
 
 function FileViewer({ award, onClose }: { award: CustomAward; onClose: () => void }) {
   const isPdf = award.fileType === 'pdf'
-  const hasData = award.fileData && award.fileData !== 'pdf:too-large'
+  const hasFullData = award.fileData && award.fileData !== 'pdf:too-large'
+  // Use full PDF data if available, else fall back to rendered thumbnail image
+  const hasData = hasFullData || !!award.fileThumbnail
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -114,30 +117,27 @@ function FileViewer({ award, onClose }: { award: CustomAward; onClose: () => voi
       {/* Content */}
       <div className="flex-1 min-h-0 flex items-center justify-center p-4" onClick={e => e.stopPropagation()}>
         {!hasData ? (
-          /* No preview — file was too large or not stored */
+          /* No preview */
           <div className="text-center text-white/60 space-y-3">
             <FileText className="w-16 h-16 mx-auto opacity-40" />
             <p className="font-semibold">{award.fileName}</p>
-            <p className="text-sm opacity-70">
-              {isPdf ? 'PDF preview not stored (file too large).' : 'No preview available.'}
-            </p>
-            <p className="text-xs opacity-50">The certificate details are saved above.</p>
+            <p className="text-sm opacity-70">Preview not available.</p>
           </div>
-        ) : isPdf ? (
-          /* PDF embed */
+        ) : isPdf && hasFullData ? (
+          /* Full PDF embed in iframe */
           <iframe
-            src={award.fileData}
+            src={award.fileData!}
             title={award.title}
-            className="w-full h-full rounded-lg border border-white/10 bg-white"
-            style={{ maxWidth: '900px', maxHeight: '80vh' }}
+            className="w-full rounded-lg border border-white/10 bg-white"
+            style={{ maxWidth: '900px', height: '80vh' }}
           />
         ) : (
-          /* Image */
+          /* Rendered thumbnail image (for large PDFs or direct image uploads) */
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={award.fileData}
+            src={(award.fileThumbnail ?? award.fileData)!}
             alt={award.title}
-            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10"
+            className="max-w-full object-contain rounded-xl shadow-2xl border border-white/10 bg-white"
             style={{ maxHeight: '80vh' }}
           />
         )}
@@ -151,9 +151,10 @@ function FileViewer({ award, onClose }: { award: CustomAward; onClose: () => voi
 function CustomAwardCard({ award, onDelete, onView }: {
   award: CustomAward; onDelete: () => void; onView: () => void
 }) {
-  const hasFile = !!award.fileData
+  const hasFile = !!award.fileData || !!award.fileThumbnail
   const isPdf = award.fileType === 'pdf'
-  const hasPreview = hasFile && award.fileData !== 'pdf:too-large'
+  // Prefer thumbnail (actual rendered page) for display; fall back to raw image data
+  const previewSrc = award.fileThumbnail ?? (award.fileData !== 'pdf:too-large' ? award.fileData : undefined)
 
   return (
     <div className="group flex flex-col rounded-2xl overflow-hidden border border-primary/20 hover:border-primary/50 transition-all bg-gradient-to-br from-primary/5 to-secondary/5">
@@ -161,52 +162,39 @@ function CustomAwardCard({ award, onDelete, onView }: {
       <button
         onClick={hasFile ? onView : undefined}
         className={cn(
-          'relative w-full overflow-hidden bg-muted/20 transition-colors',
-          hasFile && 'hover:bg-muted/30 cursor-pointer',
-          !hasFile && 'cursor-default'
+          'relative w-full overflow-hidden transition-colors',
+          hasFile ? 'hover:opacity-90 cursor-pointer bg-white dark:bg-white/5' : 'cursor-default bg-muted/20'
         )}
         style={{ aspectRatio: '4/3' }}
         disabled={!hasFile}
         title={hasFile ? 'View document' : undefined}
       >
-        {hasPreview && !isPdf && (
+        {previewSrc ? (
+          /* Actual rendered certificate image */
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={award.fileData} alt={award.title} className="w-full h-full object-contain p-2" />
-        )}
-        {isPdf && hasPreview && (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-4">
-            <FileText className="w-12 h-12 text-primary/60" />
-            <p className="text-xs font-semibold text-muted-foreground text-center truncate w-full px-2">{award.fileName}</p>
-            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">PDF</span>
-          </div>
-        )}
-        {isPdf && !hasPreview && (
+          <img
+            src={previewSrc}
+            alt={award.title}
+            className="w-full h-full object-contain"
+          />
+        ) : (
+          /* No preview available */
           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-            <FileText className="w-10 h-10 text-muted-foreground/40" />
-            <p className="text-[10px] text-muted-foreground/60">Large PDF — click to see details</p>
-          </div>
-        )}
-        {!hasFile && (
-          <div className="w-full h-full flex items-center justify-center">
             <span className="text-6xl">{award.emoji}</span>
           </div>
         )}
 
-        {/* Hover zoom */}
+        {/* Hover overlay */}
         {hasFile && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
             <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
           </div>
         )}
 
         {/* File type ribbon */}
-        {hasFile && (
-          <div className={cn(
-            'absolute top-2 left-2 flex items-center gap-1 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow',
-            isPdf ? 'bg-red-500' : 'bg-amber-500'
-          )}>
-            <FileText className="w-2.5 h-2.5" />
-            {isPdf ? 'PDF' : 'Certificate'}
+        {isPdf && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+            <FileText className="w-2.5 h-2.5" /> PDF
           </div>
         )}
       </button>
@@ -289,6 +277,7 @@ function AddAwardModal({ onAdd, onClose }: {
   const [emoji, setEmoji] = useState('🏆')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [fileData, setFileData] = useState<string | undefined>()
+  const [fileThumbnail, setFileThumbnail] = useState<string | undefined>()
   const [fileName, setFileName] = useState<string | undefined>()
   const [fileType, setFileType] = useState<'image' | 'pdf' | undefined>()
 
@@ -317,17 +306,35 @@ function AddAwardModal({ onAdd, onClose }: {
     setFileName(file.name)
     setFileType(isPdf ? 'pdf' : 'image')
 
-    // Store file data (base64) if small enough
-    let storedData: string | undefined
-    if (file.size <= MAX_PREVIEW_BYTES) {
+    // For images: store full base64. For PDFs: generate thumbnail via server, store full only if small.
+    if (isImage) {
       try {
-        storedData = await fileToBase64(file)
-        setFileData(storedData)
-      } catch {
-        storedData = undefined
-      }
+        const dataUrl = await fileToBase64(file)
+        setFileData(dataUrl)
+        setFileThumbnail(dataUrl)
+      } catch { /* ignore */ }
     } else if (isPdf) {
-      setFileData('pdf:too-large')
+      // Generate rendered thumbnail (first page PNG) via server — always, regardless of size
+      setUploadMsg('Rendering PDF thumbnail…')
+      try {
+        const fd2 = new FormData()
+        fd2.append('file', file)
+        const res = await fetch('/api/award-wall/thumbnail', { method: 'POST', body: fd2 })
+        if (res.ok) {
+          const { thumbnail } = await res.json() as { thumbnail: string }
+          setFileThumbnail(thumbnail)
+        }
+      } catch { /* thumbnail generation failed — continue without it */ }
+
+      // Also store full PDF if small enough for inline viewing
+      if (file.size <= MAX_PREVIEW_BYTES) {
+        try {
+          const dataUrl = await fileToBase64(file)
+          setFileData(dataUrl)
+        } catch { /* ignore */ }
+      } else {
+        setFileData('pdf:too-large')
+      }
     }
 
     // Extract certificate info via AI
@@ -363,6 +370,7 @@ function AddAwardModal({ onAdd, onClose }: {
       emoji,
       date: new Date(date).toISOString(),
       fileData,
+      fileThumbnail,
       fileName,
       fileType,
     })
@@ -371,6 +379,7 @@ function AddAwardModal({ onAdd, onClose }: {
 
   const removeFile = () => {
     setFileData(undefined)
+    setFileThumbnail(undefined)
     setFileName(undefined)
     setFileType(undefined)
     setUploadState('idle')
@@ -437,10 +446,10 @@ function AddAwardModal({ onAdd, onClose }: {
                 </div>
               )}
 
-              {/* Image preview */}
-              {fileData && fileData !== 'pdf:too-large' && fileType === 'image' && (
+              {/* Certificate / image preview */}
+              {fileThumbnail && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={fileData} alt="Preview" className="w-full max-h-40 object-contain rounded-lg border border-border mt-1" />
+                <img src={fileThumbnail} alt="Preview" className="w-full max-h-56 object-contain rounded-lg border border-border mt-1 bg-white" />
               )}
             </div>
           ) : (
