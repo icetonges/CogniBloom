@@ -1,6 +1,11 @@
--- ============ DAILY REVIEW — NOTE-LEVEL SPACED REPETITION ============
+-- ============ DAILY REVIEW - NOTE-LEVEL SPACED REPETITION ============
 
--cdLE PRECISION NOT NULL DEFAULT 2.5,
+-- CreateTable: NoteRecallState
+CREATE TABLE IF NOT EXISTS "NoteRecallState" (
+    "id"             TEXT NOT NULL,
+    "userId"         TEXT NOT NULL,
+    "noteId"         TEXT NOT NULL,
+    "easeFactor"     DOUBLE PRECISION NOT NULL DEFAULT 2.5,
     "interval"       INTEGER NOT NULL DEFAULT 0,
     "repetitions"    INTEGER NOT NULL DEFAULT 0,
     "nextReviewAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
