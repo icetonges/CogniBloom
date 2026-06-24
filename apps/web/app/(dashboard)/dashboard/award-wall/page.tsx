@@ -432,62 +432,109 @@ function FileViewer({ award, onClose }: { award: CustomAward; onClose: () => voi
 
 // ─── Award Card ───────────────────────────────────────────────────────────────
 
+/** Fixed pixel height for every card's preview pane — keeps the grid uniform */
+const CARD_PREVIEW_H = 220
+
 function AwardCard({ award, onDelete, onEdit, onView }: {
   award: CustomAward
   onDelete: () => void
   onEdit: () => void
   onView: () => void
 }) {
-  const thumbnail = award.fileThumbnail
-  const hasViewable = !!thumbnail || !!(award.fileData && award.fileData !== 'pdf:too-large')
-  const isPdf = award.fileType === 'pdf'
+  const isPdf   = award.fileType === 'pdf'
+  const isImage = award.fileType === 'image'
+
+  // Best available preview source:
+  //   1. fileThumbnail  — rendered PNG of page 1 (always prefer)
+  //   2. fileData       — for image awards: the raw base64 data URL works directly as <img> src
+  const hasFullData = !!award.fileData && award.fileData !== 'pdf:too-large'
+  const imgSrc = award.fileThumbnail ?? (isImage && hasFullData ? award.fileData : undefined)
+
+  // Old small-PDF awards may have full PDF base64 stored — render scaled-down iframe
+  const showPdfInline = !imgSrc && isPdf && hasFullData
+
 
   return (
     <div className="group flex flex-col rounded-2xl overflow-hidden border border-primary/20 hover:border-primary/40 transition-all">
-      {/* ── Visual preview ── */}
-      <button
-        onClick={hasViewable ? onView : undefined}
-        disabled={!hasViewable}
-        className={cn(
-          'relative w-full overflow-hidden transition-all',
-          hasViewable ? 'cursor-pointer' : 'cursor-default',
-        )}
-        style={{ aspectRatio: '4/3' }}
+      {/* ── Fixed-height preview pane ── */}
+      <div
+        className="relative overflow-hidden bg-white"
+        style={{ height: CARD_PREVIEW_H }}
       >
-        {thumbnail ? (
-          /* Actual rendered certificate page */
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={thumbnail}
-            alt={award.title}
-            className="w-full h-full object-contain bg-white"
-          />
+        {imgSrc ? (
+          /* ── Rendered thumbnail or image ── */
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imgSrc}
+              alt={award.title}
+              className="absolute inset-0 w-full h-full object-contain"
+            />
+            <button
+              onClick={onView}
+              className="absolute inset-0 w-full h-full cursor-pointer"
+              aria-label="View certificate"
+            >
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+                <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+              </div>
+            </button>
+          </>
+        ) : showPdfInline ? (
+          /* ── Scale a full-size PDF iframe down to fit the card ── */
+          <>
+            <div className="absolute inset-0 overflow-hidden" style={{ pointerEvents: 'none' }}>
+              {/* Render iframe at 3× the box height/width, then shrink with transform */}
+              <iframe
+                src={award.fileData}
+                title={award.title}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '300%',
+                  height: '300%',
+                  border: 'none',
+                  transformOrigin: 'top left',
+                  transform: 'scale(0.333)',
+                }}
+              />
+            </div>
+            <button
+              onClick={onView}
+              className="absolute inset-0 w-full h-full cursor-pointer"
+              aria-label="View certificate"
+            >
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+                <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+              </div>
+            </button>
+          </>
         ) : (
-          /* No thumbnail — show emoji + upload prompt */
-          <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">
-            <span className="text-5xl">{award.emoji}</span>
-            <p className="text-xs opacity-60 flex items-center gap-1">
-              <Upload className="w-3 h-3" /> Edit to add certificate
-            </p>
-          </div>
+          /* ── No visual — prompt to re-upload ── */
+          <button
+            onClick={onEdit}
+            className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-2 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer"
+          >
+            <span className="text-4xl">{award.emoji}</span>
+            <div className="text-center px-4">
+              <p className="text-xs font-semibold text-muted-foreground">No preview</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5 flex items-center justify-center gap-1">
+                <Upload className="w-3 h-3" /> Click Edit to attach certificate
+              </p>
+            </div>
+          </button>
         )}
 
-        {/* Hover overlay */}
-        {hasViewable && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-            <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-          </div>
-        )}
-
-        {/* Ribbon */}
+        {/* Ribbon — PDF badge */}
         {isPdf && (
-          <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+          <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow pointer-events-none z-10">
             <FileText className="w-2.5 h-2.5" /> PDF
           </div>
         )}
 
-        {/* Action buttons — always visible on hover */}
-        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Edit / Delete buttons */}
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           <button
             onClick={e => { e.stopPropagation(); onEdit() }}
             className="p-1.5 rounded-lg bg-black/60 hover:bg-primary text-white transition-colors"
@@ -503,7 +550,7 @@ function AwardCard({ award, onDelete, onEdit, onView }: {
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
-      </button>
+      </div>
 
       {/* ── Info row ── */}
       <div className="p-4 bg-card">
