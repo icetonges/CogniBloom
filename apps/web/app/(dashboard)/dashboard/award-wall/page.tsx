@@ -350,7 +350,7 @@ export default function AwardWallPage() {
 
           {/* Name & title */}
           <div className="text-center sm:text-left">
-            <h1 className="text-4xl font-black tracking-tight">Daniel's Award Wall</h1>
+            <h1 className="text-4xl font-black tracking-tight">Daniel&apos;s Award Wall</h1>
             <p className="text-primary font-bold text-lg mt-0.5">{levelTitle}</p>
             <p className="text-muted-foreground text-sm mt-1">
               Every badge earned, every milestone reached — all in one place.
