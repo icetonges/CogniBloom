@@ -420,10 +420,11 @@ export function NewNoteClient() {
   }
 
   return (
-    // Break out of dashboard container padding to go full-width.
-    // A single scroll container (the dashboard <main>) handles scrolling — this
-    // wrapper intentionally does NOT create its own scroll region, so wheel
-    // events never get trapped between nested scrollers.
+    <>
+    {/* Break out of dashboard container padding to go full-width.
+        A single scroll container (the dashboard <main>) handles scrolling — this
+        wrapper intentionally does NOT create its own scroll region, so wheel
+        events never get trapped between nested scrollers. */}
     <div className="-mx-4 md:-mx-8 -mt-6 flex flex-col">
       {/* ── Top bar (sticks to the top of the page scroller) ── */}
       <div
@@ -625,6 +626,28 @@ export function NewNoteClient() {
               <p className="text-[11px] text-right mt-4 font-medium" style={{ color: '#a78bfa' }}>
                 That&apos;s you. Keep going. 💪
               </p>
+
+              {/* Save buttons — visible in-body for reflection notes, especially on mobile */}
+              <div className="flex gap-3 mt-5 pt-4" style={{ borderTop: '1px solid rgba(99,102,241,0.15)' }}>
+                <button
+                  onClick={() => handleSave(false)}
+                  disabled={isSaving}
+                  className="flex items-center justify-center gap-2 flex-1 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}
+                >
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save
+                </button>
+                <button
+                  onClick={() => handleSave(true)}
+                  disabled={isSaving}
+                  className="flex items-center justify-center gap-2 flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 hover:scale-[1.02]"
+                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 16px rgba(99,102,241,0.4)' }}
+                >
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Save + AI
+                </button>
+              </div>
             </div>
           ) : (
             /* ── Standard Subject + Tags grid ── */
@@ -829,5 +852,6 @@ export function NewNoteClient() {
         </div>
       </div>
     )}
+    </>
   )
 }
