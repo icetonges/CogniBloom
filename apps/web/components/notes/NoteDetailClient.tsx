@@ -36,6 +36,13 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat')
   const [showSidebar, setShowSidebar] = useState(true)
 
+  // Custom confirm dialog (replaces window.confirm — blocked on iOS Safari)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string
+    confirmLabel?: string
+    onConfirm: () => void
+  } | null>(null)
+
   // ── Draggable split ─────────────────────────────────────────────────────────
   // leftPct is the percentage width of the note column (default 60%)
   const [leftPct, setLeftPct] = useState(60)
@@ -180,15 +187,21 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTitle, editContent, editSubject, editTags, mode])
 
-  const handleDelete = async () => {
-    if (!note || !confirm('Delete this note? This cannot be undone.')) return
-    setIsDeleting(true)
-    try {
-      await fetch(`/api/notes/${note.id}`, { method: 'DELETE' })
-      router.push('/dashboard/notes')
-    } catch {
-      setIsDeleting(false)
-    }
+  const handleDelete = () => {
+    if (!note) return
+    setConfirmDialog({
+      message: 'Delete this note? This cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setIsDeleting(true)
+        try {
+          await fetch(`/api/notes/${note.id}`, { method: 'DELETE' })
+          router.push('/dashboard/notes')
+        } catch {
+          setIsDeleting(false)
+        }
+      },
+    })
   }
 
   const handleDownload = () => {
@@ -593,6 +606,43 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
           </div>
         )}
       </div>
+
+      {/* ── Custom confirm dialog (replaces window.confirm — blocked on iOS Safari) ── */}
+      {confirmDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setConfirmDialog(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-6 space-y-5"
+            style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm font-semibold text-center leading-relaxed">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-80"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const fn = confirmDialog.onConfirm
+                  setConfirmDialog(null)
+                  fn()
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+                style={{ background: 'rgba(239,68,68,0.85)', border: '1px solid rgba(239,68,68,0.4)' }}
+              >
+                {confirmDialog.confirmLabel ?? 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
