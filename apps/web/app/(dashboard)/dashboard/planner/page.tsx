@@ -517,7 +517,13 @@ function DayView({
   const real = items.filter((e) => !isRoutine(e) && !e.tags.includes(META_TAG))
   const timed = real.filter((e) => e.startTime)
   const tasks = [...routine, ...real]
-  const habitList = [...routine].sort((a, b) => a.sortOrder - b.sortOrder)
+  // Sort habits chronologically by startTime; fall back to sortOrder for untimed items.
+  const habitList = [...routine].sort((a, b) => {
+    if (a.startTime && b.startTime) return a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0
+    if (a.startTime) return -1
+    if (b.startTime) return 1
+    return a.sortOrder - b.sortOrder
+  })
   const reorderHabit = (e: Entry, dir: number) => {
     const idx = habitList.findIndex((x) => x.id === e.id)
     const j = idx + dir
