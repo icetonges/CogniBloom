@@ -41,16 +41,6 @@ function fmtTime12h(t: string | null): string {
   return `${hr}:${m} ${ampm}`
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 
 // ─── HTML builder ─────────────────────────────────────────────────────────────
 
