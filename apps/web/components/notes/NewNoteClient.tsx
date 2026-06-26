@@ -198,8 +198,10 @@ export function NewNoteClient() {
 
   // Restore draft or load template on first mount
   useEffect(() => {
-    // If ?template=reflection, skip draft restore and load template directly
+    // If ?template=reflection, skip draft restore and load template directly.
+    // Also clear any stale regular-note draft so it doesn't leak into future sessions.
     if (searchParams.get('template') === 'reflection') {
+      try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
       const tpl = buildReflectionTemplate()
       setTitle(tpl.title)
       setSubject(tpl.subject)
@@ -215,7 +217,16 @@ export function NewNoteClient() {
       const raw = localStorage.getItem(DRAFT_KEY)
       if (raw) {
         const draft: NoteDraft = JSON.parse(raw)
-        if (draft.title || draft.content) {
+        // Guard: if the saved draft is a reflection note, discard it so it never
+        // bleeds into the regular new-note page (old bug — reflection content was
+        // incorrectly saved to the shared draft key).
+        const isReflectionDraft =
+          (draft.subject || '').toLowerCase().includes('reflection') ||
+          (draft.tags || '').toLowerCase().includes('reflection') ||
+          (draft.title || '').toLowerCase().includes('daily learning reflection')
+        if (isReflectionDraft) {
+          try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
+        } else if (draft.title || draft.content) {
           setTitle(draft.title || '')
           setContent(draft.content || '')
           setSubject(draft.subject || '')
@@ -238,8 +249,11 @@ export function NewNoteClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Auto-save draft — debounced 1.5 s after any field change
+  // Auto-save draft — debounced 1.5 s after any field change.
+  // Intentionally skipped for reflection notes so the reflection template
+  // doesn't overwrite the regular-note draft key.
   const saveDraft = useCallback(() => {
+    if (isReflection) return
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     autoSaveTimer.current = setTimeout(() => {
       try {
@@ -247,7 +261,7 @@ export function NewNoteClient() {
         setDraftSavedAt(new Date())
       } catch { /* storage quota */ }
     }, 1500)
-  }, [title, content, subject, tags])
+  }, [isReflection, title, content, subject, tags])
 
   useEffect(() => { saveDraft() }, [saveDraft])
 
@@ -308,6 +322,8 @@ export function NewNoteClient() {
   }
 
   const applyReflectionTemplate = useCallback(() => {
+    // Clear the regular-note draft so it doesn't show up next time a regular note is created
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
     const tpl = buildReflectionTemplate()
     setTitle(tpl.title)
     setSubject(tpl.subject)
