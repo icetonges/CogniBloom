@@ -161,7 +161,7 @@ function NavQuote({ quote }: { quote: DailyQuoteData }) {
   return (
     <div
       className="flex items-center gap-3 px-4 py-2 rounded-xl w-full"
-      style={{ background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.16)', backdropFilter: 'blur(8px)', minWidth: 0 }}
+      style={{ background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.16)', backdropFilter: 'blur(8px)', minWidth: 0, overflow: 'hidden' }}
     >
       <span style={{ fontSize: '0.58rem', letterSpacing: '0.12em', color: '#7c83e6', fontWeight: 700, textTransform: 'uppercase' as const, flexShrink: 0 }}>
         ✨ Today
@@ -274,7 +274,7 @@ export default async function LandingPage() {
   const title = getLevelTitle(level)
 
   return (
-    <main className="min-h-screen font-display overflow-x-hidden" style={{ background: '#060810', color: '#f1f5f9' }}>
+    <main className="min-h-screen font-display overflow-x-hidden" style={{ background: '#060810', color: '#f1f5f9', overflowX: 'hidden' }}>
 
       {/* ── Background layers ── */}
       <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
@@ -303,7 +303,7 @@ export default async function LandingPage() {
       </nav>
 
       {/* ── Mobile daily quote ── */}
-      <div className="relative z-10 block sm:hidden px-4 pb-3"><NavQuote quote={dailyQuote} /></div>
+      <div className="relative z-10 block sm:hidden px-4 pb-3 overflow-hidden"><NavQuote quote={dailyQuote} /></div>
 
       {/* ── Hero — compact ── */}
       <section className="relative z-10 pb-4 sm:pb-6">
@@ -355,7 +355,7 @@ export default async function LandingPage() {
               </div>
 
               {/* Orb — 85% scale, centered, cards spread wide */}
-              <div className="relative flex items-center justify-center h-60 mt-3 hidden sm:flex overflow-visible">
+              <div className="relative flex items-center justify-center h-60 mt-3 hidden md:flex overflow-visible">
                 <div className="scale-[0.85]" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   {/* Floating cards around orb */}
                   <div className="relative" style={{ width: 320, height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -377,8 +377,8 @@ export default async function LandingPage() {
 
             {/* ── Right: published diary preview (top 3) ── */}
             {publishedNotes.length > 0 && (
-              <div className="hidden lg:flex flex-col gap-3 pt-2">
-                <div className="flex items-center gap-2 mb-1">
+              <div className="flex flex-col gap-3 pt-4 lg:pt-2">
+                <div className="flex items-center gap-2 mb-1 pt-2 lg:pt-0 border-t lg:border-none" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <BookOpen className="w-3.5 h-3.5" style={{ color: '#6366f1' }} />
                   <span className="text-[10px] font-800 uppercase tracking-widest" style={{ color: '#475569', letterSpacing: '0.1em' }}>Learning Chronicle</span>
                 </div>
@@ -423,3 +423,4 @@ export default async function LandingPage() {
     </main>
   )
 }
+            

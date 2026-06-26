@@ -632,14 +632,14 @@ function buildPublishedPage(note: {
     .back-btn:hover{opacity:.8;}
 
     /* ── Article ──────────────────────────────────── */
-    .article-wrap{padding:52px 72px 96px;max-width:800px;}
+    .article-wrap{padding:52px clamp(24px,5%,80px) 96px;}
 
     .eyebrow{
       font-size:10px;font-weight:800;text-transform:uppercase;
       letter-spacing:.15em;color:var(--text4);margin-bottom:16px;
     }
     .pub-title{
-      font-size:2.35rem;font-weight:900;line-height:1.1;letter-spacing:-.01em;
+      font-size:2.9rem;font-weight:900;line-height:1.08;letter-spacing:-.02em;
       background:linear-gradient(135deg,#a5b4fc,#c4b5fd 50%,#f0abfc);
       -webkit-background-clip:text;-webkit-text-fill-color:transparent;
       margin-bottom:16px;
@@ -658,7 +658,7 @@ function buildPublishedPage(note: {
 
     /* Opening */
     .opening{margin-bottom:52px;}
-    .opening p{font-size:17px;line-height:1.95;color:var(--text3);margin-bottom:18px;}
+    .opening p{font-size:21px;line-height:1.9;color:var(--text3);margin-bottom:22px;}
     .opening p:last-child{margin-bottom:0;}
 
     .divider{height:1px;background:linear-gradient(90deg,transparent,rgba(99,102,241,0.3),transparent);margin:44px 0;}
@@ -671,7 +671,7 @@ function buildPublishedPage(note: {
       padding-bottom:14px;border-bottom:1px solid var(--border);
     }
     .subject-emoji{font-size:1.2rem;flex-shrink:0;}
-    .subject-body p{font-size:16.5px;line-height:1.95;color:var(--text3);margin-bottom:20px;}
+    .subject-body p{font-size:21px;line-height:1.9;color:var(--text3);margin-bottom:22px;}
     .subject-body p:last-child{margin-bottom:0;}
     .subject-body strong{color:var(--text2);font-weight:700;}
     .subject-body em{color:#c4b5fd;font-style:italic;}
@@ -683,7 +683,7 @@ function buildPublishedPage(note: {
       padding:26px 30px;margin-bottom:52px;
     }
     .closing-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:12px;}
-    .closing p{font-size:16px;line-height:1.9;color:var(--text3);margin-bottom:12px;}
+    .closing p{font-size:20px;line-height:1.9;color:var(--text3);margin-bottom:14px;}
     .closing p:last-child{margin-bottom:0;}
 
     /* Sec headers */
@@ -700,20 +700,20 @@ function buildPublishedPage(note: {
     .card-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text4);margin-bottom:14px;}
     .term-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
     .term-pill{flex-shrink:0;display:inline-block;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:700;border-width:1px;border-style:solid;}
-    .term-def{font-size:14px;color:var(--text4);line-height:1.65;padding-top:2px;}
+    .term-def{font-size:17px;color:var(--text4);line-height:1.65;padding-top:2px;}
 
     /* Quiz */
     .quiz-item{margin-bottom:12px;border:1px solid var(--border2);border-radius:12px;overflow:hidden;}
-    .quiz-q{padding:11px 15px;background:rgba(99,102,241,0.08);font-size:14px;font-weight:600;color:#c4b5fd;}
+    .quiz-q{padding:13px 18px;background:rgba(99,102,241,0.08);font-size:17px;font-weight:600;color:#c4b5fd;}
     .quiz-details{background:var(--bg3);}
     .quiz-summary{cursor:pointer;padding:8px 15px;font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;list-style:none;display:flex;align-items:center;gap:6px;}
     .quiz-summary::-webkit-details-marker{display:none;}
-    .quiz-a{padding:10px 15px;font-size:14px;color:#6ee7b7;line-height:1.7;}
+    .quiz-a{padding:12px 18px;font-size:17px;color:#6ee7b7;line-height:1.7;}
 
     /* Review */
     .review-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
     .review-box{width:18px;height:18px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;display:inline-block;}
-    .review-text{font-size:14px;color:var(--text3);}
+    .review-text{font-size:17px;color:var(--text3);}
 
     /* Raw notes */
     details.raw{background:var(--bg3);border:1px solid var(--border);border-radius:14px;margin-bottom:20px;overflow:hidden;}
@@ -722,15 +722,15 @@ function buildPublishedPage(note: {
     details.raw summary::before{content:'▶';font-size:8px;transition:transform .18s;color:var(--text4);}
     details.raw[open] summary::before{transform:rotate(90deg);}
     .raw-body{padding:16px 20px 20px;border-top:1px solid var(--border);}
-    .raw-body p{font-size:14px;color:var(--text4);line-height:1.75;margin-bottom:8px;}
+    .raw-body p{font-size:17px;color:var(--text4);line-height:1.75;margin-bottom:10px;}
     .raw-body h1,.raw-body h2,.raw-body h3{color:var(--accent);font-size:.95rem;margin:10px 0 5px;}
-    .raw-body ul,.raw-body ol{padding-left:16px;color:var(--text4);font-size:14px;margin-bottom:8px;}
+    .raw-body ul,.raw-body ol{padding-left:16px;color:var(--text4);font-size:17px;margin-bottom:10px;}
     .raw-body li{margin-bottom:3px;}
     .raw-body code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px;font-size:.8em;color:#93c5fd;font-family:monospace;}
 
     /* AI boxes */
     .ai-box{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px;}
-    .tutor-body{font-size:14px;color:var(--text3);line-height:1.85;}
+    .tutor-body{font-size:17px;color:var(--text3);line-height:1.85;}
     .tutor-body strong{color:#c4b5fd;}
 
     /* Social */
@@ -767,14 +767,21 @@ function buildPublishedPage(note: {
       .sb-overlay.open{display:block;}
       .ham{display:flex;}
       .article-wrap{padding:36px 24px 72px;}
-      .pub-title{font-size:1.85rem;}
+      .pub-title{font-size:2rem;}
+      .opening p,.subject-body p{font-size:18px;}
+      .closing p{font-size:17px;}
     }
     @media(max-width:600px){
       .topbar{padding:0 16px;}
       .back-btn{display:none;}
-      .article-wrap{padding:28px 16px 60px;}
+      .article-wrap{padding:24px 16px 56px;}
       .plat-grid{grid-template-columns:1fr 1fr;}
+      .pub-title{font-size:1.65rem;}
+      .opening p,.subject-body p{font-size:16px;}
+      .closing p{font-size:15.5px;}
+      .term-def,.review-text,.quiz-q,.quiz-a,.tutor-body{font-size:15px;}
     }
+    body{overflow-x:hidden;}
   </style>
 </head>
 <body>
@@ -910,7 +917,7 @@ function buildPublishedPage(note: {
     var html=document.documentElement;
     var dark=html.getAttribute('data-theme')==='dark';
     html.setAttribute('data-theme',dark?'light':'dark');
-    document.getElementById('themeBtn').textContent=dark?'🌙 Dark':'☀ Light';
+    document.getElementById('themeBtn').textContent=dark?'🌙 Dark':'\u2600 Light';
     try{localStorage.setItem('cogni-theme',dark?'light':'dark');}catch(e){}
   };
   (function(){
@@ -940,37 +947,42 @@ function buildPublishedPage(note: {
     if(!iso)return'';
     return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   }
-  var _sbCtrl=new AbortController();
-  var _sbTimer=setTimeout(function(){_sbCtrl.abort();},20000);
-  fetch('/api/notes/published',{signal:_sbCtrl.signal})
-    .then(function(r){
-      clearTimeout(_sbTimer);
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      return r.json();
-    })
-    .then(function(res){
-      var list=document.getElementById('note-list');
-      if(!list)return;
-      if(!res||!res.success||!Array.isArray(res.data)||!res.data.length){
-        list.innerHTML='<div class="sb-loading">No entries yet.</div>';return;
-      }
-      list.innerHTML=res.data.map(function(n){
-        var active=n.publishedSlug===currentSlug?' active':'';
-        var subj=n.subject?'<div class="nl-subj">'+esc(n.subject)+'</div>':'';
-        var slug2=n.publishedSlug?esc(n.publishedSlug):'';
-        return '<a href="/notes/view/'+slug2+'" class="note-link'+active+'">'+
-          subj+
-          '<div class="nl-title">'+esc(n.title||'Untitled')+'</div>'+
-          '<div class="nl-date">'+fmtDate(n.publishedAt||n.createdAt)+'</div>'+
-          '</a>';
-      }).join('');
-    })
-    .catch(function(e){
-      clearTimeout(_sbTimer);
-      var list=document.getElementById('note-list');
-      var msg=e&&e.name==='AbortError'?'Request timed out':(e&&e.message?e.message:'Network error');
-      if(list)list.innerHTML='<div class="sb-loading" style="color:#fb7185;font-size:11px;">'+msg+'</div>';
-    });
+  window.loadSidebar=function(isRetry){
+    var list=document.getElementById('note-list');
+    if(!list)return;
+    if(!isRetry)list.innerHTML='<div class="sb-loading">Loading entries…</div>';
+    var ctrl=new AbortController();
+    var timer=setTimeout(function(){ctrl.abort();},30000);
+    fetch('/api/notes/published',{signal:ctrl.signal})
+      .then(function(r){
+        clearTimeout(timer);
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        return r.json();
+      })
+      .then(function(res){
+        if(!list)return;
+        if(!res||!res.success||!Array.isArray(res.data)||!res.data.length){
+          list.innerHTML='<div class="sb-loading">No entries yet.</div>';return;
+        }
+        list.innerHTML=res.data.map(function(n){
+          var active=n.publishedSlug===currentSlug?' active':'';
+          var subj=n.subject?'<div class="nl-subj">'+esc(n.subject)+'</div>':'';
+          var slug2=n.publishedSlug?esc(n.publishedSlug):'';
+          return '<a href="/notes/view/'+slug2+'" class="note-link'+active+'">'+
+            subj+
+            '<div class="nl-title">'+esc(n.title||'Untitled')+'</div>'+
+            '<div class="nl-date">'+fmtDate(n.publishedAt||n.createdAt)+'</div>'+
+            '</a>';
+        }).join('');
+      })
+      .catch(function(e){
+        clearTimeout(timer);
+        var msg=e&&e.name==='AbortError'?'Timed out':(e&&e.message?e.message.slice(0,60):'Network error');
+        if(list)list.innerHTML='<div class="sb-loading" style="color:#fb7185;font-size:11px;">'+msg+
+          '<br><button onclick="loadSidebar(true)" style="margin-top:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;display:block;">Retry</button></div>';
+      });
+  };
+  window.loadSidebar(false);
 })();
 </script>
 </body>
