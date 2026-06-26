@@ -8,13 +8,15 @@ export const dynamic = 'force-dynamic'
 // Marked with the reserved tag 'routine' so the UI can render them distinctly
 // and so seeding stays idempotent.
 const DEFAULT_ROUTINE = [
-  { title: 'Duolingo',                 time: '07:30', details: '15 min lesson', tag: 'language' },
-  { title: 'Workout — set 1',          time: '08:00', details: '5 min',         tag: 'fitness' },
-  { title: '$5 daily investment',      time: '09:00', details: 'Invest $5',     tag: 'investment' },
-  { title: 'Workout — set 2',          time: '12:30', details: '5 min',         tag: 'fitness' },
-  { title: 'Workout — set 3',          time: '18:00', details: '5 min',         tag: 'fitness' },
-  { title: 'Daily mind map',           time: '20:45', details: '1 topic — branch it out', tag: 'mind' },
-  { title: 'Reflection / mindfulness', time: '21:00', details: '3 wins · 1 lesson · 1 goal', tag: 'mind' },
+  { title: 'Workout — set 1',             time: '07:30', details: '5 min',                        tag: 'fitness'    },
+  { title: 'Duolingo',                    time: '07:40', details: '5 min',                        tag: 'language'   },
+  { title: 'Study Session 1',             time: '07:45', details: '40 min',                       tag: 'study'      },
+  { title: 'Workout — set 2',             time: '16:00', details: '5 min',                        tag: 'fitness'    },
+  { title: 'Study Session 2',             time: '17:00', details: '40 min',                       tag: 'study'      },
+  { title: 'Workout — set 3',             time: '17:45', details: '5 min',                        tag: 'fitness'    },
+  { title: '$5 daily investment',         time: '18:00', details: '15 min',                       tag: 'investment' },
+  { title: 'Daily Reflection',            time: '20:00', details: '3 wins · 1 lesson · 1 goal',  tag: 'mind'       },
+  { title: 'Daily mind map + Close Out',  time: '20:30', details: '1 topic — branch it out',     tag: 'mind'       },
 ]
 
 function parseDay(value: string): Date | null {

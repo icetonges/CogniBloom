@@ -43,7 +43,10 @@ const fmtHour = (h: number) => { const ampm = h < 12 ? 'AM' : 'PM'; const hr = h
 const ROUTINE_EMOJI: Record<string, string> = {
   'Duolingo': '🦉',
   'Workout — set 1': '💪', 'Workout — set 2': '💪', 'Workout — set 3': '💪', 'Workout': '💪',
-  '$5 daily investment': '💵', 'Reflection / mindfulness': '🧘', 'Daily mind map': '🧠',
+  'Study Session 1': '📚', 'Study Session 2': '📚',
+  '$5 daily investment': '💵',
+  'Daily Reflection': '🧘', 'Reflection / mindfulness': '🧘',
+  'Daily mind map + Close Out': '🧠', 'Daily mind map': '🧠',
 }
 const routineEmoji = (title: string) => ROUTINE_EMOJI[title] ?? '✨'
 const isRoutine = (e: Entry) => e.tags.includes('routine')
@@ -69,12 +72,13 @@ function serializeDetails(notes: string, checklist: ChecklistItem[]): string {
 // One-tap starters for the entry editor
 interface Template { label: string; title: string; time: string; notes: string; tags: string[]; routine: boolean }
 const QUICK_TEMPLATES: Template[] = [
-  { label: '🦉 Duolingo',  title: 'Duolingo',                 time: '07:30', notes: '15 min lesson', tags: ['language'],   routine: true },
-  { label: '💪 Workout',   title: 'Workout',                  time: '',      notes: '5 min',         tags: ['fitness'],    routine: true },
-  { label: '💵 $5 invest', title: '$5 daily investment',      time: '09:00', notes: 'Invest $5',     tags: ['investment'], routine: true },
-  { label: '🧘 Reflect',   title: 'Reflection / mindfulness', time: '21:00', notes: '10 min',        tags: ['mind'],       routine: true },
-  { label: '📚 Study',     title: 'Study session',            time: '',      notes: '',              tags: ['study'],      routine: false },
-  { label: '📖 Read',      title: 'Reading',                  time: '',      notes: '',              tags: ['reading'],    routine: false },
+  { label: '💪 Workout',    title: 'Workout — set 1',            time: '07:30', notes: '5 min',   tags: ['fitness'],    routine: true  },
+  { label: '🦉 Duolingo',  title: 'Duolingo',                   time: '07:40', notes: '5 min',   tags: ['language'],   routine: true  },
+  { label: '📚 Study',     title: 'Study Session 1',             time: '07:45', notes: '40 min',  tags: ['study'],      routine: true  },
+  { label: '💵 $5 invest', title: '$5 daily investment',         time: '18:00', notes: '15 min',  tags: ['investment'], routine: true  },
+  { label: '🧘 Reflect',   title: 'Daily Reflection',            time: '20:00', notes: '',        tags: ['mind'],       routine: true  },
+  { label: '🧠 Mind map',  title: 'Daily mind map + Close Out',  time: '20:30', notes: '',        tags: ['mind'],       routine: true  },
+  { label: '📖 Read',      title: 'Reading',                     time: '',      notes: '',        tags: ['reading'],    routine: false },
 ]
 
 // ── per-day planner widgets, stored in one reserved meta row ──
