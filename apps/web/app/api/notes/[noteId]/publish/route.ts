@@ -1067,7 +1067,6 @@ function buildPublishedPage(note: {
 </script>
 </body>
 </html>`
-}`
 }
 
 
