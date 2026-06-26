@@ -3,7 +3,7 @@ import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
 import { chatWithFallback } from '@/lib/ai/fallback'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 type RouteParams = { params: Promise<{ noteId: string }> }
 
