@@ -33,7 +33,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
   const [autoSavedAt, setAutoSavedAt] = useState<Date | null>(null)
   const autoSavingRef = useRef(false)
   const autoSnapshotRef = useRef<string>('')
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat')
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('analysis')
   const [showSidebar, setShowSidebar] = useState(true)
 
   // Custom confirm dialog (replaces window.confirm — blocked on iOS Safari)
@@ -522,8 +522,8 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
               style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
             >
               {([
-                { id: 'chat' as const, label: 'AI Chat', icon: Bot },
                 { id: 'analysis' as const, label: 'Analysis', icon: Brain },
+                { id: 'chat' as const, label: 'AI Chat', icon: Bot },
               ] as const).map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -571,8 +571,8 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
           style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}
         >
           {([
-            { id: 'chat' as const, label: 'AI Chat', icon: Bot },
             { id: 'analysis' as const, label: 'Analysis', icon: Brain },
+            { id: 'chat' as const, label: 'AI Chat', icon: Bot },
           ] as const).map(({ id, label, icon: Icon }) => (
             <button
               key={id}

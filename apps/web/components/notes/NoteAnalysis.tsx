@@ -329,7 +329,7 @@ export function NoteAnalysis({
   publishedSlug,
   onAnalyze,
 }: NoteAnalysisProps) {
-  const [activeTab, setActiveTab] = useState<'mindmap' | 'reasoning' | 'concepts' | 'tutor' | 'study'>('mindmap')
+  const [activeTab, setActiveTab] = useState<'mindmap' | 'reasoning' | 'concepts' | 'tutor' | 'study'>('tutor')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -419,11 +419,11 @@ export function NoteAnalysis({
   const importanceColor: Record<string, string> = { core: '#6366f1', supporting: '#10b981', context: '#f59e0b' }
 
   const TABS = [
-    { id: 'mindmap' as const, label: 'Mind Map', icon: GitBranch },
+    { id: 'tutor' as const, label: 'Tutor Notes', icon: Brain },
     { id: 'reasoning' as const, label: 'Reasoning', icon: Lightbulb, count: parsedHints.length || null },
     { id: 'concepts' as const, label: 'Key Concepts', icon: BookOpen, count: parsedConcepts.length || null },
-    { id: 'tutor' as const, label: 'Tutor Notes', icon: Brain },
     { id: 'study' as const, label: 'Study Plan', icon: Compass },
+    { id: 'mindmap' as const, label: 'Mind Map', icon: GitBranch },
   ]
 
   return (
