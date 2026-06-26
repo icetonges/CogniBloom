@@ -209,7 +209,7 @@ async function generateWriterContent(note: {
   tutorSummary: string | null
   content: string
   knowledgePoints: string | null
-}): Promise<WriterOutput> {
+}, storedWriter: WriterOutput | null = null): Promise<WriterOutput> {
   const sections = parseReflectionSections(note.content)
 
   const parts: string[] = []
@@ -370,6 +370,8 @@ Return ONLY this JSON (no markdown fences, no preamble, no trailing text):
       socialPost:      (typeof parsed.socialPost === 'string' && parsed.socialPost.trim()) ? parsed.socialPost.trim() : defaults.socialPost,
     }
   } catch {
+    // AI failed — reuse the last good writer output rather than raw note text
+    if (storedWriter) return storedWriter
     return defaults
   }
 }
@@ -511,6 +513,15 @@ function buildPublishedPage(note: {
   <meta property="og:type" content="article">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+    /* ── Theme transition ───────────────────────── */
+    html{transition:background-color .18s ease,color .18s ease;}
+    body,
+    .sidebar,.topbar,.main,
+    .note-link,.terms-card,.quiz-item,.ai-box,.closing,
+    .raw,.sb-brand{
+      transition:background-color .18s ease,color .18s ease,border-color .18s ease;
+    }
 
     /* ── Theme tokens ─────────────────────────────── */
     [data-theme="dark"]{
@@ -720,13 +731,13 @@ function buildPublishedPage(note: {
     .tutor-body strong{color:#c4b5fd;}
 
     /* Social */
-    .social{background:linear-gradient(135deg,rgba(15,23,42,.97),rgba(30,27,75,.85));border:1px solid rgba(99,102,241,.2);border-radius:18px;padding:26px;margin-top:32px;}
+    .social{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:26px;margin-top:32px;}
     .soc-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
     .soc-icon-wrap{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
-    .soc-head h3{font-size:14px;font-weight:800;color:#f1f5f9;}
-    .soc-head p{font-size:11px;color:#64748b;margin-top:1px;}
-    .post-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 16px;margin-bottom:16px;position:relative;}
-    .post-text{font-size:14px;line-height:1.75;color:#cbd5e1;white-space:pre-wrap;padding-right:70px;}
+    .soc-head h3{font-size:14px;font-weight:800;color:var(--text);}
+    .soc-head p{font-size:11px;color:var(--text4);margin-top:1px;}
+    .post-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;position:relative;}
+    .post-text{font-size:14px;line-height:1.75;color:var(--text3);white-space:pre-wrap;padding-right:70px;}
     .cpbtn{position:absolute;top:10px;right:10px;background:rgba(99,102,241,.18);border:1px solid rgba(99,102,241,.35);color:#a5b4fc;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;}
     .cpbtn:hover{background:rgba(99,102,241,.3);}
     .cpbtn.ok{color:#34d399;border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.1);}
@@ -736,7 +747,7 @@ function buildPublishedPage(note: {
     .p-x{background:#000;border:1px solid #2d2d2d;}.p-fb{background:#1877f2;}
     .p-ig{background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af);}
     .p-tt{background:#010101;border:1px solid #2d2d2d;}.p-th{background:#111;border:1px solid #2d2d2d;}
-    .copy-hint{font-size:10.5px;color:#475569;margin-top:10px;text-align:center;}
+    .copy-hint{font-size:10.5px;color:var(--text4);margin-top:10px;text-align:center;}
 
     /* Footer */
     .article-footer{margin-top:52px;padding-top:20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
@@ -926,25 +937,36 @@ function buildPublishedPage(note: {
     if(!iso)return'';
     return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   }
-  fetch('/api/notes/published')
-    .then(function(r){return r.json();})
+  var _sbCtrl=new AbortController();
+  var _sbTimer=setTimeout(function(){_sbCtrl.abort();},10000);
+  fetch('/api/notes/published',{signal:_sbCtrl.signal})
+    .then(function(r){
+      clearTimeout(_sbTimer);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return r.json();
+    })
     .then(function(res){
       var list=document.getElementById('note-list');
-      if(!res.success||!res.data||!res.data.length){
+      if(!list)return;
+      if(!res||!res.success||!Array.isArray(res.data)||!res.data.length){
         list.innerHTML='<div class="sb-loading">No entries yet.</div>';return;
       }
       list.innerHTML=res.data.map(function(n){
         var active=n.publishedSlug===currentSlug?' active':'';
         var subj=n.subject?'<div class="nl-subj">'+esc(n.subject)+'</div>':'';
-        return '<a href="/notes/view/'+esc(n.publishedSlug)+'" class="note-link'+active+'">'+
+        var slug2=n.publishedSlug?esc(n.publishedSlug):'';
+        return '<a href="/notes/view/'+slug2+'" class="note-link'+active+'">'+
           subj+
           '<div class="nl-title">'+esc(n.title||'Untitled')+'</div>'+
           '<div class="nl-date">'+fmtDate(n.publishedAt||n.createdAt)+'</div>'+
           '</a>';
       }).join('');
     })
-    .catch(function(){
-      document.getElementById('note-list').innerHTML='<div class="sb-loading">Could not load entries.</div>';
+    .catch(function(e){
+      clearTimeout(_sbTimer);
+      var list=document.getElementById('note-list');
+      var msg=e&&e.name==='AbortError'?'Request timed out':(e&&e.message?e.message:'Network error');
+      if(list)list.innerHTML='<div class="sb-loading" style="color:#fb7185;font-size:11px;">'+msg+'</div>';
     });
 })();
 </script>
@@ -963,10 +985,15 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
 
     const slug = note.publishedSlug ?? await generateSlug(note.subject, note.createdAt)
+    // Parse stored writer JSON as fallback so republish never overwrites with raw defaults
+    let storedWriter: WriterOutput | null = null
+    if (note.writerJson) {
+      try { storedWriter = JSON.parse(note.writerJson) as WriterOutput } catch { /* ignore */ }
+    }
     const writer = await generateWriterContent({
       title: note.title, subject: note.subject, tutorSummary: note.tutorSummary,
       content: note.content, knowledgePoints: note.knowledgePoints,
-    })
+    }, storedWriter)
     const publishedHtml = buildPublishedPage({
       originalTitle: note.title, subject: note.subject, originalContent: note.content,
       tutorSummary: note.tutorSummary, knowledgePoints: note.knowledgePoints,
@@ -975,7 +1002,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     })
     const updated = await db.note.update({
       where: { id: noteId },
-      data: { publishedHtml, publishedSlug: slug, publishedAt: new Date() },
+      data: { publishedHtml, publishedSlug: slug, publishedAt: new Date(), writerJson: JSON.stringify(writer) },
     })
     return NextResponse.json({
       success: true,

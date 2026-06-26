@@ -169,6 +169,7 @@ model Note {
   publishedHtml        String?     @db.Text   // self-contained HTML page
   publishedSlug        String?     @unique    // e.g. "20260522_AMC_Math_001"
   publishedAt          DateTime?
+  writerJson           String?     @db.Text   // JSON of WriterOutput — reused on republish if AI fails
 
   // pgvector embedding (768 dims — Google text-embedding-004)
   embedding            Unsupported("vector(768)")?
