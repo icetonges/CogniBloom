@@ -272,9 +272,6 @@ export default async function LandingPage() {
   const level = profile?.level ?? xpToLevel(xp)
   const streak = profile?.currentStreak ?? 0
   const title = getLevelTitle(level)
-  const levelStart = xpForLevel(level)
-  const levelEnd = xpForLevel(level + 1)
-  const xpPct = Math.min(Math.round(((xp - levelStart) / (levelEnd - levelStart)) * 100), 100)
 
   return (
     <main className="min-h-screen font-display overflow-x-hidden" style={{ background: '#060810', color: '#f1f5f9' }}>
