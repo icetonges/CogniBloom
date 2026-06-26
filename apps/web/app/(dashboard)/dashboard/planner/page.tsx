@@ -114,14 +114,27 @@ function parseMeta(e?: Entry | null): DayMeta {
   } catch { return base }
 }
 
-// Add-a-line input: Enter creates and clears, keeping focus to add the next.
+// Add-a-line input: Enter or blur commits the value (mobile-safe).
 function AddLine({ onAdd, placeholder, className }: { onAdd: (t: string) => void; placeholder: string; className?: string }) {
   const [v, setV] = useState('')
+  // Prevent double-submit when Enter fires then blur fires in the same gesture.
+  const committedByKey = useRef(false)
+  const commit = (val: string) => { const t = val.trim(); if (t) { onAdd(t); setV('') } }
   return (
     <input
       value={v}
       onChange={(e) => setV(e.target.value)}
-      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const t = v.trim(); if (t) { onAdd(t); setV('') } } }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          committedByKey.current = true
+          commit(v)
+        }
+      }}
+      onBlur={() => {
+        if (!committedByKey.current) commit(v)
+        committedByKey.current = false
+      }}
       placeholder={placeholder}
       className={className}
     />
@@ -279,6 +292,7 @@ export default function PlannerPage() {
           cursor={cursor}
           onOpenEntry={(e) => setEditor({ entry: e, scope: e.scope, date: cursor })}
           onRestoreRoutine={restoreRoutine}
+          onRefresh={load}
         />
       ) : (
         <MonthView
@@ -425,12 +439,13 @@ function TaskRow({ e, onToggle, onCommit, onRemove, onOpen }: {
 
 // ============ DAY VIEW — inline multi-activity planner ============
 function DayView({
-  entries, cursor, onOpenEntry, onRestoreRoutine,
+  entries, cursor, onOpenEntry, onRestoreRoutine, onRefresh,
 }: {
   entries: Entry[]
   cursor: Date
   onOpenEntry: (e: Entry) => void
   onRestoreRoutine: () => void
+  onRefresh: () => void
 }) {
   const dateKey = dayKey(cursor)
   const [items, setItems] = useState<Entry[]>(entries)
@@ -657,9 +672,25 @@ function DayView({
             <div className="text-[11px] text-muted-foreground">{cursor.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-muted-foreground hidden sm:flex items-center gap-1">
-              {saveState === 'saving' ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</> : saveState === 'saved' ? <><Check className="w-3 h-3 text-emerald-500" /> All changes saved</> : null}
-            </span>
+            {/* Save button — always visible, confirms sync with server */}
+            <button
+              onClick={async () => { begin(); await onRefresh(); end() }}
+              disabled={saveState === 'saving'}
+              className={cn(
+                'flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-colors border',
+                saveState === 'saving'
+                  ? 'text-muted-foreground border-border cursor-wait'
+                  : saveState === 'saved'
+                  ? 'text-emerald-600 border-emerald-400/60 bg-emerald-50 dark:bg-emerald-950/30'
+                  : 'text-primary border-primary/40 hover:bg-primary/5'
+              )}
+            >
+              {saveState === 'saving'
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</>
+                : saveState === 'saved'
+                ? <><Check className="w-3 h-3" /> Saved</>
+                : <><Check className="w-3 h-3" /> Save</>}
+            </button>
             <div className="text-right">
               <div className="text-base font-bold tabular-nums leading-none">{pct}%</div>
               <div className="text-[10px] text-muted-foreground">{done}/{tasks.length} done</div>
