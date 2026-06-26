@@ -216,7 +216,7 @@ export default async function LandingPage() {
       <div className="relative z-10 block sm:hidden px-4 pb-3"><NavQuote /></div>
 
       {/* ── Hero — compact ── */}
-      <section className="relative z-10 py-10 sm:py-14">
+      <section className="relative z-10 pb-10 sm:pb-14">
         <div className="w-full px-4 sm:px-12 xl:px-20">
           <div className="grid lg:grid-cols-2 gap-8 items-start">
 
@@ -312,9 +312,9 @@ export default async function LandingPage() {
               <div className="hidden lg:flex flex-col gap-3 pt-2">
                 <div className="flex items-center gap-2 mb-1">
                   <BookOpen className="w-3.5 h-3.5" style={{ color: '#6366f1' }} />
-                  <span className="text-[10px] font-800 uppercase tracking-widest" style={{ color: '#475569', letterSpacing: '0.1em' }}>Latest from the Chronicle</span>
+                  <span className="text-[10px] font-800 uppercase tracking-widest" style={{ color: '#475569', letterSpacing: '0.1em' }}>Learning Chronicle</span>
                 </div>
-                {publishedNotes.slice(0, 3).map((note, i) => {
+                {publishedNotes.slice(0, 2).map((note, i) => {
                   const c = DIARY_COLORS[i % DIARY_COLORS.length]!
                   const aiTitle = extractAiTitle(note.publishedHtml, note.title)
                   const preview = stripHtml(note.tutorSummary)
@@ -335,90 +335,14 @@ export default async function LandingPage() {
                     </Link>
                   )
                 })}
+                <Link href="/dashboard/notes/archive" className="block text-center text-[10px] font-bold mt-1 transition-opacity hover:opacity-70" style={{ color: '#6366f1' }}>
+                  View all published entries →
+                </Link>
               </div>
             )}
           </div>
         </div>
       </section>
-
-      {/* ── The Learning Chronicle ─────────────────────────────────── */}
-      {publishedNotes.length > 0 && (
-        <section className="relative z-10 px-4 sm:px-12 xl:px-20 pb-20">
-
-          {/* Section divider */}
-          <div className="mb-10" style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.3), transparent)' }} />
-
-          {/* Section header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2))', border: '1px solid rgba(99,102,241,0.3)' }}>
-                <span style={{ fontSize: 16 }}>📖</span>
-              </div>
-              <div>
-                <h2 className="font-black tracking-tight" style={{ fontSize: 'clamp(1.3rem, 3vw, 1.7rem)', background: 'linear-gradient(135deg, #a5b4fc, #c4b5fd 50%, #f0abfc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  The Learning Chronicle
-                </h2>
-                <p className="text-xs font-medium mt-0.5" style={{ color: '#475569' }}>
-                  Daniel&apos;s study sessions, transformed into published reflections worth reading
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Grid */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {publishedNotes.map((note, i) => {
-              const c = DIARY_COLORS[i % DIARY_COLORS.length]!
-              const aiTitle = extractAiTitle(note.publishedHtml, note.title)
-              const preview = stripHtml(note.tutorSummary)
-              return (
-                <Link key={note.id} href={`/notes/view/${note.publishedSlug!}`} target="_blank">
-                  <div
-                    className="group rounded-2xl p-5 flex flex-col gap-3 h-full transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
-                    style={{ background: 'rgba(255,255,255,0.025)', border: `1px solid ${c.border}` }}
-                  >
-                    {/* Subject badge */}
-                    {note.subject && (
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full w-fit" style={{ background: c.badge, color: c.badgeText }}>
-                        {note.subject}
-                      </span>
-                    )}
-
-                    {/* AI Title */}
-                    <h3 className="font-bold text-sm leading-snug text-white flex-1 line-clamp-3">
-                      {aiTitle}
-                    </h3>
-
-                    {/* Preview */}
-                    {preview && (
-                      <p className="text-xs leading-relaxed line-clamp-2" style={{ color: '#475569' }}>{preview}</p>
-                    )}
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${c.border}` }}>
-                      <span className="text-[10px] font-semibold" style={{ color: '#334155' }}>
-                        {note.publishedAt ? new Date(note.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
-                      </span>
-                      <span className="text-[10px] font-bold transition-colors group-hover:opacity-80" style={{ color: c.accent }}>
-                        Read diary →
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-
-          {/* View all link */}
-          <div className="mt-6 text-center">
-            <Link href="/dashboard/notes/archive">
-              <button className="text-xs font-bold px-5 py-2 rounded-xl transition-all duration-200 hover:scale-105" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#a5b4fc' }}>
-                View all published entries →
-              </button>
-            </Link>
-          </div>
-        </section>
-      )}
 
       {/* ── Footer ── */}
       <footer className="relative z-10 text-center py-8 px-6 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
