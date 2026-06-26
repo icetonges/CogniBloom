@@ -32,7 +32,9 @@ export async function GET(
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+      // no-store prevents Vercel CDN and browser from caching the HTML blob,
+      // so republishing a note is reflected immediately without a cache purge.
+      'Cache-Control': 'no-store',
     },
   })
 }
