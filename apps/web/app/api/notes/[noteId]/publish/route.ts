@@ -270,34 +270,77 @@ async function generateWriterContent(note: {
 
   const noteType = hasStructuredSections ? 'daily learning reflection' : 'study note'
 
-  const prompt = `You are helping Daniel write a rich personal learning diary entry. Daniel just completed a ${noteType}.
+  const prompt = `You are TWO things at once:
+1. A BRILLIANT SUBJECT EXPERT who deeply knows ${note.subject ?? 'the topics Daniel studied'} — you can teach it from first principles, explain every nuance, build perfect analogies.
+2. A PROFESSIONAL WRITER who produces content teens actually want to read — your writing has rhythm, personality, and hooks that make someone forget they're "studying."
 
-Daniel's actual inputs (ONLY use what he wrote — do not invent facts):
+Daniel (a motivated student) just completed a ${noteType}. His raw notes are below. These are your RAW MATERIAL — use them as the story skeleton, then build something FAR richer using your expert knowledge.
+
+─── DANIEL'S RAW NOTES ───────────────────────────────────────
 Title: ${note.title}
 Subject: ${note.subject ?? 'General'}
 
 ${rawContent}${aiContext}
+──────────────────────────────────────────────────────────────
 
-YOUR JOB:
-1. Write in FIRST PERSON as Daniel ("I", "me", "my", "I realized", "When I tried...")
-2. STORY-TELLING narrative — this is Daniel's personal learning journal, not a textbook summary
-3. EXTRACT and ENHANCE what Daniel actually wrote — don't fabricate content not mentioned
-4. For "conceptsUnpacked": if Daniel listed things he doesn't fully understand, ACTUALLY explain them clearly — pick a vivid everyday analogy (food, sport, game, phone, real object). Don't just acknowledge the confusion.
-5. For "mistakeLab": root cause must be SPECIFIC ("I forgot to swap the inequality sign when multiplying by a negative" — NOT "I made a careless mistake"). Show the lesson learned.
-6. For "knowledgeWeb": describe how today's topics genuinely connect to prior knowledge Daniel mentioned, or to foundational ideas in the subject.
-7. "frameworkNote": 1-2 sentences on how today builds Daniel's bigger learning framework.
-8. OMIT sections if Daniel provided no content (empty arrays are fine).
-9. Keep "learnings" to 2-4 items max. Each "insight" is 2-3 sentences in Daniel's voice.
+YOUR MISSION: Transform these raw notes into a published learning diary entry that Daniel would be PROUD to share. Not a summary. Not a paraphrase. A genuine piece of writing that teaches, excites, and makes the concepts click.
 
-TITLE RULE: Write a diary-style title that captures a specific insight or turning point, e.g.:
-- "The Day I Finally Understood Why Negative × Negative = Positive"
-- "Cracking Algebra Word Problems: The Strategy That Changed Everything"
-NOT: "Notes on Math" or "Algebra Study Session"
-Max 90 chars. Should make Daniel want to re-read it.
+━━ TITLE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write a title so specific and compelling that a tired teen would put down their phone to read it.
+It must name the actual concept or breakthrough, not the subject area.
+GREAT: "Why I Was Wrong About Fractions for 3 Years (And What Fixed It in 10 Minutes)"
+GREAT: "The Invisible Rule in Algebra Nobody Told Me About Until Today"
+GREAT: "I Finally Get Probability — And It's Basically Minecraft Loot Tables"
+BAD: "Math Reflection" / "Today's Learning" / "Algebra Notes"
+Max 95 chars. No colons-then-generic-subtitle.
 
-ANALOGY RULE: All analogies must be vivid and concrete. "It's like a box" is NOT acceptable. Use: food (recipe steps), sport (player positions), games (Minecraft inventory), tech (phone notifications), real-world processes.
+━━ OPENING STORY (openingStory) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3-4 sentences in Daniel's first-person voice that HOOK the reader immediately.
+Start with a concrete moment, a struggle, a question, or a revelation — NOT "Today I studied..."
+Bad: "Today I worked on math and learned some things."
+Good: "I stared at that inequality for five minutes and I still had it wrong. Not because I didn't try — I just had one rule backwards in my head, and it was quietly breaking every problem I touched."
+The opening must make the reader think "yeah I've felt that" or "wait, now I want to know what happens."
 
-COLOR options for keyTerms: "violet", "emerald", "amber", "sky", "rose"
+━━ LEARNINGS (learnings) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2-4 items. Each one must ACTUALLY TEACH the concept — use your expert knowledge to go beyond what Daniel wrote.
+- "insight": 3-5 sentences. Explain the concept from the ground up, in Daniel's voice but with expert depth. Don't restate his notes — elevate them. A reader who knew nothing about this topic should now understand it.
+- "analogy": One sentence. Make it VIVID and teen-relevant. Not "it's like a box." Try: game mechanics, cooking, sports strategy, social media algorithms, phone battery management, sneaker drops, Spotify playlists, etc.
+- "whyItMatters": One punchy sentence explaining why this concept matters in the real world or in the bigger subject framework.
+
+━━ CONCEPT LAB (conceptsUnpacked) ━━━━━━━━━━━━━━━━━━━━━━━━━━
+For every concept Daniel flagged as confusing: ACTUALLY EXPLAIN IT using your expert knowledge.
+Don't just acknowledge the confusion. RESOLVE it.
+- "danielsSaid": What Daniel wrote (his exact confusion or partial understanding — keep it short)
+- "clearExplanation": A proper expert explanation written in Daniel's first-person voice. 4-6 sentences. Walk from confusion to clarity. Use the "aha moment" structure: what most people think → why that's wrong → what's actually happening → why it makes sense now.
+- "analogy": A specific, vivid teen-relevant analogy that makes the concept impossible to forget. Name real things (a specific game, food, sport, app). Not "it's similar to everyday life."
+
+━━ MISTAKE LAB (mistakeLab) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For each mistake Daniel recorded:
+- "rootCause": Name the EXACT cognitive error. Not "careless." Name the specific wrong rule or assumption ("I thought you distribute the exponent over addition, but exponents don't distribute — only multiplication does")
+- "lesson": 2-3 sentences explaining the CORRECT reasoning from first principles, so Daniel will never make this mistake again.
+Use your subject expertise to diagnose precisely what went wrong in Daniel's thinking.
+
+━━ KNOWLEDGE WEB (knowledgeWeb) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Draw real connections between today's concepts and other ideas — across topics, real-world uses, future subjects.
+Use your expert knowledge to find connections Daniel probably didn't see himself. These should feel like genuine "whoa" moments.
+- "bridge": 2 sentences explaining WHY these two things are connected at a deep level, not just superficially.
+
+━━ KEY TERMS (keyTerms) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write definitions that are precise AND memorable. Not dictionary definitions — write them the way a brilliant teacher would explain them in one sentence to a curious teen.
+COLOR options: "violet", "emerald", "amber", "sky", "rose"
+
+━━ SELF-QUIZ (selfQuiz) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write questions that test deep understanding, not memorization. The answers should be explanations, not single words.
+
+━━ FRAMEWORK NOTE (frameworkNote) ━━━━━━━━━━━━━━━━━━━━━━━━━━
+2-3 sentences. Describe how today's learning fits into the BIGGER picture of the subject. What door does this open? What foundation does it build? Make Daniel feel like he's assembling something powerful.
+
+━━ ENCOURAGEMENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Be specific — reference something real from today's session. Not generic "great job!" energy.
+Sound like a coach who actually watched the session, not a motivational poster.
+
+━━ SOCIAL POST ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write something Daniel would actually post. Short, punchy, specific to what he learned, with 2-3 hashtags max. Not cringe. Think how a teen who's proud of learning something would phrase it.
 
 Return ONLY this JSON (no markdown, no preamble):
 {
@@ -334,27 +377,27 @@ Return ONLY this JSON (no markdown, no preamble):
 
   const defaults: WriterOutput = {
     publishTitle: note.title,
-    openingStory: `Today I worked on ${note.subject ?? 'my studies'}.`,
+    openingStory: `I stared at today's work and realised I had more questions than answers — which, honestly, is where the real learning begins.`,
     subjectsCovered: note.subject ? [note.subject] : ['General'],
-    learnings: [{ topic: note.subject ?? 'General', insight: htmlToText(note.content).slice(0, 200), whyItMatters: 'Building my foundation.' }],
+    learnings: [{ topic: note.subject ?? 'General', insight: htmlToText(note.content).slice(0, 200), whyItMatters: 'Every concept learned builds the foundation for what comes next.' }],
     conceptsUnpacked: [],
     mistakeLab: [],
     improvementPlan: [],
     knowledgeWeb: [],
     keyTerms: [],
     selfQuiz: [],
-    smallWin: 'I kept going and put in the work today.',
+    smallWin: 'I showed up, put in the work, and understood something I didn\'t before.',
     reviewTomorrow: [],
-    frameworkNote: 'Today builds on my growing knowledge base.',
-    encouragement: 'Great work today, Daniel. Every session moves you forward.',
-    socialPost: `just finished studying ${note.subject ?? 'a new topic'} 🧠 building knowledge one day at a time #LearnInPublic #StudyWithMe #CogniBloom`,
+    frameworkNote: 'Today\'s session adds another layer to a growing foundation.',
+    encouragement: 'The fact that you wrote this down means you\'re already ahead of most people who just move on without reflecting.',
+    socialPost: `just had one of those sessions where something finally clicked 🧠✨ #LearningInPublic #CogniBloom`,
   }
 
   try {
     const res = await chatWithFallback({
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.4,
-      maxTokens: 2200,
+      temperature: 0.72,
+      maxTokens: 3600,
     })
     const parsed = JSON.parse(extractJSON(res.content)) as Partial<WriterOutput>
     return {
