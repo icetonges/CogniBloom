@@ -393,20 +393,71 @@ const TERM_COLORS: Record<string, { bg: string; border: string; text: string }> 
 // The AI body may include \n\n paragraph breaks, <strong>, <em>
 
 function renderProseBody(body: string): string {
-  // Split on double newlines into paragraphs
-  return body
-    .split(/\n\n+/)
-    .map(para => {
-      const p = para.trim()
-      if (!p) return ''
-      // Allow <strong> and <em> only; escape everything else
-      const safe = p
-        .replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;')
-        .replace(/<(?!\/?(?:strong|em)\s*>)/g, '&lt;')
-      return `<p>${safe}</p>`
-    })
-    .filter(Boolean)
-    .join('\n')
+  // ── Inline markdown → safe HTML ──────────────────────────────────
+  function inlineMd(raw: string): string {
+    // Protect price dollar signs ($5, $10 etc) so KaTeX ignores them
+    let s = raw.replace(/\$(\d)/g, '&#36;$1')
+    // HTML-escape dangerous chars; allow existing <strong><em><code> tags
+    s = s
+      .replace(/&(?!amp;|lt;|gt;|quot;|#39;|#36;)/g, '&amp;')
+      .replace(/<(?!\/?(?:strong|em|code)\s*>)/g, '&lt;')
+    // Bold **...**
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Italic *...* (not double-star)
+    s = s.replace(/(^|\s|>)\*(?!\*)([^*\n]+?)\*(?!\*)($|\s|[.,;:!?<])/g, '$1<em>$2</em>$3')
+    // Inline code `...`
+    s = s.replace(/`([^`]+)`/g, '<code style="background:rgba(99,102,241,0.12);color:#a5b4fc;padding:1px 6px;border-radius:4px;font-family:monospace;font-size:.82em;">$1</code>')
+    return s
+  }
+
+  // ── Block-level line processor ────────────────────────────────────
+  const lines = body.split('\n')
+  const out: string[] = []
+  let listTag = '' // 'ul' | 'ol' | ''
+  const hStyle = 'font-weight:800;color:var(--text);line-height:1.3;border-bottom:1px solid var(--border);padding-bottom:10px;'
+
+  function closeList() {
+    if (listTag) { out.push(`</${listTag}>`); listTag = '' }
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) { closeList(); continue }
+
+    // Headings: #, ##, ###, ####
+    const hm = line.match(/^(#{1,6})\s+(.+)/)
+    if (hm) {
+      closeList()
+      const lvl = Math.min(hm[1].length + 1, 5)
+      const sz = lvl <= 2 ? '1.2rem' : lvl === 3 ? '1.05rem' : '0.95rem'
+      const mt = lvl <= 2 ? '32px' : '24px'
+      out.push(`<h${lvl} style="font-size:${sz};${hStyle}margin:${mt} 0 14px;">${inlineMd(hm[2])}</h${lvl}>`)
+      continue
+    }
+
+    // Unordered bullets: * item / - item / + item
+    const bm = line.match(/^[*\-+]\s+(.+)/)
+    if (bm) {
+      if (listTag !== 'ul') { closeList(); out.push('<ul style="margin:14px 0 14px 26px;padding:0;list-style:disc;">'); listTag = 'ul' }
+      out.push(`<li style="margin-bottom:8px;">${inlineMd(bm[1])}</li>`)
+      continue
+    }
+
+    // Ordered lists: 1. / 2. etc
+    const om = line.match(/^\d+\.\s+(.+)/)
+    if (om) {
+      if (listTag !== 'ol') { closeList(); out.push('<ol style="margin:14px 0 14px 26px;padding:0;list-style:decimal;">'); listTag = 'ol' }
+      out.push(`<li style="margin-bottom:8px;">${inlineMd(om[1])}</li>`)
+      continue
+    }
+
+    // Regular paragraph
+    closeList()
+    out.push(`<p>${inlineMd(line)}</p>`)
+  }
+
+  closeList()
+  return out.filter(Boolean).join('\n')
 }
 
 // ── Page Builder ──────────────────────────────────────────────────────────────
@@ -782,7 +833,14 @@ function buildPublishedPage(note: {
       .term-def,.review-text,.quiz-q,.quiz-a,.tutor-body{font-size:15px;}
     }
     body{overflow-x:hidden;}
+    /* KaTeX math display overrides */
+    .katex-display{overflow-x:auto;overflow-y:hidden;padding:6px 0;}
+    .katex{font-size:1.05em;color:inherit;}
   </style>
+  <!-- KaTeX math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div class="sb-overlay" id="overlay" onclick="closeSidebar()"></div>
@@ -983,10 +1041,33 @@ function buildPublishedPage(note: {
       });
   };
   window.loadSidebar(false);
+  // ── KaTeX math render ───────────────────────────────────
+  function _tryKatex(){
+    if(window.renderMathInElement){
+      renderMathInElement(document.body,{
+        delimiters:[
+          {left:'$$',right:'$$',display:true},
+          {left:'$',right:'$',display:false},
+          {left:'\\(',right:'\\)',display:false},
+          {left:'\\[',right:'\\]',display:true}
+        ],
+        throwOnError:false,
+        ignoredTags:['script','noscript','style','textarea','pre','code','button']
+      });
+    } else {
+      setTimeout(_tryKatex,120);
+    }
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',_tryKatex);
+  } else {
+    _tryKatex();
+  }
 })();
 </script>
 </body>
 </html>`
+}`
 }
 
 
