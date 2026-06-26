@@ -27,6 +27,7 @@ function htmlToText(html: string): string {
     .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<\/li>/gi, '\n')
     .replace(/<\/h[1-6]>/gi, '\n').replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'").replace(/&quot;/g, '"')
     .replace(/\s+/g, ' ').trim()
 }
 function htmlToTextLines(html: string): string {
@@ -40,7 +41,7 @@ function htmlToTextLines(html: string): string {
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&#39;/g, "'").replace(/&quot;/g, '"')
-    .split('\n').map(l => l.trim()).join('\n')
+    .split('\n').map((l: string) => l.trim()).join('\n')
     .replace(/\n{3,}/g, '\n\n').trim()
 }
 function extractJSON(text: string): string {
@@ -69,8 +70,6 @@ async function generateSlug(subject: string | null, date: Date): Promise<string>
 }
 
 // ── Section Parser ────────────────────────────────────────────────────────────
-// Extracts Daniel's actual content from the daily reflection template sections,
-// filtering out empty bullets, template instructions, and placeholder text.
 
 interface DanielInputSections {
   whatILearned: string | null
@@ -120,7 +119,7 @@ function isNoiseLine(line: string): boolean {
   if (l === '-' || l === '•' || l === '[ ]' || l === '[x]' || l === '[X]') return true
   if (/^_{2,}$/.test(l)) return true
   if (/^\[[ xX]\]\s*$/.test(l)) return true
-  if (/^>\s*_/.test(l)) return true  // blockquote placeholder
+  if (/^>\s*_/.test(l)) return true
   if (/^[📚🧠📝🎯🔗📅🌍💡🎉🔍⭐]+\s*$/.test(l)) return true
   if (/^\s*[-*]\s+_{3,}/.test(l)) return true
   if (/^[-*]\s*$/.test(l)) return true
@@ -166,11 +165,7 @@ function parseReflectionSections(html: string): DanielInputSections {
 
   const flush = () => {
     if (!curKey) return
-    const content = curLines
-      .filter(l => !isNoiseLine(l))
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
+    const content = curLines.filter(l => !isNoiseLine(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim()
     if (content.length > 5) result[curKey] = content
     curLines.length = 0
   }
@@ -186,46 +181,25 @@ function parseReflectionSections(html: string): DanielInputSections {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface SubjectSection {
+  emoji: string
+  subjectTitle: string   // e.g. "Math — The Sequence That Flipped and Fooled Me"
+  body: string           // 2-4 flowing prose paragraphs (may include <strong> and <em>)
+}
+
 interface WriterOutput {
   publishTitle: string
-  openingStory: string
-  subjectsCovered: string[]
-  learnings: Array<{
-    topic: string
-    insight: string
-    analogy?: string
-    whyItMatters: string
-  }>
-  conceptsUnpacked: Array<{
-    concept: string
-    danielsSaid: string
-    clearExplanation: string
-    analogy: string
-  }>
-  mistakeLab: Array<{
-    problem: string
-    myAnswer?: string
-    correctAnswer?: string
-    rootCause: string
-    lesson: string
-  }>
-  improvementPlan: Array<{
-    issue: string
-    action: string
-  }>
-  knowledgeWeb: Array<{
-    today: string
-    linkedTo: string
-    bridge: string
-  }>
+  openingHook: string           // 2-4 sentences, scene-setting, never "Today I learned..."
+  subjectSections: SubjectSection[]
+  closingSection: string        // 3-5 sentence synthesis connecting subjects
   keyTerms: Array<{ term: string; definition: string; color: string }>
   selfQuiz: Array<{ question: string; answer: string }>
-  smallWin: string
   reviewTomorrow: string[]
-  frameworkNote: string
-  encouragement: string
-  socialPost: string
+  socialPost: string            // max 250 chars, genuine teen voice
 }
+
+// ── Title pattern tracker (in-process rotation only) ─────────────────────────
+let lastTitlePattern = 0
 
 // ── AI Writer ─────────────────────────────────────────────────────────────────
 
@@ -239,7 +213,7 @@ async function generateWriterContent(note: {
   const sections = parseReflectionSections(note.content)
 
   const parts: string[] = []
-  if (sections.subjectsPracticed) parts.push(`SUBJECTS STUDIED:\n${sections.subjectsPracticed}`)
+  if (sections.subjectsPracticed) parts.push(`SUBJECTS PRACTICED:\n${sections.subjectsPracticed}`)
   if (sections.whatILearned)      parts.push(`WHAT I LEARNED:\n${sections.whatILearned}`)
   if (sections.knowledgePoints)   parts.push(`KEY KNOWLEDGE POINTS:\n${sections.knowledgePoints}`)
   if (sections.problemsWrong)     parts.push(`PROBLEMS I GOT WRONG:\n${sections.problemsWrong}`)
@@ -249,173 +223,151 @@ async function generateWriterContent(note: {
   if (sections.connections)      parts.push(`CONNECTIONS TO PRIOR LEARNING:\n${sections.connections}`)
   if (sections.smallWin)         parts.push(`MY SMALL WIN TODAY:\n${sections.smallWin}`)
   if (sections.reviewTomorrow)   parts.push(`WHAT TO REVIEW TOMORROW:\n${sections.reviewTomorrow}`)
-  if (sections.selfQuiz)         parts.push(`SELF-CHECK QUIZ QUESTIONS:\n${sections.selfQuiz}`)
-  if (sections.questionsToAsk)   parts.push(`QUESTIONS TO ASK LATER:\n${sections.questionsToAsk}`)
+  if (sections.selfQuiz)         parts.push(`SELF-CHECK QUIZ:\n${sections.selfQuiz}`)
+  if (sections.questionsToAsk)   parts.push(`OPEN QUESTIONS:\n${sections.questionsToAsk}`)
 
-  const hasStructuredSections = parts.length > 0
-  const rawContent = hasStructuredSections
+  const rawContent = parts.length > 0
     ? parts.join('\n\n')
-    : htmlToText(note.content).slice(0, 3000)
+    : htmlToText(note.content).slice(0, 4000)
 
   let aiContext = ''
   if (note.tutorSummary) {
-    aiContext += `\nAI TUTOR SUMMARY: ${htmlToText(note.tutorSummary).slice(0, 500)}`
+    aiContext += `\nAI TUTOR CONTEXT: ${htmlToText(note.tutorSummary).slice(0, 600)}`
   }
   if (note.knowledgePoints) {
     try {
       const kps = JSON.parse(note.knowledgePoints) as { term: string; definition: string; importance: string }[]
-      aiContext += `\nKEY CONCEPTS FROM ANALYSIS:\n${kps.map(k => `• ${k.term} [${k.importance}]: ${k.definition}`).join('\n')}`
+      aiContext += `\nKEY CONCEPTS IDENTIFIED:\n${kps.map(k => `• ${k.term}: ${k.definition}`).join('\n')}`
     } catch { /* ignore */ }
   }
 
-  const noteType = hasStructuredSections ? 'daily learning reflection' : 'study note'
+  // Rotate title pattern suggestion
+  lastTitlePattern = (lastTitlePattern % 6) + 1
 
-  const prompt = `You are TWO things at once:
-1. A BRILLIANT SUBJECT EXPERT who deeply knows ${note.subject ?? 'the topics Daniel studied'} — you can teach it from first principles, explain every nuance, build perfect analogies.
-2. A PROFESSIONAL WRITER who produces content teens actually want to read — your writing has rhythm, personality, and hooks that make someone forget they're "studying."
+  const titlePatterns = `
+Pattern A — Two big ideas + one human anchor: "Gauss, Fibonacci, and a $5 Bet on the Future"
+Pattern B — One concept + its implication: "The Only Even Prime and Why That Changes Everything"
+Pattern C — A surprising contrast: "While True: Runs Forever. The Vocab Test Did Not."
+Pattern D — A question from the day: "What Does a Flipped Sequence Actually Cost You?"
+Pattern E — A vivid moment: "The Day the Pairing Trick Changed Addition Forever"
+Pattern F — A concept name used poetically: "Indefinite Loops and the Interminable Beauty of Fibonacci"
+Today, use Pattern ${lastTitlePattern}.`
 
-Daniel (a motivated student) just completed a ${noteType}. His raw notes are below. These are your RAW MATERIAL — use them as the story skeleton, then build something FAR richer using your expert knowledge.
+  const prompt = `You are a professional writer and expert educator producing a published daily learning diary entry for Daniel, a motivated student.
 
-─── DANIEL'S RAW NOTES ───────────────────────────────────────
-Title: ${note.title}
-Subject: ${note.subject ?? 'General'}
+─── DANIEL'S RAW NOTES ───────────────────────────────────────────────────────
+Note title: ${note.title}
+Subject area: ${note.subject ?? 'Multiple subjects'}
 
 ${rawContent}${aiContext}
-──────────────────────────────────────────────────────────────
+──────────────────────────────────────────────────────────────────────────────
 
-YOUR MISSION: Transform these raw notes into a published learning diary entry that Daniel would be PROUD to share. Not a summary. Not a paraphrase. A genuine piece of writing that teaches, excites, and makes the concepts click.
+Your job is to transform these raw notes into a polished, story-driven piece that Daniel would be proud to publish. This is NOT a summary. It is literary, intellectually serious, and human.
 
-━━ TITLE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Write a title so specific and compelling that a tired teen would put down their phone to read it.
-It must name the actual concept or breakthrough, not the subject area.
-GREAT: "Why I Was Wrong About Fractions for 3 Years (And What Fixed It in 10 Minutes)"
-GREAT: "The Invisible Rule in Algebra Nobody Told Me About Until Today"
-GREAT: "I Finally Get Probability — And It's Basically Minecraft Loot Tables"
-BAD: "Math Reflection" / "Today's Learning" / "Algebra Notes"
-Max 95 chars. No colons-then-generic-subtitle.
+━━ TITLE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Title rotation patterns (use the assigned one):
+${titlePatterns}
 
-━━ OPENING STORY (openingStory) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-3-4 sentences in Daniel's first-person voice that HOOK the reader immediately.
-Start with a concrete moment, a struggle, a question, or a revelation — NOT "Today I studied..."
-Bad: "Today I worked on math and learned some things."
-Good: "I stared at that inequality for five minutes and I still had it wrong. Not because I didn't try — I just had one rule backwards in my head, and it was quietly breaking every problem I touched."
-The opening must make the reader think "yeah I've felt that" or "wait, now I want to know what happens."
+Rule: The title must name the actual intellectual content — a concept, a breakthrough, a vivid moment. It must be specific enough that it could not describe any other day.
+NEVER: "Math Reflection" / "Today's Learning" / "A Productive Study Session"
+Max 95 characters.
 
-━━ LEARNINGS (learnings) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2-4 items. Each one must ACTUALLY TEACH the concept — use your expert knowledge to go beyond what Daniel wrote.
-- "insight": 3-5 sentences. Explain the concept from the ground up, in Daniel's voice but with expert depth. Don't restate his notes — elevate them. A reader who knew nothing about this topic should now understand it.
-- "analogy": One sentence. Make it VIVID and teen-relevant. Not "it's like a box." Try: game mechanics, cooking, sports strategy, social media algorithms, phone battery management, sneaker drops, Spotify playlists, etc.
-- "whyItMatters": One punchy sentence explaining why this concept matters in the real world or in the bigger subject framework.
+━━ OPENING HOOK (openingHook) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2–4 sentences. Set the human scene before any academic content. Reference the energy/focus level of the day without being clinical. Use one vivid specific detail. The reader should feel the texture of the day before they learn anything.
+NEVER open with "Today I learned…" or "In today's session…"
+GOOD: "I wasn't running at full speed today — energy at a 3, focus holding at a 4. But I showed up for five subjects, passed a vocabulary test, and made my first real investment before the day was over."
 
-━━ CONCEPT LAB (conceptsUnpacked) ━━━━━━━━━━━━━━━━━━━━━━━━━━
-For every concept Daniel flagged as confusing: ACTUALLY EXPLAIN IT using your expert knowledge.
-Don't just acknowledge the confusion. RESOLVE it.
-- "danielsSaid": What Daniel wrote (his exact confusion or partial understanding — keep it short)
-- "clearExplanation": A proper expert explanation written in Daniel's first-person voice. 4-6 sentences. Walk from confusion to clarity. Use the "aha moment" structure: what most people think → why that's wrong → what's actually happening → why it makes sense now.
-- "analogy": A specific, vivid teen-relevant analogy that makes the concept impossible to forget. Name real things (a specific game, food, sport, app). Not "it's similar to everyday life."
+━━ SUBJECT SECTIONS (subjectSections) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write one section per subject Daniel actually worked on. Skip subjects with no real content.
 
-━━ MISTAKE LAB (mistakeLab) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-For each mistake Daniel recorded:
-- "rootCause": Name the EXACT cognitive error. Not "careless." Name the specific wrong rule or assumption ("I thought you distribute the exponent over addition, but exponents don't distribute — only multiplication does")
-- "lesson": 2-3 sentences explaining the CORRECT reasoning from first principles, so Daniel will never make this mistake again.
-Use your subject expertise to diagnose precisely what went wrong in Daniel's thinking.
+For each section:
+- "emoji": single emoji that fits the subject (🔢 math, 💻 coding, 📖 vocabulary, 🌍 language, ∞ or 🏛️ theory, 💰 finance/real life, etc.)
+- "subjectTitle": "SubjectName — A Short Vivid Description of What Happened" (NOT just the subject name)
+  Example: "Math — The Sequence That Flipped and Fooled Me" (NOT "Math")
+- "body": 2–4 paragraphs of flowing prose. Rules for body:
+  * Use your expert knowledge to explain concepts deeply and correctly — if Daniel's understanding is partial or slightly off, write the correct version gently, without calling it out
+  * Treat every concept as genuinely interesting. Find the elegance in math. Connect code to real-world use. Bring vocabulary words alive with scenes. Find structures hiding inside language phrases.
+  * For any mistake Daniel made: name it specifically ("I read the sequence backwards — and then swapped the digits on top of that. Two errors folded into one wrong answer. Not a knowledge gap. A reading gap.") and state the lesson clearly
+  * For any open question: treat it as an intellectual cliffhanger, not a gap to apologize for
+  * Use <strong> for exactly ONE key insight per section — the thing worth remembering
+  * Use <em> for emphasis within a sentence, or vocabulary words on first use
+  * NO bullet points inside the body. No lists. Pure prose.
+  * Vary sentence length: short sentences land hard after longer ones
+  * Tone by subject type:
+    - Math / Number Theory: precise but warm; show WHY the rule works, not just what it is; find the elegance
+    - Coding / Programming: concrete and mechanical, but connect to what it unlocks in the real world
+    - Vocabulary: bring words alive with context and scenes, not just definitions
+    - Language learning: notice structures and patterns hiding inside phrases, not just words
+    - Science / History / Other: lead with the most surprising or counterintuitive idea
+    - Finance / Real life: connect to bigger thinking about the future
 
-━━ KNOWLEDGE WEB (knowledgeWeb) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Draw real connections between today's concepts and other ideas — across topics, real-world uses, future subjects.
-Use your expert knowledge to find connections Daniel probably didn't see himself. These should feel like genuine "whoa" moments.
-- "bridge": 2 sentences explaining WHY these two things are connected at a deep level, not just superficially.
+━━ CLOSING SECTION (closingSection) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3–5 sentences that synthesize the whole day. Connect at least two subjects to each other if possible. End with something specific — the small win, a decision, a moment of pride — without being sentimental. 
+NEVER end with "Overall it was a great day." End with something real and specific.
 
-━━ KEY TERMS (keyTerms) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Write definitions that are precise AND memorable. Not dictionary definitions — write them the way a brilliant teacher would explain them in one sentence to a curious teen.
+━━ KEY TERMS (keyTerms) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3–6 terms from today's learning. Write definitions the way a brilliant teacher would explain them in one sentence — precise AND memorable, not dictionary-style.
 COLOR options: "violet", "emerald", "amber", "sky", "rose"
 
-━━ SELF-QUIZ (selfQuiz) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Write questions that test deep understanding, not memorization. The answers should be explanations, not single words.
+━━ SELF-QUIZ (selfQuiz) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2–4 questions that test genuine understanding, not surface recall. Answers should be mini-explanations.
 
-━━ FRAMEWORK NOTE (frameworkNote) ━━━━━━━━━━━━━━━━━━━━━━━━━━
-2-3 sentences. Describe how today's learning fits into the BIGGER picture of the subject. What door does this open? What foundation does it build? Make Daniel feel like he's assembling something powerful.
+━━ REVIEW TOMORROW (reviewTomorrow) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2–4 specific items worth revisiting. Concrete, not vague.
 
-━━ ENCOURAGEMENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Be specific — reference something real from today's session. Not generic "great job!" energy.
-Sound like a coach who actually watched the session, not a motivational poster.
+━━ SOCIAL POST (socialPost) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HARD LIMIT: 250 characters including hashtags. Lead with the most surprising specific from the day. Include one concrete fact or number if possible. 1–3 hashtags max. Sound genuine, not performative — like a teen who's actually proud of something they figured out, not marketing copy.
 
-━━ SOCIAL POST ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Write something Daniel would actually post. Short, punchy, specific to what he learned, with 2-3 hashtags max. Not cringe. Think how a teen who's proud of learning something would phrase it.
-
-Return ONLY this JSON (no markdown, no preamble):
+Return ONLY this JSON (no markdown fences, no preamble, no trailing text):
 {
   "publishTitle": "...",
-  "openingStory": "...",
-  "subjectsCovered": ["..."],
-  "learnings": [
-    { "topic": "...", "insight": "...", "analogy": "...", "whyItMatters": "..." }
+  "openingHook": "...",
+  "subjectSections": [
+    { "emoji": "🔢", "subjectTitle": "Math — ...", "body": "paragraph 1\\n\\nparagraph 2\\n\\nparagraph 3" }
   ],
-  "conceptsUnpacked": [
-    { "concept": "...", "danielsSaid": "...", "clearExplanation": "...", "analogy": "..." }
-  ],
-  "mistakeLab": [
-    { "problem": "...", "myAnswer": "...", "correctAnswer": "...", "rootCause": "...", "lesson": "..." }
-  ],
-  "improvementPlan": [
-    { "issue": "...", "action": "..." }
-  ],
-  "knowledgeWeb": [
-    { "today": "...", "linkedTo": "...", "bridge": "..." }
-  ],
+  "closingSection": "...",
   "keyTerms": [
     { "term": "...", "definition": "...", "color": "violet" }
   ],
   "selfQuiz": [
     { "question": "...", "answer": "..." }
   ],
-  "smallWin": "...",
   "reviewTomorrow": ["...", "..."],
-  "frameworkNote": "...",
-  "encouragement": "...",
   "socialPost": "..."
 }`
 
   const defaults: WriterOutput = {
     publishTitle: note.title,
-    openingStory: `I stared at today's work and realised I had more questions than answers — which, honestly, is where the real learning begins.`,
-    subjectsCovered: note.subject ? [note.subject] : ['General'],
-    learnings: [{ topic: note.subject ?? 'General', insight: htmlToText(note.content).slice(0, 200), whyItMatters: 'Every concept learned builds the foundation for what comes next.' }],
-    conceptsUnpacked: [],
-    mistakeLab: [],
-    improvementPlan: [],
-    knowledgeWeb: [],
+    openingHook: `The day started slow, but the ideas came anyway.`,
+    subjectSections: [{
+      emoji: '📚',
+      subjectTitle: `${note.subject ?? 'Study Session'} — Notes from Today`,
+      body: htmlToText(note.content).slice(0, 600),
+    }],
+    closingSection: `Every session adds something. Today was no different.`,
     keyTerms: [],
     selfQuiz: [],
-    smallWin: 'I showed up, put in the work, and understood something I didn\'t before.',
     reviewTomorrow: [],
-    frameworkNote: 'Today\'s session adds another layer to a growing foundation.',
-    encouragement: 'The fact that you wrote this down means you\'re already ahead of most people who just move on without reflecting.',
-    socialPost: `just had one of those sessions where something finally clicked 🧠✨ #LearningInPublic #CogniBloom`,
+    socialPost: `learning something new every day 🧠 #studentlife #CogniBloom`,
   }
 
   try {
     const res = await chatWithFallback({
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.72,
-      maxTokens: 3600,
+      temperature: 0.75,
+      maxTokens: 4000,
     })
     const parsed = JSON.parse(extractJSON(res.content)) as Partial<WriterOutput>
+
     return {
       publishTitle:    (typeof parsed.publishTitle === 'string' && parsed.publishTitle.trim()) ? parsed.publishTitle.trim() : defaults.publishTitle,
-      openingStory:    parsed.openingStory   || defaults.openingStory,
-      subjectsCovered: Array.isArray(parsed.subjectsCovered) && parsed.subjectsCovered.length ? parsed.subjectsCovered : defaults.subjectsCovered,
-      learnings:       Array.isArray(parsed.learnings)       && parsed.learnings.length       ? parsed.learnings       : defaults.learnings,
-      conceptsUnpacked:Array.isArray(parsed.conceptsUnpacked)? parsed.conceptsUnpacked : defaults.conceptsUnpacked,
-      mistakeLab:      Array.isArray(parsed.mistakeLab)      ? parsed.mistakeLab       : defaults.mistakeLab,
-      improvementPlan: Array.isArray(parsed.improvementPlan) ? parsed.improvementPlan  : defaults.improvementPlan,
-      knowledgeWeb:    Array.isArray(parsed.knowledgeWeb)    ? parsed.knowledgeWeb     : defaults.knowledgeWeb,
-      keyTerms:        Array.isArray(parsed.keyTerms)        ? parsed.keyTerms         : defaults.keyTerms,
-      selfQuiz:        Array.isArray(parsed.selfQuiz)        ? parsed.selfQuiz         : defaults.selfQuiz,
-      smallWin:        parsed.smallWin      || defaults.smallWin,
-      reviewTomorrow:  Array.isArray(parsed.reviewTomorrow)  ? parsed.reviewTomorrow   : defaults.reviewTomorrow,
-      frameworkNote:   parsed.frameworkNote || defaults.frameworkNote,
-      encouragement:   parsed.encouragement || defaults.encouragement,
-      socialPost:      parsed.socialPost    || defaults.socialPost,
+      openingHook:     (typeof parsed.openingHook === 'string' && parsed.openingHook.trim())   ? parsed.openingHook.trim() : defaults.openingHook,
+      subjectSections: Array.isArray(parsed.subjectSections) && parsed.subjectSections.length  ? parsed.subjectSections   : defaults.subjectSections,
+      closingSection:  (typeof parsed.closingSection === 'string' && parsed.closingSection.trim()) ? parsed.closingSection.trim() : defaults.closingSection,
+      keyTerms:        Array.isArray(parsed.keyTerms)     ? parsed.keyTerms     : defaults.keyTerms,
+      selfQuiz:        Array.isArray(parsed.selfQuiz)     ? parsed.selfQuiz     : defaults.selfQuiz,
+      reviewTomorrow:  Array.isArray(parsed.reviewTomorrow) ? parsed.reviewTomorrow : defaults.reviewTomorrow,
+      socialPost:      (typeof parsed.socialPost === 'string' && parsed.socialPost.trim()) ? parsed.socialPost.trim() : defaults.socialPost,
     }
   } catch {
     return defaults
@@ -430,6 +382,26 @@ const TERM_COLORS: Record<string, { bg: string; border: string; text: string }> 
   amber:  { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)', text: '#fbbf24' },
   sky:    { bg: 'rgba(14,165,233,0.12)', border: 'rgba(14,165,233,0.35)', text: '#38bdf8' },
   rose:   { bg: 'rgba(244,63,94,0.12)',  border: 'rgba(244,63,94,0.35)',  text: '#fb7185' },
+}
+
+// ── Prose renderer — convert body text to safe HTML paragraphs ────────────────
+// The AI body may include \n\n paragraph breaks, <strong>, <em>
+
+function renderProseBody(body: string): string {
+  // Split on double newlines into paragraphs
+  return body
+    .split(/\n\n+/)
+    .map(para => {
+      const p = para.trim()
+      if (!p) return ''
+      // Allow <strong> and <em> only; escape everything else
+      const safe = p
+        .replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;')
+        .replace(/<(?!\/?(?:strong|em)\s*>)/g, '&lt;')
+      return `<p>${safe}</p>`
+    })
+    .filter(Boolean)
+    .join('\n')
 }
 
 // ── Page Builder ──────────────────────────────────────────────────────────────
@@ -449,97 +421,19 @@ function buildPublishedPage(note: {
   const date = new Date(note.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   const { writer } = note
 
-  // ── Subject badges ──
-  const subjectBadgesHtml = writer.subjectsCovered.map(s =>
-    `<span class="badge">📚 ${escapeHtml(s)}</span>`
-  ).join('')
-
-  // ── Learnings ──
-  const learningsHtml = writer.learnings.map(l => {
-    const analogyHtml = l.analogy ? `
-      <div class="analogy-box">
-        <span class="analogy-label">💡 Analogy</span>
-        <span class="analogy-text">${escapeHtml(l.analogy)}</span>
-      </div>` : ''
+  // ── Subject sections ──
+  const subjectSectionsHtml = writer.subjectSections.map(sec => {
+    const safeTitle = escapeHtml(sec.subjectTitle)
+    const body = renderProseBody(sec.body)
     return `
-    <div class="learning-card">
-      <div class="learning-topic">
-        <span class="topic-bar"></span>
-        <span>${escapeHtml(l.topic)}</span>
-      </div>
-      <p class="learning-insight">${escapeHtml(l.insight)}</p>
-      ${analogyHtml}
-      <div class="why-matters">🌍 ${escapeHtml(l.whyItMatters)}</div>
-    </div>`
-  }).join('')
-
-  // ── Concept Lab ──
-  const conceptsHtml = writer.conceptsUnpacked.map(c => `
-    <div class="concept-card">
-      <div class="concept-title">🔬 ${escapeHtml(c.concept)}</div>
-      ${c.danielsSaid ? `<div class="concept-said">
-        <span class="concept-said-label">What I was thinking:</span>
-        ${escapeHtml(c.danielsSaid)}
-      </div>` : ''}
-      <p class="concept-explanation">${escapeHtml(c.clearExplanation)}</p>
-      <div class="concept-analogy">
-        <span class="analogy-label">🎯 The Analogy That Makes It Click</span>
-        <span class="concept-analogy-text">${escapeHtml(c.analogy)}</span>
-      </div>
-    </div>`).join('')
-
-  // ── Mistake Lab ──
-  const mistakeColors = [
-    { accent: '#f43f5e', bg: 'rgba(244,63,94,0.06)', border: 'rgba(244,63,94,0.2)' },
-    { accent: '#f97316', bg: 'rgba(249,115,22,0.06)', border: 'rgba(249,115,22,0.2)' },
-    { accent: '#eab308', bg: 'rgba(234,179,8,0.06)',  border: 'rgba(234,179,8,0.2)'  },
-  ]
-  const mistakeHtml = writer.mistakeLab.map((m, i) => {
-    const c = mistakeColors[i % 3]!
-    return `
-    <div class="mistake-card" style="background:${c.bg};border-color:${c.border};">
-      <div class="mistake-header" style="color:${c.accent};">❌ The Problem</div>
-      <div class="mistake-problem">${escapeHtml(m.problem)}</div>
-      ${(m.myAnswer || m.correctAnswer) ? `<div class="answer-row">
-        ${m.myAnswer ? `<div class="answer-box wrong">
-          <div class="answer-label" style="color:#f87171;">My answer</div>
-          <div class="answer-val" style="color:#fca5a5;">${escapeHtml(m.myAnswer)}</div>
-        </div>` : ''}
-        ${m.correctAnswer ? `<div class="answer-box right">
-          <div class="answer-label" style="color:#34d399;">Correct answer</div>
-          <div class="answer-val" style="color:#6ee7b7;">${escapeHtml(m.correctAnswer)}</div>
-        </div>` : ''}
-      </div>` : ''}
-      <div class="root-cause-label">🔍 Root Cause</div>
-      <div class="root-cause-text">${escapeHtml(m.rootCause)}</div>
-      <div class="lesson-box">
-        <span class="lesson-label">✓ What I now understand</span>
-        <span class="lesson-text">${escapeHtml(m.lesson)}</span>
-      </div>
-    </div>`
-  }).join('')
-
-  // ── Improvement Plan ──
-  const improvementHtml = writer.improvementPlan.map((p, i) => `
-    <div class="improve-item">
-      <span class="improve-num">${i + 1}</span>
-      <div>
-        <div class="improve-issue">${escapeHtml(p.issue)}</div>
-        <div class="improve-action">${escapeHtml(p.action)}</div>
-      </div>
-    </div>`).join('')
-
-  // ── Knowledge Web ──
-  const knowledgeWebHtml = writer.knowledgeWeb.map(k => `
-    <div class="web-item">
-      <div class="web-link">
-        <span class="web-today">${escapeHtml(k.today)}</span>
-        <span class="web-arrow">→</span>
-        <span class="web-linked">${escapeHtml(k.linkedTo)}</span>
-      </div>
-      <div class="web-bridge">${escapeHtml(k.bridge)}</div>
-      <span class="web-icon">🔗</span>
-    </div>`).join('')
+  <section class="subject-section">
+    <h2 class="subject-heading">
+      <span class="subject-emoji">${escapeHtml(sec.emoji)}</span>
+      ${safeTitle}
+    </h2>
+    <div class="subject-body">${body}</div>
+  </section>`
+  }).join('\n')
 
   // ── Key Terms ──
   const termPillsHtml = writer.keyTerms.map(kt => {
@@ -573,7 +467,7 @@ function buildPublishedPage(note: {
     interface MindNode { label: string; children?: MindNode[] }
     const renderNode = (node: MindNode, depth = 0): string => {
       const ch = node.children?.length
-        ? `<ul style="margin:4px 0 4px 18px;padding:0;list-style:none;">${node.children.map(c => renderNode(c, depth + 1)).join('')}</ul>` : ''
+        ? `<ul style="margin:4px 0 4px 18px;padding:0;list-style:none;">${node.children.map((c: MindNode) => renderNode(c, depth + 1)).join('')}</ul>` : ''
       const bg = depth === 0 ? '#6366f1' : depth === 1 ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)'
       return `<li style="margin:4px 0;"><span style="display:inline-block;background:${bg};color:${depth === 0 ? '#fff' : 'inherit'};padding:${depth === 0 ? '5px 14px' : '3px 10px'};border-radius:7px;font-size:${depth === 0 ? '13px' : '12px'};font-weight:${depth === 0 ? 700 : 500};">${escapeHtml(node.label)}</span>${ch}</li>`
     }
@@ -592,19 +486,14 @@ function buildPublishedPage(note: {
       </div>`).join('')
   } catch { /* */ }
 
-  // Safe strings
-  const safeTitle     = escapeHtml(writer.publishTitle)
-  const safeOrigTitle = escapeHtml(note.originalTitle)
-  const safeSlug      = escapeHtml(note.publishedSlug)
-  const safeOpening   = escapeHtml(writer.openingStory)
-  const safeSmallWin  = escapeHtml(writer.smallWin)
-  const safeFramework = escapeHtml(writer.frameworkNote)
-  const safeEncourage = escapeHtml(writer.encouragement)
-  const safeSocial    = escapeHtml(writer.socialPost)
+  const safeTitle       = escapeHtml(writer.publishTitle)
+  const safeSlug        = escapeHtml(note.publishedSlug)
+  const safeOpening     = writer.openingHook.split(/\n+/).map(p => `<p>${escapeHtml(p.trim())}</p>`).filter(p => p !== '<p></p>').join('\n')
+  const safeClosing     = writer.closingSection.split(/\n+/).map(p => `<p>${escapeHtml(p.trim())}</p>`).filter(p => p !== '<p></p>').join('\n')
   const safeOrigContent = sanitizeRichHtml(note.originalContent)
   const safeSummary     = note.tutorSummary ? sanitizeRichHtml(note.tutorSummary) : null
+  const safeSocial      = escapeHtml(writer.socialPost)
 
-  // Social SVGs
   const xSvg  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.259 5.631L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/></svg>`
   const fbSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.411c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.971h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>`
   const igSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>`
@@ -622,75 +511,43 @@ function buildPublishedPage(note: {
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #060c18; color: #e2e8f0; min-height: 100vh; }
-    .page { max-width: 760px; margin: 0 auto; padding: 44px 20px 80px; }
+    .page { max-width: 720px; margin: 0 auto; padding: 52px 24px 100px; }
 
     /* Header */
-    .eyebrow { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; color: #374151; margin-bottom: 10px; }
-    .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.3); border-radius: 999px; padding: 3px 12px; font-size: 11px; font-weight: 700; margin-right: 6px; margin-bottom: 6px; }
-    .pub-title { font-size: 2rem; font-weight: 900; background: linear-gradient(135deg,#a5b4fc,#c4b5fd 50%,#f0abfc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.15; margin-bottom: 8px; }
-    .meta { font-size: 11px; color: #374151; margin-bottom: 28px; }
+    .eyebrow { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; color: #374151; margin-bottom: 14px; }
+    .pub-title { font-size: 2.15rem; font-weight: 900; line-height: 1.12; background: linear-gradient(135deg,#a5b4fc,#c4b5fd 50%,#f0abfc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; }
+    .meta { font-size: 11px; color: #374151; margin-bottom: 36px; }
+
+    /* Opening hook */
+    .opening { margin-bottom: 44px; }
+    .opening p { font-size: 17px; line-height: 1.85; color: #cbd5e1; margin-bottom: 14px; }
+    .opening p:last-child { margin-bottom: 0; }
+
+    /* Divider */
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(99,102,241,0.3), transparent); margin: 36px 0; }
+
+    /* Subject sections */
+    .subject-section { margin-bottom: 44px; }
+    .subject-heading { font-size: 1.1rem; font-weight: 800; color: #e2e8f0; margin-bottom: 18px; display: flex; align-items: baseline; gap: 10px; line-height: 1.3; }
+    .subject-emoji { font-size: 1.3rem; flex-shrink: 0; }
+    .subject-body p { font-size: 15.5px; line-height: 1.85; color: #94a3b8; margin-bottom: 16px; }
+    .subject-body p:last-child { margin-bottom: 0; }
+    .subject-body strong { color: #e2e8f0; font-weight: 700; }
+    .subject-body em { color: #c4b5fd; font-style: italic; }
+
+    /* Closing */
+    .closing { background: linear-gradient(135deg, rgba(99,102,241,0.07), rgba(139,92,246,0.04)); border: 1px solid rgba(99,102,241,0.15); border-radius: 16px; padding: 22px 26px; margin-bottom: 44px; }
+    .closing-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #6366f1; margin-bottom: 10px; }
+    .closing p { font-size: 15px; line-height: 1.8; color: #cbd5e1; margin-bottom: 10px; }
+    .closing p:last-child { margin-bottom: 0; }
 
     /* Section headers */
-    .sec-hdr { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #475569; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .sec-hdr { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #475569; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
     .sec-hdr::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.06); }
-    .sec-wrap { margin-bottom: 28px; }
-
-    /* Opening */
-    .opening-card { background: linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.06)); border: 1px solid rgba(99,102,241,.2); border-radius: 16px; padding: 20px 24px; margin-bottom: 28px; font-size: 15px; color: #e2e8f0; line-height: 1.8; }
-    .opening-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #6366f1; margin-bottom: 8px; }
-
-    /* Learning cards */
-    .learning-card { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
-    .learning-topic { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #6366f1; }
-    .topic-bar { display: inline-block; width: 4px; height: 18px; border-radius: 2px; background: linear-gradient(135deg,#6366f1,#8b5cf6); flex-shrink: 0; }
-    .learning-insight { font-size: 15px; color: #e2e8f0; line-height: 1.8; margin-bottom: 10px; }
-    .analogy-box { margin-top: 10px; padding: 10px 14px; background: rgba(245,158,11,.08); border-radius: 10px; border: 1px solid rgba(245,158,11,.2); }
-    .analogy-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #fbbf24; display: block; margin-bottom: 4px; }
-    .analogy-text { font-size: 13px; color: #fde68a; line-height: 1.6; }
-    .why-matters { margin-top: 10px; padding: 8px 12px; background: rgba(14,165,233,.07); border-radius: 8px; border-left: 3px solid rgba(14,165,233,.4); font-size: 12px; color: #7dd3fc; line-height: 1.6; }
-
-    /* Concept Lab */
-    .concept-card { background: rgba(139,92,246,.06); border: 1px solid rgba(139,92,246,.2); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
-    .concept-title { font-size: 14px; font-weight: 800; color: #c4b5fd; margin-bottom: 8px; }
-    .concept-said { font-size: 12px; color: #64748b; margin-bottom: 10px; padding: 8px 12px; background: rgba(0,0,0,.2); border-radius: 8px; border-left: 3px solid rgba(100,116,139,.3); }
-    .concept-said-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: #475569; display: block; margin-bottom: 3px; }
-    .concept-explanation { font-size: 14px; color: #cbd5e1; line-height: 1.75; margin-bottom: 12px; }
-    .concept-analogy { padding: 10px 14px; background: rgba(245,158,11,.08); border-radius: 10px; border: 1px solid rgba(245,158,11,.2); }
-    .concept-analogy-text { font-size: 13.5px; color: #fde68a; line-height: 1.65; }
-
-    /* Mistake Lab */
-    .mistake-card { border-radius: 14px; border-width: 1px; border-style: solid; padding: 18px; margin-bottom: 14px; }
-    .mistake-header { font-size: 13px; font-weight: 800; margin-bottom: 10px; }
-    .mistake-problem { font-size: 14px; color: #e2e8f0; margin-bottom: 8px; padding: 8px 12px; background: rgba(0,0,0,.15); border-radius: 8px; }
-    .answer-row { display: flex; gap: 10px; margin-bottom: 10px; }
-    .answer-box { flex: 1; padding: 8px 10px; border-radius: 8px; }
-    .answer-box.wrong { background: rgba(244,63,94,.1); }
-    .answer-box.right  { background: rgba(16,185,129,.1); }
-    .answer-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3px; }
-    .answer-val { font-size: 12.5px; }
-    .root-cause-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: 4px; }
-    .root-cause-text { font-size: 13px; color: #94a3b8; line-height: 1.65; margin-bottom: 8px; }
-    .lesson-box { padding: 8px 12px; background: rgba(16,185,129,.08); border-radius: 8px; border-left: 3px solid rgba(16,185,129,.4); }
-    .lesson-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: #34d399; display: block; margin-bottom: 3px; }
-    .lesson-text { font-size: 13px; color: #6ee7b7; line-height: 1.6; }
-
-    /* Improvement Plan */
-    .improve-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
-    .improve-num { flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg,#10b981,#059669); color: white; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
-    .improve-issue { font-size: 12px; font-weight: 700; color: #34d399; margin-bottom: 2px; }
-    .improve-action { font-size: 13px; color: #94a3b8; line-height: 1.6; }
-
-    /* Knowledge Web */
-    .web-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px; background: rgba(14,165,233,.06); border-radius: 12px; border: 1px solid rgba(14,165,233,.15); margin-bottom: 10px; position: relative; }
-    .web-link { font-size: 12px; margin-bottom: 4px; }
-    .web-today  { font-weight: 800; color: #38bdf8; }
-    .web-arrow  { color: #475569; margin: 0 6px; }
-    .web-linked { font-weight: 700; color: #7dd3fc; }
-    .web-bridge { font-size: 12.5px; color: #64748b; line-height: 1.6; }
-    .web-icon   { font-size: 20px; flex-shrink: 0; margin-left: auto; }
+    .sec-wrap { margin-bottom: 32px; }
 
     /* Key Terms */
-    .terms-card { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; }
+    .terms-card { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: 18px 20px; margin-bottom: 24px; }
     .card-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #475569; margin-bottom: 14px; }
     .term-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
     .term-pill { flex-shrink: 0; display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border-width: 1px; border-style: solid; }
@@ -704,26 +561,12 @@ function buildPublishedPage(note: {
     .quiz-summary::-webkit-details-marker { display: none; }
     .quiz-a { padding: 10px 14px; font-size: 13px; color: #6ee7b7; line-height: 1.6; }
 
-    /* Small Win */
-    .small-win { display: flex; gap: 14px; align-items: flex-start; background: linear-gradient(135deg,rgba(16,185,129,.1),rgba(5,150,105,.06)); border: 1px solid rgba(16,185,129,.3); border-radius: 14px; padding: 16px 18px; margin-bottom: 20px; }
-    .win-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #10b981; margin-bottom: 4px; }
-    .win-text { font-size: 14.5px; font-weight: 600; color: #6ee7b7; line-height: 1.65; }
-
     /* Review */
     .review-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
     .review-box { width: 18px; height: 18px; border: 1px solid rgba(99,102,241,.4); border-radius: 4px; flex-shrink: 0; display: inline-block; }
     .review-text { font-size: 13px; color: #94a3b8; }
 
-    /* Framework */
-    .framework { display: flex; gap: 14px; align-items: flex-start; background: rgba(14,165,233,.08); border: 1px solid rgba(14,165,233,.25); border-radius: 14px; padding: 16px 18px; margin-bottom: 24px; }
-    .fw-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #0ea5e9; margin-bottom: 4px; }
-    .fw-text { font-size: 14px; color: #7dd3fc; line-height: 1.7; }
-
-    /* Encouragement */
-    .encourage { background: linear-gradient(135deg,rgba(99,102,241,.09),rgba(139,92,246,.05)); border: 1px solid rgba(99,102,241,.2); border-radius: 14px; padding: 16px 20px; margin-bottom: 20px; display: flex; gap: 12px; align-items: flex-start; }
-    .enc-text { font-size: 13.5px; color: #c4b5fd; line-height: 1.7; }
-
-    /* Collapsible notes */
+    /* Collapsible raw notes */
     details.raw { background: rgba(255,255,255,.01); border: 1px solid rgba(255,255,255,.06); border-radius: 14px; margin-bottom: 20px; overflow: hidden; }
     details.raw summary { cursor: pointer; padding: 12px 18px; font-size: 11px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: .07em; list-style: none; display: flex; align-items: center; gap: 8px; user-select: none; }
     details.raw summary::-webkit-details-marker { display: none; }
@@ -740,9 +583,6 @@ function buildPublishedPage(note: {
     .ai-box { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
     .tutor-body { font-size: 13.5px; color: #94a3b8; line-height: 1.8; }
     .tutor-body strong { color: #c4b5fd; }
-
-    /* Improve wrapper */
-    .improve-wrap { background: rgba(16,185,129,.04); border: 1px solid rgba(16,185,129,.15); border-radius: 14px; padding: 18px 20px; }
 
     /* Social */
     .social { background: linear-gradient(135deg,rgba(15,23,42,.95),rgba(30,27,75,.8)); border: 1px solid rgba(99,102,241,.2); border-radius: 18px; padding: 24px; margin-top: 28px; }
@@ -770,9 +610,9 @@ function buildPublishedPage(note: {
     .slug-txt { font-family: monospace; font-size: 10px; color: #374151; }
 
     @media(max-width:600px) {
-      .pub-title { font-size: 1.6rem; }
-      .answer-row { flex-direction: column; }
+      .pub-title { font-size: 1.7rem; }
       .plat-grid { grid-template-columns: 1fr 1fr; }
+      .page { padding: 32px 16px 80px; }
     }
   </style>
 </head>
@@ -780,46 +620,25 @@ function buildPublishedPage(note: {
 <div class="page">
 
   <!-- Header -->
-  <div class="eyebrow">Daniel's Learning Diary · CogniBloom</div>
-  <div style="margin-bottom:12px;">${subjectBadgesHtml}</div>
-  <div class="pub-title">${safeTitle}</div>
-  <div class="meta">📅 ${date}${safeOrigTitle !== safeTitle ? ` &nbsp;·&nbsp; Note: &ldquo;${safeOrigTitle}&rdquo;` : ''}</div>
+  <div class="eyebrow">Daniel's Learning Diary · CogniBloom · ${date}</div>
+  <h1 class="pub-title">${safeTitle}</h1>
+  <div class="meta">📅 ${date}</div>
 
-  <!-- Opening Story -->
-  <div class="opening-card">
-    <div class="opening-label">✍️ Today's Story</div>
+  <!-- Opening Hook -->
+  <div class="opening">
     ${safeOpening}
   </div>
 
-  <!-- What I Learned -->
-  ${learningsHtml ? `<div class="sec-wrap">
-    <div class="sec-hdr">📚 What I Learned Today</div>
-    ${learningsHtml}
-  </div>` : ''}
+  <div class="divider"></div>
 
-  <!-- Concept Lab -->
-  ${conceptsHtml ? `<div class="sec-wrap">
-    <div class="sec-hdr">🔬 Concept Lab — Things I Didn't Fully Get (Until Now)</div>
-    ${conceptsHtml}
-  </div>` : ''}
+  <!-- Subject Sections -->
+  ${subjectSectionsHtml}
 
-  <!-- Mistake Lab -->
-  ${mistakeHtml ? `<div class="sec-wrap">
-    <div class="sec-hdr">🧪 Mistake Lab — What Went Wrong &amp; Why</div>
-    ${mistakeHtml}
-  </div>` : ''}
-
-  <!-- Improvement Plan -->
-  ${improvementHtml ? `<div class="sec-wrap">
-    <div class="sec-hdr">🎯 My Improvement Plan</div>
-    <div class="improve-wrap">${improvementHtml}</div>
-  </div>` : ''}
-
-  <!-- Knowledge Web -->
-  ${knowledgeWebHtml ? `<div class="sec-wrap">
-    <div class="sec-hdr">🕸️ Knowledge Web — How Today Connects</div>
-    ${knowledgeWebHtml}
-  </div>` : ''}
+  <!-- Closing Synthesis -->
+  <div class="closing">
+    <div class="closing-label">What Today Added Up To</div>
+    ${safeClosing}
+  </div>
 
   <!-- Key Terms -->
   ${termPillsHtml ? `<div class="terms-card">
@@ -829,17 +648,8 @@ function buildPublishedPage(note: {
 
   <!-- Self-Quiz -->
   ${selfQuizHtml ? `<div class="sec-wrap">
-    <div class="sec-hdr">❓ My Self-Check Quiz</div>
+    <div class="sec-hdr">❓ Self-Check Quiz</div>
     ${selfQuizHtml}
-  </div>` : ''}
-
-  <!-- Small Win -->
-  ${safeSmallWin ? `<div class="small-win">
-    <span style="font-size:22px;">🎉</span>
-    <div>
-      <div class="win-label">My Small Win Today</div>
-      <div class="win-text">${safeSmallWin}</div>
-    </div>
   </div>` : ''}
 
   <!-- Review Tomorrow -->
@@ -847,21 +657,6 @@ function buildPublishedPage(note: {
     <div class="card-label">📋 Review Tomorrow</div>
     ${reviewHtml}
   </div>` : ''}
-
-  <!-- Framework Note -->
-  ${safeFramework ? `<div class="framework">
-    <span style="font-size:22px;">🧩</span>
-    <div>
-      <div class="fw-label">Building the Framework</div>
-      <div class="fw-text">${safeFramework}</div>
-    </div>
-  </div>` : ''}
-
-  <!-- Encouragement -->
-  <div class="encourage">
-    <span style="font-size:20px;">🌟</span>
-    <div class="enc-text">${safeEncourage}</div>
-  </div>
 
   <!-- Original Notes -->
   <details class="raw">
