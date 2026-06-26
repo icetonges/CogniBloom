@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { db } from '@/lib/db'
 import { DANIEL_USER_ID } from '@/lib/user'
-import { xpToLevel, xpForLevel } from '@/lib/gamification'
+import { xpToLevel } from '@/lib/gamification'
 import { chatWithFallback } from '@/lib/ai/fallback'
 import { ArrowRight, Sparkles, CalendarDays, BookOpen } from 'lucide-react'
 
@@ -306,9 +306,9 @@ export default async function LandingPage() {
       <div className="relative z-10 block sm:hidden px-4 pb-3"><NavQuote quote={dailyQuote} /></div>
 
       {/* ── Hero — compact ── */}
-      <section className="relative z-10 pb-10 sm:pb-14">
+      <section className="relative z-10 pb-4 sm:pb-6">
         <div className="w-full px-4 sm:px-12 xl:px-20">
-          <div className="grid lg:grid-cols-2 gap-8 items-start">
+          <div className="grid lg:grid-cols-2 gap-8 items-stretch">
 
             {/* ── Left: text + orb ── */}
             <div className="flex flex-col gap-5 max-w-xl">
@@ -320,6 +320,20 @@ export default async function LandingPage() {
                     <span className="animate-streak">🔥</span> {streak}-day streak
                   </div>
                 )}
+              </div>
+
+              {/* CTAs — two buttons */}
+              <div className="flex flex-wrap gap-2">
+                <Link href="/dashboard/planner">
+                  <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white transition-all duration-200 hover:scale-105 active:scale-95 text-sm" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 6px 24px rgba(99,102,241,0.45)' }}>
+                    <CalendarDays className="w-4 h-4" /> Daily Planner
+                  </button>
+                </Link>
+                <Link href="/dashboard">
+                  <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 hover:scale-105 active:scale-95 text-sm" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0' }}>
+                    Dashboard <ArrowRight className="w-4 h-4" />
+                  </button>
+                </Link>
               </div>
 
               {/* Compact stat row */}
@@ -338,31 +352,6 @@ export default async function LandingPage() {
                     </div>
                   </Link>
                 ))}
-              </div>
-
-              {/* XP bar — slim */}
-              <div style={{ maxWidth: 260 }}>
-                <div className="flex justify-between text-[10px] mb-1" style={{ color: '#475569' }}>
-                  <span>Lv {level} → {level + 1}</span>
-                  <span>{xpPct}% · {xp.toLocaleString()} XP</span>
-                </div>
-                <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                  <div className="h-full rounded-full" style={{ width: `${xpPct}%`, background: 'linear-gradient(90deg, #6366f1, #a78bfa)', boxShadow: '0 0 6px rgba(99,102,241,0.6)' }} />
-                </div>
-              </div>
-
-              {/* CTAs — two buttons */}
-              <div className="flex flex-wrap gap-2">
-                <Link href="/dashboard/planner">
-                  <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white transition-all duration-200 hover:scale-105 active:scale-95 text-sm" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 6px 24px rgba(99,102,241,0.45)' }}>
-                    <CalendarDays className="w-4 h-4" /> Daily Planner
-                  </button>
-                </Link>
-                <Link href="/dashboard">
-                  <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 hover:scale-105 active:scale-95 text-sm" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0' }}>
-                    Dashboard <ArrowRight className="w-4 h-4" />
-                  </button>
-                </Link>
               </div>
 
               {/* Orb — full size, centered, cards spread wide */}
@@ -414,7 +403,7 @@ export default async function LandingPage() {
                     </Link>
                   )
                 })}
-                <Link href="/dashboard/notes/archive" className="block text-center text-[10px] font-bold mt-1 transition-opacity hover:opacity-70" style={{ color: '#6366f1' }}>
+                <Link href="/dashboard/notes/archive" className="block text-center text-[10px] font-bold mt-auto pt-2 transition-opacity hover:opacity-70" style={{ color: '#6366f1' }}>
                   View all published entries →
                 </Link>
               </div>
@@ -424,7 +413,7 @@ export default async function LandingPage() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="relative z-10 text-center py-8 px-6 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <footer className="relative z-10 text-center py-4 px-6 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <p className="text-sm font-semibold" style={{ color: '#64748b' }}>
           Built for{' '}
           <span style={{ color: '#a5b4fc', fontWeight: 800 }}>Daniel</span>
