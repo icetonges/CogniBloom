@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { db } from '@/lib/db'
+import { chatWithFallback } from '@/lib/ai/fallback'
+
+export const maxDuration = 60
 
 type RouteParams = { params: Promise<{ noteId: string }> }
 
@@ -33,11 +36,40 @@ function sanitizeRichHtml(html: string): string {
     .replace(/\s(?:href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\1/gi, '')
 }
 
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractJSON(text: string): string {
+  const noThinking = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+  const s = noThinking || text
+  let depth = 0; let start = -1; let inString = false; let escape = false
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') { if (depth === 0) start = i; depth++ }
+    else if (ch === '}') { depth--; if (depth === 0 && start !== -1) return s.slice(start, i + 1) }
+  }
+  return s.replace(/^```(?:json)?\s*/im, '').replace(/```\s*$/im, '').trim()
+}
+
 async function generateSlug(subject: string | null, date: Date): Promise<string> {
   const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '')
   const subjectPart = sanitizeSlugPart(subject ?? 'Note') || 'Note'
-
-  // Count existing notes with same date+subject prefix to get index
   const prefix = `${dateStr}_${subjectPart}_`
   const existing = await db.note.findMany({
     where: { publishedSlug: { startsWith: prefix } },
@@ -45,6 +77,68 @@ async function generateSlug(subject: string | null, date: Date): Promise<string>
   })
   const index = (existing.length + 1).toString().padStart(3, '0')
   return `${prefix}${index}`
+}
+
+interface AIEnrichment {
+  encouragement: string
+  reviewTips: string[]
+}
+
+async function generateEnrichment(note: {
+  title: string
+  subject: string | null
+  tutorSummary: string | null
+  content: string
+}): Promise<AIEnrichment> {
+  const plainText = htmlToText(note.content).slice(0, 3000)
+  const summaryLine = note.tutorSummary ? `\nAI Tutor Summary: ${htmlToText(note.tutorSummary)}` : ''
+
+  const prompt = `You are Daniel's personal AI learning coach. He has just published a study note.
+Write personalized content for the published page based on this note.
+
+Title: ${note.title}
+Subject: ${note.subject ?? 'General'}${summaryLine}
+
+Content (excerpt):
+${plainText.slice(0, 2000)}
+
+Return ONLY a JSON object with exactly these fields:
+{
+  "encouragement": "<2-3 warm, specific sentences encouraging Daniel about this particular work. Reference what he studied. Be genuine, not generic.>",
+  "reviewTips": [
+    "<specific, actionable tip for reviewing or practicing THIS content — not generic study advice>",
+    "<another tip specific to this note's topic>",
+    "<a third tip, e.g. connections to make, problems to try, or follow-up questions to explore>"
+  ]
+}
+
+Rules:
+- encouragement: mention something specific from the content; speak directly to Daniel
+- reviewTips: 3 tips, each 1 sentence, highly specific to the note's subject matter
+- Return ONLY the JSON. No markdown, no preamble.`
+
+  try {
+    const response = await chatWithFallback(
+      { messages: [{ role: 'user', content: prompt }], temperature: 0.4, maxTokens: 600 },
+    )
+    const raw = extractJSON(response.content)
+    const parsed = JSON.parse(raw) as Partial<AIEnrichment>
+    return {
+      encouragement: parsed.encouragement ?? 'Great work publishing this note — keep building your knowledge!',
+      reviewTips: Array.isArray(parsed.reviewTips) && parsed.reviewTips.length > 0
+        ? parsed.reviewTips
+        : ['Re-read the key concepts without notes, then check what you missed.'],
+    }
+  } catch {
+    return {
+      encouragement: 'Great work publishing this note — every note you write is a step forward in your learning journey.',
+      reviewTips: [
+        'Cover the note and try to recall the main ideas from memory.',
+        'Create a practice problem based on the concepts in this note.',
+        'Explain the topic out loud as if teaching it to someone else.',
+      ],
+    }
+  }
 }
 
 function buildPublishedPage(note: {
@@ -57,12 +151,13 @@ function buildPublishedPage(note: {
   reasoningHints: string | null
   publishedSlug: string
   createdAt: Date
+  enrichment: AIEnrichment
 }): string {
   const date = new Date(note.createdAt).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
   })
 
-  // Render knowledge points as pills
+  // ── Knowledge concept pills ──
   let knowledgePillsHtml = ''
   try {
     const kps = JSON.parse(note.knowledgePoints ?? '[]') as { term: string; definition: string; importance: string }[]
@@ -72,7 +167,7 @@ function buildPublishedPage(note: {
     }).join('')
   } catch { /* empty */ }
 
-  // Render mind map as simple nested list
+  // ── Mind map ──
   let mindMapHtml = ''
   try {
     interface MindNode { label: string; children?: MindNode[] }
@@ -92,30 +187,37 @@ function buildPublishedPage(note: {
     }
   } catch { /* empty */ }
 
-  // Render reasoning hints as steps
+  // ── Reasoning hints ──
   let reasoningHtml = ''
   try {
     const hints = JSON.parse(note.reasoningHints ?? '[]') as { step: number; hint: string }[]
     reasoningHtml = hints.map((h) => `
-      <div style="display:flex;gap:12px;margin-bottom:10px;align-items:flex-start;">
-        <span style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">${h.step}</span>
-        <span style="font-size:14px;line-height:1.5;padding-top:3px;">${escapeHtml(h.hint)}</span>
+      <div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;">
+        <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">${h.step}</span>
+        <span style="font-size:14px;line-height:1.6;padding-top:4px;color:#cbd5e1;">${escapeHtml(h.hint)}</span>
       </div>`).join('')
   } catch { /* empty */ }
+
+  // ── Review tips ──
+  const reviewTipsHtml = note.enrichment.reviewTips.map((tip, i) => `
+    <div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;">
+      <span style="flex-shrink:0;width:22px;height:22px;border-radius:6px;background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.4);color:#10b981;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;">${i + 1}</span>
+      <span style="font-size:14px;line-height:1.6;padding-top:2px;color:#cbd5e1;">${escapeHtml(tip)}</span>
+    </div>`).join('')
 
   const safeTitle = escapeHtml(note.title)
   const safeSubject = note.subject ? escapeHtml(note.subject) : null
   const safeContent = sanitizeRichHtml(note.content)
   const safeSummary = note.tutorSummary ? sanitizeRichHtml(note.tutorSummary) : null
   const safeSlug = escapeHtml(note.publishedSlug)
-  const hasAI = knowledgePillsHtml || mindMapHtml || reasoningHtml || safeSummary
+  const safeEncouragement = escapeHtml(note.enrichment.encouragement)
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${safeTitle} - CogniBloom</title>
+  <title>${safeTitle} — CogniBloom</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -127,14 +229,18 @@ function buildPublishedPage(note: {
     }
     .page { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
     /* Header */
-    .header { margin-bottom: 40px; }
     .badge { display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:4px 14px;font-size:12px;font-weight:600;margin-bottom:16px; }
-    h1 { font-size: 2.2rem; font-weight: 900; background: linear-gradient(135deg,#a5b4fc,#c4b5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; line-height: 1.2; }
-    .meta { font-size: 13px; color: #64748b; display:flex;gap:16px;flex-wrap:wrap; }
+    h1 { font-size:2.1rem;font-weight:900;background:linear-gradient(135deg,#a5b4fc,#c4b5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px;line-height:1.2; }
+    .meta { font-size:13px;color:#64748b;display:flex;gap:16px;flex-wrap:wrap;margin-bottom:32px; }
+    /* Encouragement banner */
+    .encourage { background:linear-gradient(135deg,rgba(99,102,241,0.12),rgba(139,92,246,0.08));border:1px solid rgba(99,102,241,0.25);border-radius:16px;padding:20px 24px;margin-bottom:28px;display:flex;gap:14px;align-items:flex-start; }
+    .encourage-icon { font-size:24px;flex-shrink:0;margin-top:2px; }
+    .encourage-text { font-size:15px;line-height:1.7;color:#c4b5fd; }
     /* Note content */
-    .note-content { background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:28px 32px;margin-bottom:32px; }
-    .note-content h2 { font-size:1.3rem;font-weight:700;color:#c4b5fd;margin:20px 0 8px; }
-    .note-content h3 { font-size:1.1rem;font-weight:700;color:#a5b4fc;margin:16px 0 6px; }
+    .note-content { background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:28px 32px;margin-bottom:28px; }
+    .note-content h1 { font-size:1.6rem;font-weight:800;color:#c4b5fd;margin:0 0 12px; }
+    .note-content h2 { font-size:1.25rem;font-weight:700;color:#c4b5fd;margin:20px 0 8px; }
+    .note-content h3 { font-size:1.05rem;font-weight:700;color:#a5b4fc;margin:16px 0 6px; }
     .note-content p { margin-bottom:12px;color:#cbd5e1; }
     .note-content ul,.note-content ol { padding-left:20px;margin-bottom:12px;color:#cbd5e1; }
     .note-content li { margin-bottom:4px; }
@@ -146,66 +252,98 @@ function buildPublishedPage(note: {
     .note-content img { max-width:100%;border-radius:10px;margin:12px 0;border:1px solid rgba(255,255,255,0.08); }
     .note-content blockquote { border-left:3px solid #6366f1;padding-left:16px;color:#94a3b8;font-style:italic;margin:12px 0; }
     /* AI sections */
-    .ai-section { background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:24px;margin-bottom:20px; }
-    .ai-section-title { font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6366f1;margin-bottom:16px;display:flex;align-items:center;gap:8px; }
-    .ai-section-title::before { content:'';display:inline-block;width:3px;height:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:2px; }
-    .tutor-summary { font-size:14px;color:#94a3b8;line-height:1.7; }
+    .section-label { font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:14px;display:flex;align-items:center;gap:8px; }
+    .section-label::before { content:'';display:inline-block;width:3px;height:13px;border-radius:2px; }
+    .ai-section { background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px 24px;margin-bottom:20px; }
+    /* Summary */
+    .summary-label { color:#6366f1; }
+    .summary-label::before { background:linear-gradient(135deg,#6366f1,#8b5cf6); }
+    .tutor-summary { font-size:14px;color:#94a3b8;line-height:1.75; }
     .tutor-summary strong { color:#c4b5fd;font-weight:600; }
+    /* Review tips */
+    .review-label { color:#10b981; }
+    .review-label::before { background:linear-gradient(135deg,#10b981,#0ea5e9); }
+    /* Reasoning */
+    .reasoning-label { color:#8b5cf6; }
+    .reasoning-label::before { background:linear-gradient(135deg,#8b5cf6,#6366f1); }
+    /* Concepts */
+    .concepts-label { color:#f59e0b; }
+    .concepts-label::before { background:linear-gradient(135deg,#f59e0b,#ef4444); }
+    /* Mind map */
+    .mindmap-label { color:#0ea5e9; }
+    .mindmap-label::before { background:linear-gradient(135deg,#0ea5e9,#6366f1); }
     /* Footer */
     footer { margin-top:48px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px; }
     .brand { font-size:13px;font-weight:700;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
     .slug { font-family:monospace;font-size:11px;color:#475569; }
+    @media (max-width:640px) {
+      h1 { font-size:1.6rem; }
+      .note-content { padding:20px; }
+      .ai-section { padding:16px; }
+    }
   </style>
 </head>
 <body>
 <div class="page">
+
   <!-- Header -->
-  <div class="header">
-    ${safeSubject ? `<div class="badge">Subject: ${safeSubject}</div>` : ''}
-    <h1>${safeTitle}</h1>
-    <div class="meta">
-      <span>📅 ${date}</span>
-      <span>${safeSlug}</span>
-    </div>
+  ${safeSubject ? `<div class="badge">📚 ${safeSubject}</div>` : ''}
+  <h1>${safeTitle}</h1>
+  <div class="meta">
+    <span>📅 ${date}</span>
+    <span style="font-family:monospace;font-size:11px;">${safeSlug}</span>
+  </div>
+
+  <!-- Encouragement -->
+  <div class="encourage">
+    <div class="encourage-icon">💡</div>
+    <div class="encourage-text">${safeEncouragement}</div>
   </div>
 
   <!-- Note content -->
-  <div class="note-content">
-    ${safeContent}
-  </div>
+  <div class="note-content">${safeContent}</div>
 
-  ${hasAI ? `
-  <!-- AI Analysis -->
-  ${knowledgePillsHtml ? `
+  ${safeSummary ? `
+  <!-- AI Summary -->
   <div class="ai-section">
-    <div class="ai-section-title">Key Concepts</div>
+    <div class="section-label summary-label">✨ AI Summary</div>
+    <div class="tutor-summary">${safeSummary}</div>
+  </div>` : ''}
+
+  ${reviewTipsHtml ? `
+  <!-- Review Tips -->
+  <div class="ai-section">
+    <div class="section-label review-label">🎯 Review Tips</div>
+    ${reviewTipsHtml}
+  </div>` : ''}
+
+  ${reasoningHtml ? `
+  <!-- Reasoning Logic -->
+  <div class="ai-section">
+    <div class="section-label reasoning-label">🧠 Reasoning Logic</div>
+    ${reasoningHtml}
+  </div>` : ''}
+
+  ${knowledgePillsHtml ? `
+  <!-- Key Concepts -->
+  <div class="ai-section">
+    <div class="section-label concepts-label">🔑 Key Concepts</div>
     <div>${knowledgePillsHtml}</div>
   </div>` : ''}
 
   ${mindMapHtml ? `
+  <!-- Mind Map -->
   <div class="ai-section">
-    <div class="ai-section-title">Mind Map</div>
+    <div class="section-label mindmap-label">🗺️ Mind Map</div>
     ${mindMapHtml}
   </div>` : ''}
-
-  ${reasoningHtml ? `
-  <div class="ai-section">
-    <div class="ai-section-title">Reasoning Steps</div>
-    ${reasoningHtml}
-  </div>` : ''}
-
-  ${safeSummary ? `
-  <div class="ai-section">
-    <div class="ai-section-title">Tutor Notes</div>
-    <div class="tutor-summary">${safeSummary}</div>
-  </div>` : ''}
-  ` : ''}
 
   <!-- Footer -->
   <footer>
     <span class="brand">CogniBloom — AI Learning Platform</span>
     <span class="slug">${safeSlug}</span>
   </footer>
+
 </div>
 </body>
 </html>`
@@ -223,7 +361,15 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     // Generate or reuse slug
     const slug = note.publishedSlug ?? await generateSlug(note.subject, note.createdAt)
 
-    // Build the published HTML page
+    // Generate AI enrichment (encouragement + review tips) at publish time
+    const enrichment = await generateEnrichment({
+      title: note.title,
+      subject: note.subject,
+      tutorSummary: note.tutorSummary,
+      content: note.content,
+    })
+
+    // Build the published HTML page with all AI content
     const publishedHtml = buildPublishedPage({
       title: note.title,
       subject: note.subject,
@@ -234,15 +380,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       reasoningHints: note.reasoningHints,
       publishedSlug: slug,
       createdAt: note.createdAt,
+      enrichment,
     })
 
     const updated = await db.note.update({
       where: { id: noteId },
-      data: {
-        publishedHtml,
-        publishedSlug: slug,
-        publishedAt: new Date(),
-      },
+      data: { publishedHtml, publishedSlug: slug, publishedAt: new Date() },
     })
 
     return NextResponse.json({
@@ -258,7 +401,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// GET /api/notes/[noteId]/publish — get current publish status
+// GET /api/notes/[noteId]/publish — current publish status
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
