@@ -15,9 +15,7 @@ function sanitizeSlugPart(str: string): string {
 function escapeHtml(v: string): string {
   return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
-function escapeAttribute(v: string): string {
-  return escapeHtml(v).replace(/`/g, '&#96;')
-}
+
 function sanitizeRichHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
