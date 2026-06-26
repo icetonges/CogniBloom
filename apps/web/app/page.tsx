@@ -308,7 +308,7 @@ export default async function LandingPage() {
       {/* ── Hero — compact ── */}
       <section className="relative z-10 pb-4 sm:pb-6">
         <div className="w-full px-4 sm:px-12 xl:px-20">
-          <div className="grid lg:grid-cols-2 gap-8 items-stretch">
+          <div className="grid lg:grid-cols-2 gap-8 items-start">
 
             {/* ── Left: text + orb ── */}
             <div className="flex flex-col gap-5 max-w-xl">
@@ -354,9 +354,9 @@ export default async function LandingPage() {
                 ))}
               </div>
 
-              {/* Orb — full size, centered, cards spread wide */}
-              <div className="relative flex items-center justify-center h-72 mt-3 hidden sm:flex overflow-visible">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+              {/* Orb — 85% scale, centered, cards spread wide */}
+              <div className="relative flex items-center justify-center h-60 mt-3 hidden sm:flex overflow-visible">
+                <div className="scale-[0.85]" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   {/* Floating cards around orb */}
                   <div className="relative" style={{ width: 320, height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {recentNotes[0] && (
@@ -403,7 +403,7 @@ export default async function LandingPage() {
                     </Link>
                   )
                 })}
-                <Link href="/dashboard/notes/archive" className="block text-center text-[10px] font-bold mt-auto pt-2 transition-opacity hover:opacity-70" style={{ color: '#6366f1' }}>
+                <Link href="/dashboard/notes/archive" className="block text-center text-[10px] font-bold mt-2 transition-opacity hover:opacity-70" style={{ color: '#6366f1' }}>
                   View all published entries →
                 </Link>
               </div>
