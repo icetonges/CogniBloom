@@ -10,7 +10,7 @@ import {
   BookOpen, Medal, Award, GraduationCap, X, Check,
   ZoomIn, FileText, Sparkles, Upload, Pencil, RefreshCw,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, localISODate } from '@/lib/utils'
 import { extractCertificateInfo } from './actions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ function AwardModal({
   const [title, setTitle] = useState(initial?.title ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [emoji, setEmoji] = useState(initial?.emoji ?? '🏆')
-  const [date, setDate] = useState(initial?.date ? initial.date.slice(0, 10) : new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(initial?.date ? initial.date.slice(0, 10) : localISODate())
 
   const [fileThumbnail, setFileThumbnail] = useState<string | undefined>(initial?.fileThumbnail)
   const [fileData, setFileData] = useState<string | undefined>(initial?.fileData)
@@ -194,7 +194,7 @@ function AwardModal({
       // Auto-fill only if fields are empty (don't overwrite manual edits)
       if (processed.extractedTitle && !title) setTitle(processed.extractedTitle)
       if (processed.extractedDescription && !description) setDescription(processed.extractedDescription)
-      if (processed.extractedDate && date === new Date().toISOString().slice(0, 10))
+      if (processed.extractedDate && date === localISODate())
         setDate(processed.extractedDate.slice(0, 10))
       setStatus('done')
       setStatusMsg('Certificate info extracted ✓')
@@ -217,7 +217,7 @@ function AwardModal({
       title: title.trim(),
       description: description.trim(),
       emoji,
-      date: new Date(date).toISOString(),
+      date: new Date(date + 'T00:00:00').toISOString(), // parse as local midnight, not UTC
       fileData,
       fileThumbnail,
       fileName,

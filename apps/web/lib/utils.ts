@@ -94,6 +94,19 @@ export function slugify(str: string) {
 }
 
 // Date utilities
+
+/**
+ * Returns the local calendar date as YYYY-MM-DD.
+ * Unlike toISOString() (which uses UTC), this uses the device's local timezone
+ * so the date always matches what the user sees on their clock.
+ */
+export function localISODate(date: Date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function formatDate(date: Date, format: 'short' | 'long' = 'short') {
   const options: Intl.DateTimeFormatOptions =
     format === 'short'

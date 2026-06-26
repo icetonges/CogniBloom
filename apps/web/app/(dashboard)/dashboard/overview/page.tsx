@@ -7,6 +7,7 @@ import { db } from '@/lib/db'
 import { formatDistanceToNow } from 'date-fns'
 import { xpToLevel, xpForLevel } from '@/lib/gamification'
 import { easternMidnight, pgDateToEasternMidnight } from '@/lib/timezone'
+import { LocalGreeting } from './LocalGreeting'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,11 +106,6 @@ export default async function DashboardOverviewPage() {
     (learningProfile?.masteryScores as Record<string, number>) ?? {}
   ).sort(([, a], [, b]) => b - a).slice(0, 4)
 
-  // Use Eastern hour so the greeting reflects Daniel's local time of day
-  const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10)
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
-  const greetEmoji = hour < 12 ? '🌅' : hour < 18 ? '☀️' : '🌙'
-
   // XP / level
   const xp = learningProfile?.xp ?? 0
   const level = learningProfile?.level ?? xpToLevel(xp)
@@ -156,7 +152,7 @@ export default async function DashboardOverviewPage() {
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-sm font-semibold text-muted-foreground mb-1">{greetEmoji} {greeting}</p>
+          <LocalGreeting />
           <h1 className="text-4xl font-black tracking-tight">
             <span className="text-foreground">Hey, </span>
             <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">

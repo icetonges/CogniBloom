@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { RichEditor, type RichEditorRef } from '@/components/notes/RichEditor'
 import { DocumentImport } from '@/components/notes/DocumentImport'
-import { cn } from '@/lib/utils'
+import { cn, localISODate } from '@/lib/utils'
 import { ModelCompare } from '@/components/chat/ModelCompare'
 import type { Note } from '@/hooks/useNotes'
 
@@ -42,7 +42,7 @@ interface NoteDraft { title: string; content: string; subject: string; tags: str
 function buildReflectionTemplate(): { title: string; subject: string; tags: string; html: string } {
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-  const isoDate = now.toISOString().slice(0, 10)
+  const isoDate = localISODate(now)   // local date, not UTC
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
 
   const html = `
