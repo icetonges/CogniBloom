@@ -232,17 +232,6 @@ export default async function LandingPage() {
                 )}
               </div>
 
-              {/* Headline */}
-              <div>
-                <h1 className="font-black leading-[1.1] tracking-tight" style={{ fontSize: 'clamp(1.8rem, 5vw, 2.4rem)' }}>
-                  <span className="text-white">Keep Learning, </span>
-                  <span className="text-shimmer">Daniel.</span>
-                </h1>
-                <p className="mt-2 text-sm leading-relaxed" style={{ color: '#64748b', maxWidth: '40ch' }}>
-                  AI tutor · notes · quizzes · flashcards — all in one place.
-                </p>
-              </div>
-
               {/* Compact stat row */}
               <div className="flex flex-wrap gap-2">
                 {[
@@ -286,9 +275,9 @@ export default async function LandingPage() {
                 </Link>
               </div>
 
-              {/* Orb — below text on the left side */}
-              <div className="relative flex items-center h-52 mt-2 hidden sm:flex">
-                <div className="absolute scale-[0.75] origin-left" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+              {/* Orb — centered below text */}
+              <div className="relative flex items-center justify-center h-52 mt-2 hidden sm:flex">
+                <div className="scale-[0.75]" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   {/* Floating cards around orb */}
                   <div className="relative" style={{ width: 280, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {recentNotes[0] && (
