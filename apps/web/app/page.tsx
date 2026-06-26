@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { db } from '@/lib/db'
 import { DANIEL_USER_ID } from '@/lib/user'
 import { xpToLevel, xpForLevel } from '@/lib/gamification'
+import { chatWithFallback } from '@/lib/ai/fallback'
 import { ArrowRight, Sparkles, CalendarDays, BookOpen } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -38,38 +39,125 @@ function stripHtml(html: string | null): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140)
 }
 
-// ─── Daily bilingual inspirational quotes ─────────────────────────────────────
+// ─── Daily multilingual inspirational quotes ──────────────────────────────────
 
-const QUOTES = [
-  { zh: '学而不思则罔，思而不学则殆。', en: 'Learning without thought is labor lost; thought without learning is perilous.', source: '孔子 · Confucius' },
-  { zh: '千里之行，始于足下。', en: 'A journey of a thousand miles begins with a single step.', source: '老子 · Lao Tzu' },
-  { zh: '知之者不如好之者，好之者不如乐之者。', en: 'Knowing is not as good as loving it; loving is not as good as delighting in it.', source: '孔子 · Confucius' },
-  { zh: '书山有路勤为径，学海无涯苦作舟。', en: 'On the mountain of knowledge, diligence is the path; in the sea of learning, perseverance is the boat.', source: '韩愈 · Han Yu' },
-  { zh: '温故而知新，可以为师矣。', en: 'Review the old and learn the new — then you may become a teacher.', source: '孔子 · Confucius' },
-  { zh: '不积跬步，无以至千里。', en: 'Without accumulating small steps, one cannot reach a thousand miles.', source: '荀子 · Xunzi' },
-  { zh: '博学之，審问之，慎思之，明辨之，笃行之。', en: 'Learn broadly, question carefully, think deeply, discern clearly, practice faithfully.', source: '《中庸》 · Doctrine of the Mean' },
-  { zh: '读书破万卷，下笔如有神。', en: 'Read ten thousand books, and your pen will move as if guided by the divine.', source: '杜甫 · Du Fu' },
-  { zh: '业精于勤，荒于写；行成于思，毁于随。', en: 'Excellence is born of diligence and lost in play; achievement is born of thought and ruined by carelessness.', source: '韩愈 · Han Yu' },
-  { zh: '三人行，必有我师。', en: 'Among any three people walking, I will find my teacher.', source: '孔子 · Confucius' },
-  { zh: '契而不舍，金石可镂。', en: 'With persistent effort, even metal and stone can be engraved.', source: '荀子 · Xunzi' },
-  { zh: '志当存高远。', en: 'Let your ambitions soar to great heights.', source: '诸葛亮 · Zhuge Liang' },
-  { zh: '有志者，事竟成。', en: 'Where there is a will, there is a way.', source: '《后汉书》 · Book of Later Han' },
-  { zh: '活到老，学到老。', en: 'Live and learn — learning has no end.', source: '中国谚语 · Chinese Proverb' },
-  { zh: '敏而好学，不耗下问。', en: 'Be quick to learn and unashamed to ask those beneath you.', source: '孔子 · Confucius' },
-]
-
-function getDailyQuote() {
-  const easternDateStr = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
-  const [month, day, year] = easternDateStr.split('/').map(Number)
-  const start = new Date(year!, 0, 0)
-  const now = new Date(year!, month! - 1, day!)
-  const diff = now.getTime() - start.getTime()
-  const dayOfYear = Math.floor(diff / 86_400_000)
-  return QUOTES[dayOfYear % QUOTES.length]
+interface DailyQuoteData {
+  language: string
+  original: string
+  english: string | null
+  source: string
 }
 
-function NavQuote() {
-  const q = getDailyQuote()
+const LANG_CYCLE = ['en', 'zh', 'es', 'fr', 'de'] as const
+type Lang = typeof LANG_CYCLE[number]
+
+const LANG_LABELS: Record<Lang, string> = {
+  en: 'English', zh: 'Chinese', es: 'Spanish', fr: 'French', de: 'German',
+}
+
+// Fallback pool used when AI generation fails or DB isn't ready
+const FALLBACK_POOL: Record<Lang, DailyQuoteData[]> = {
+  en: [
+    { language: 'en', original: 'An investment in knowledge pays the best interest.', english: null, source: 'Benjamin Franklin' },
+    { language: 'en', original: 'The beautiful thing about learning is that nobody can take it away from you.', english: null, source: 'B.B. King' },
+    { language: 'en', original: 'Tell me and I forget. Teach me and I remember. Involve me and I learn.', english: null, source: 'Benjamin Franklin' },
+    { language: 'en', original: 'Live as if you were to die tomorrow. Learn as if you were to live forever.', english: null, source: 'Mahatma Gandhi' },
+    { language: 'en', original: 'The more that you read, the more things you will know.', english: null, source: 'Dr. Seuss' },
+  ],
+  zh: [
+    { language: 'zh', original: '学而不思则罔，思而不学则殆。', english: 'Learning without thought is labor lost; thought without learning is perilous.', source: '孔子 · Confucius' },
+    { language: 'zh', original: '千里之行，始于足下。', english: 'A journey of a thousand miles begins with a single step.', source: '老子 · Lao Tzu' },
+    { language: 'zh', original: '书山有路勤为径，学海无涯苦作舟。', english: 'On the mountain of books, diligence is the path; in the sea of learning, hard work is your boat.', source: '韩愈 · Han Yu' },
+    { language: 'zh', original: '三人行，必有我师。', english: 'Among any three people walking, I will find my teacher.', source: '孔子 · Confucius' },
+    { language: 'zh', original: '活到老，学到老。', english: 'Live and learn — learning has no end.', source: '中国谚语 · Chinese Proverb' },
+  ],
+  es: [
+    { language: 'es', original: 'Dime y lo olvido, enséñame y lo recuerdo, involúcrame y lo aprendo.', english: 'Tell me and I forget, teach me and I remember, involve me and I learn.', source: 'Benjamin Franklin' },
+    { language: 'es', original: 'El conocimiento es la única riqueza que crece al compartirse.', english: 'Knowledge is the only wealth that grows when shared.', source: 'Proverbio Español' },
+    { language: 'es', original: 'Quien tiene imaginación, con qué facilidad levanta palacios en el aire.', english: 'He who has imagination finds it easy to build palaces in the air.', source: 'Gustavo Adolfo Bécquer' },
+    { language: 'es', original: 'No hay camino para la sabiduría; la sabiduría es el camino.', english: 'There is no path to wisdom; wisdom is the path.', source: 'Proverbio' },
+    { language: 'es', original: 'Aprender es descubrir que algo es posible.', english: 'Learning is discovering that something is possible.', source: 'Fritz Perls' },
+  ],
+  fr: [
+    { language: 'fr', original: 'La connaissance s\'acquiert par l\'expérience, tout le reste n\'est que de l\'information.', english: 'Knowledge is acquired through experience; everything else is just information.', source: 'Albert Einstein' },
+    { language: 'fr', original: 'L\'éducation est l\'arme la plus puissante pour changer le monde.', english: 'Education is the most powerful weapon you can use to change the world.', source: 'Nelson Mandela' },
+    { language: 'fr', original: 'Dis-moi et j\'oublie, enseigne-moi et je me souviens, implique-moi et j\'apprends.', english: 'Tell me and I forget, teach me and I remember, involve me and I learn.', source: 'Benjamin Franklin' },
+    { language: 'fr', original: 'Le génie, c\'est 1% d\'inspiration et 99% de transpiration.', english: 'Genius is 1% inspiration and 99% perspiration.', source: 'Thomas Edison' },
+    { language: 'fr', original: 'Apprendre sans réfléchir est vain, réfléchir sans apprendre est dangereux.', english: 'Learning without reflecting is vain; reflecting without learning is dangerous.', source: 'Confucius' },
+  ],
+  de: [
+    { language: 'de', original: 'Wer aufhört zu lernen, ist alt. Wer immer lernt, bleibt jung.', english: 'He who stops learning is old. He who keeps learning stays young.', source: 'Henry Ford' },
+    { language: 'de', original: 'Bildung ist nicht das Befüllen von Fässern, sondern das Entzünden von Flammen.', english: 'Education is not filling buckets, but lighting fires.', source: 'W.B. Yeats' },
+    { language: 'de', original: 'Wissen ist Macht.', english: 'Knowledge is power.', source: 'Francis Bacon' },
+    { language: 'de', original: 'Der Kluge lernt aus allem und von jedem, der Normale aus seinen Erfahrungen.', english: 'The wise learn from everything and everyone; the ordinary only from their own experience.', source: 'Sokrates · Socrates' },
+    { language: 'de', original: 'Lernen ist wie Rudern gegen den Strom: Hört man damit auf, treibt man zurück.', english: 'Learning is like rowing against the current: if you stop, you drift back.', source: 'Laotse · Lao Tzu' },
+  ],
+}
+
+function getDayOfYear(): number {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const start = new Date(d.getFullYear(), 0, 0)
+  return Math.floor((d.getTime() - start.getTime()) / 86_400_000)
+}
+
+async function getOrCreateDailyQuote(): Promise<DailyQuoteData> {
+  const nyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  const day = getDayOfYear()
+  const lang = LANG_CYCLE[day % LANG_CYCLE.length]!
+  const fallbacks = FALLBACK_POOL[lang]!
+  const fallback = fallbacks[day % fallbacks.length]!
+
+  try {
+    // Fast path: today's quote already in DB
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const existing = await (db as any).dailyQuote.findUnique({ where: { date: nyDate } }) as DailyQuoteData | null
+    if (existing) return existing
+
+    // Generate a fresh quote via AI
+    const isEn = lang === 'en'
+    const prompt = `Generate a unique, inspiring quote about learning, curiosity, or intellectual growth${isEn ? '' : ` written in ${LANG_LABELS[lang]}`}.
+Return ONLY valid JSON, no other text:
+{
+  "original": "${isEn ? 'the quote in English' : `the quote in ${LANG_LABELS[lang]}`}",${isEn ? '' : '\n  "english": "accurate English translation",'}
+  "source": "Real Author Name · Brief attribution (e.g., Confucius, Albert Einstein, Latin Proverb)"
+}
+Rules: attributed to a real person or well-known proverb; 1–2 sentences; inspiring for a curious teenager; no invented attributions.`
+
+    const result = await Promise.race([
+      chatWithFallback({ messages: [{ role: 'user', content: prompt }], temperature: 0.85, maxTokens: 180 })
+        .then(r => r)
+        .catch(() => null),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 7000)),
+    ])
+
+    let quoteData: DailyQuoteData = fallback
+    if (result) {
+      const jsonMatch = result.content.match(/\{[\s\S]*?\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as { original?: string; english?: string; source?: string }
+        if (parsed.original && parsed.source) {
+          quoteData = { language: lang, original: parsed.original, english: parsed.english ?? null, source: parsed.source }
+        }
+      }
+    }
+
+    // Save to DB — upsert protects against race conditions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db as any).dailyQuote.upsert({
+      where: { date: nyDate },
+      create: { date: nyDate, ...quoteData },
+      update: { source: quoteData.source }, // no-op on race; keeps record
+    }).catch(() => {/* ignore save errors */})
+
+    return quoteData
+  } catch {
+    // Table not yet created or any other DB error — use fallback silently
+    return fallback
+  }
+}
+
+function NavQuote({ quote }: { quote: DailyQuoteData }) {
+  const isEnglish = quote.language === 'en'
   return (
     <div
       className="flex items-center gap-3 px-4 py-2 rounded-xl w-full"
@@ -79,11 +167,15 @@ function NavQuote() {
         ✨ Today
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold truncate" style={{ color: '#c4b5fd' }}>{q!.zh}</p>
-        <p className="text-xs font-semibold truncate" style={{ color: '#f1f5f9' }}>&ldquo;{q!.en}&rdquo;</p>
+        {!isEnglish && (
+          <p className="text-xs font-bold truncate" style={{ color: '#c4b5fd' }}>{quote.original}</p>
+        )}
+        <p className="text-xs font-semibold truncate" style={{ color: '#f1f5f9' }}>
+          &ldquo;{isEnglish ? quote.original : (quote.english ?? quote.original)}&rdquo;
+        </p>
       </div>
       <span className="text-[10px] flex-shrink-0 hidden lg:block" style={{ color: '#64748b', fontWeight: 600 }}>
-        &mdash; {q!.source}
+        &mdash; {quote.source}
       </span>
     </div>
   )
@@ -160,7 +252,7 @@ const DIARY_COLORS = [
 export default async function LandingPage() {
   const userId = DANIEL_USER_ID
 
-  const [recentNotes, totalNotes, profile, earnedBadges, sessions, publishedNotes] =
+  const [recentNotes, totalNotes, profile, earnedBadges, sessions, publishedNotes, dailyQuote] =
     await Promise.all([
       db.note.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 3, select: { id: true, slug: true, title: true, subject: true } }),
       db.note.count({ where: { userId } }),
@@ -173,6 +265,7 @@ export default async function LandingPage() {
         take: 6,
         select: { id: true, title: true, subject: true, publishedSlug: true, publishedAt: true, tutorSummary: true, publishedHtml: true },
       }),
+      getOrCreateDailyQuote(),
     ])
 
   const xp = profile?.xp ?? 0
@@ -204,7 +297,7 @@ export default async function LandingPage() {
           </div>
           <span className="text-lg font-black tracking-tight text-white">CogniBloom</span>
         </div>
-        <div className="flex-1 hidden sm:block"><NavQuote /></div>
+        <div className="flex-1 hidden sm:block"><NavQuote quote={dailyQuote} /></div>
         <Link href="/dashboard" className="flex-shrink-0">
           <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-105 active:scale-95" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)', color: 'white' }}>
             Open App <ArrowRight className="w-4 h-4" />
@@ -213,7 +306,7 @@ export default async function LandingPage() {
       </nav>
 
       {/* ── Mobile daily quote ── */}
-      <div className="relative z-10 block sm:hidden px-4 pb-3"><NavQuote /></div>
+      <div className="relative z-10 block sm:hidden px-4 pb-3"><NavQuote quote={dailyQuote} /></div>
 
       {/* ── Hero — compact ── */}
       <section className="relative z-10 pb-10 sm:pb-14">
@@ -275,19 +368,19 @@ export default async function LandingPage() {
                 </Link>
               </div>
 
-              {/* Orb — centered below text */}
-              <div className="relative flex items-center justify-center h-52 mt-2 hidden sm:flex">
-                <div className="scale-[0.75]" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+              {/* Orb — full size, centered, cards spread wide */}
+              <div className="relative flex items-center justify-center h-72 mt-3 hidden sm:flex overflow-visible">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   {/* Floating cards around orb */}
-                  <div className="relative" style={{ width: 280, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="relative" style={{ width: 320, height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {recentNotes[0] && (
-                      <div className="absolute" style={{ left: '-60px', top: '0px', zIndex: 4 }}>
+                      <div className="absolute" style={{ left: '-120px', top: '-25px', zIndex: 4 }}>
                         <FloatingCard title={recentNotes[0].title} subject={recentNotes[0].subject} rotate="-7deg" delay="0s" colorFrom="#6366f1" colorTo="#8b5cf6" href={`/dashboard/notes/${recentNotes[0].slug ?? recentNotes[0].id}`} />
                       </div>
                     )}
                     <GyroscopeOrb level={level} title={title} />
                     {recentNotes[1] && (
-                      <div className="absolute" style={{ right: '-55px', bottom: '0px', zIndex: 4 }}>
+                      <div className="absolute" style={{ right: '-115px', bottom: '-25px', zIndex: 4 }}>
                         <FloatingCard title={recentNotes[1].title} subject={recentNotes[1].subject} rotate="5deg" delay="1.5s" colorFrom="#10b981" colorTo="#0ea5e9" href={`/dashboard/notes/${recentNotes[1].slug ?? recentNotes[1].id}`} />
                       </div>
                     )}

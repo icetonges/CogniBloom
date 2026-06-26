@@ -638,6 +638,24 @@ model CategoryFeedItem {
   @@index([expiresAt])
 }
 
+// ============ DAILY QUOTE ============
+
+/// One AI-generated (or curated) inspirational quote per calendar day.
+/// Language rotates across English, Chinese, Spanish, French, German.
+/// Non-English quotes always include an English translation.
+model DailyQuote {
+  id        String   @id @default(cuid())
+  date      String   @unique  // "YYYY-MM-DD" in America/New_York
+  language  String             // "en" | "zh" | "es" | "fr" | "de"
+  original  String   @db.Text // quote in native language
+  english   String?  @db.Text // English translation (null when language == "en")
+  source    String             // "Author Name · Attribution"
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
 // ============ DAILY FEED & CONTENT ============
 
 model DailyFeedItem {
