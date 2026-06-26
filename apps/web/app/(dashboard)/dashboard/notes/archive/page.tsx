@@ -47,17 +47,19 @@ function stripHtml(html: string | null): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)
 }
 
-type ActionState = 'idle' | 'republishing' | 'unpublishing'
+type ActionState = 'idle' | 'republishing' | 'unpublishing' | 'deleting'
 
-function NoteCard({ note, onUnpublish, onRepublish }: {
+function NoteCard({ note, onUnpublish, onRepublish, onDelete }: {
   note: PublishedNote
   onUnpublish: (id: string) => void
   onRepublish: (id: string, newSlug: string, newDate: string) => void
+  onDelete: (id: string) => void
 }) {
   const colors = colorFor(note.subject)
   const preview = stripHtml(note.tutorSummary)
   const [action, setAction] = useState<ActionState>('idle')
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleRepublish = useCallback(async () => {
@@ -91,6 +93,22 @@ function NoteCard({ note, onUnpublish, onRepublish }: {
     }
   }, [note.id, confirmUnpublish, onUnpublish])
 
+  const handleDelete = useCallback(async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    setAction('deleting')
+    setError(null)
+    try {
+      const res = await fetch(`/api/notes/${note.id}`, { method: 'DELETE' })
+      const data = await res.json() as { success: boolean; error?: string }
+      if (!data.success) throw new Error(data.error ?? 'Delete failed')
+      onDelete(note.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setAction('idle')
+      setConfirmDelete(false)
+    }
+  }, [note.id, confirmDelete, onDelete])
+
   const busy = action !== 'idle'
 
   return (
@@ -100,7 +118,7 @@ function NoteCard({ note, onUnpublish, onRepublish }: {
         'hover:shadow-lg hover:-translate-y-0.5',
         colors.border
       )}
-      onMouseLeave={() => setConfirmUnpublish(false)}
+      onMouseLeave={() => { setConfirmUnpublish(false); setConfirmDelete(false) }}
     >
       {/* Subject badge */}
       {note.subject && (
@@ -193,6 +211,24 @@ function NoteCard({ note, onUnpublish, onRepublish }: {
             : <Trash2 className="w-3 h-3" />}
           {action === 'unpublishing' ? 'Removing…' : confirmUnpublish ? 'Confirm?' : 'Unpublish'}
         </button>
+
+        {/* Delete Note — hard deletes from DB */}
+        <button
+          onClick={handleDelete}
+          disabled={busy}
+          title={confirmDelete ? 'Click again — this permanently deletes the note' : 'Permanently delete this note from the database'}
+          className={cn(
+            'inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all disabled:opacity-40 disabled:cursor-not-allowed',
+            confirmDelete
+              ? 'bg-red-600/30 text-red-300 border-red-500/60 scale-105 shadow-sm shadow-red-900/40'
+              : 'bg-transparent text-red-500/70 border-red-500/20 hover:bg-red-500/10 hover:text-red-400'
+          )}
+        >
+          {action === 'deleting'
+            ? <Loader2 className="w-3 h-3 animate-spin" />
+            : <Trash2 className="w-3 h-3" />}
+          {action === 'deleting' ? 'Deleting…' : confirmDelete ? 'Delete?' : 'Delete'}
+        </button>
       </div>
     </div>
   )
@@ -216,6 +252,10 @@ export default function ArchivePage() {
 
   const handleRepublish = useCallback((id: string, newSlug: string, newDate: string) => {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, publishedSlug: newSlug, publishedAt: newDate } : n))
+  }, [])
+
+  const handleDelete = useCallback((id: string) => {
+    setNotes(prev => prev.filter(n => n.id !== id))
   }, [])
 
   return (
@@ -266,6 +306,7 @@ export default function ArchivePage() {
               note={note}
               onUnpublish={handleUnpublish}
               onRepublish={handleRepublish}
+              onDelete={handleDelete}
             />
           ))}
         </div>

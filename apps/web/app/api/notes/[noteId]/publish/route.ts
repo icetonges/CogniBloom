@@ -279,6 +279,7 @@ GOOD: "I wasn't running at full speed today — energy at a 3, focus holding at 
 
 ━━ SUBJECT SECTIONS (subjectSections) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Write one section per subject Daniel actually worked on. Skip subjects with no real content.
+IMPORTANT: For daily reflection notes covering multiple subjects (Math + Coding + Language + Vocab + Finance etc.), write ALL subjects that have real content — do NOT abbreviate or skip any. Each section deserves equal depth and craft.
 
 For each section:
 - "emoji": single emoji that fits the subject (🔢 math, 💻 coding, 📖 vocabulary, 🌍 language, ∞ or 🏛️ theory, 💰 finance/real life, etc.)
@@ -354,9 +355,11 @@ Return ONLY this JSON (no markdown fences, no preamble, no trailing text):
   try {
     const res = await chatWithFallback({
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.75,
-      maxTokens: 4000,
+      temperature: 0.72,
+      maxTokens: 6000,
     })
+    // Uses default fallback chain: Gemini 3.5 Flash first (best literary quality),
+    // then Groq/Llama, then Claude — same chain that produced the excellent AMC 8 note.
     const parsed = JSON.parse(extractJSON(res.content)) as Partial<WriterOutput>
 
     return {
@@ -938,7 +941,7 @@ function buildPublishedPage(note: {
     return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   }
   var _sbCtrl=new AbortController();
-  var _sbTimer=setTimeout(function(){_sbCtrl.abort();},10000);
+  var _sbTimer=setTimeout(function(){_sbCtrl.abort();},20000);
   fetch('/api/notes/published',{signal:_sbCtrl.signal})
     .then(function(r){
       clearTimeout(_sbTimer);
