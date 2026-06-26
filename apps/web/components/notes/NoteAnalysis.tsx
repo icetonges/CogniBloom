@@ -351,6 +351,7 @@ export function NoteAnalysis({
   const [publishedUrl, setPublishedUrl] = useState<string | null>(
     publishedSlug ? `/notes/view/${publishedSlug}` : null
   )
+  const [publishedTitle, setPublishedTitle] = useState<string | null>(null)
   const [localMindMap, setLocalMindMap] = useState(mindMap)
   const [localHints, setLocalHints] = useState(reasoningHints)
   const [localConcepts, setLocalConcepts] = useState(knowledgePoints)
@@ -396,12 +397,13 @@ export function NoteAnalysis({
     setError(null)
     try {
       const res = await fetch(`/api/notes/${noteId}/publish`, { method: 'POST' })
-      const json = await res.json() as { success: boolean; error?: string; data?: { url: string } }
+      const json = await res.json() as { success: boolean; error?: string; data?: { url: string; publishTitle?: string } }
       if (!res.ok || !json.success) {
         throw new Error(json.error ?? 'Publish failed')
       }
       if (json.success && json.data) {
         setPublishedUrl(json.data.url)
+        if (json.data.publishTitle) setPublishedTitle(json.data.publishTitle)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed')
@@ -444,15 +446,22 @@ export function NoteAnalysis({
           )}
         </div>
         {publishedUrl ? (
-          <a
-            href={publishedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors shrink-0"
-            style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
-          >
-            <ExternalLink className="w-2.5 h-2.5" /> View Page
-          </a>
+          <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-0 max-w-[180px]">
+            <a
+              href={publishedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors"
+              style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
+            >
+              <ExternalLink className="w-2.5 h-2.5 shrink-0" /> View Published Page
+            </a>
+            {publishedTitle && (
+              <span className="text-[9px] text-muted-foreground truncate max-w-full px-1" title={publishedTitle}>
+                ✨ &ldquo;{publishedTitle}&rdquo;
+              </span>
+            )}
+          </div>
         ) : (
           <button
             onClick={publishNote}
@@ -461,7 +470,7 @@ export function NoteAnalysis({
             style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
           >
             {isPublishing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <ExternalLink className="w-2.5 h-2.5" />}
-            {isPublishing ? 'Publishing…' : 'Publish'}
+            {isPublishing ? 'Writing & Publishing…' : 'Publish'}
           </button>
         )}
       </div>
