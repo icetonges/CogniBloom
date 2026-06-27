@@ -77,7 +77,20 @@ function isRetryableError(err: unknown): boolean {
     msg.includes('network') ||
     msg.includes('fetch') ||
     msg.includes('unavailable') ||
-    msg.includes('capacity')
+    msg.includes('capacity') ||
+    // Model availability / naming issues — degrade to the next model in the chain
+    // instead of aborting the whole request (e.g. a model id not yet live in this region)
+    msg.includes('404') ||
+    msg.includes('not found') ||
+    msg.includes('does not exist') ||
+    msg.includes('unknown model') ||
+    msg.includes('invalid model') ||
+    msg.includes('no such model') ||
+    msg.includes('not supported') ||
+    msg.includes('unsupported') ||
+    msg.includes('deprecated') ||
+    msg.includes('permission') ||
+    msg.includes('403')
   )
 }
 
