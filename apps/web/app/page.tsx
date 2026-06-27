@@ -254,7 +254,7 @@ export default async function LandingPage() {
 
   const [recentNotes, totalNotes, profile, earnedBadges, sessions, publishedNotes, dailyQuote] =
     await Promise.all([
-      db.note.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 3, select: { id: true, slug: true, title: true, subject: true } }),
+      db.note.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, slug: true, title: true, subject: true } }),
       db.note.count({ where: { userId } }),
       db.learningProfile.findUnique({ where: { userId }, select: { xp: true, level: true, currentStreak: true } }),
       db.userBadge.findMany({ where: { userId }, select: { badgeId: true } }),
@@ -359,15 +359,29 @@ export default async function LandingPage() {
                 <div className="scale-[0.85]" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   {/* Floating cards around orb */}
                   <div className="relative" style={{ width: 320, height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {/* Top-left */}
                     {recentNotes[0] && (
-                      <div className="absolute" style={{ left: '-120px', top: '-25px', zIndex: 4 }}>
+                      <div className="absolute" style={{ left: '-120px', top: '-30px', zIndex: 4 }}>
                         <FloatingCard title={recentNotes[0].title} subject={recentNotes[0].subject} rotate="-7deg" delay="0s" colorFrom="#6366f1" colorTo="#8b5cf6" href={`/dashboard/notes/${recentNotes[0].slug ?? recentNotes[0].id}`} />
                       </div>
                     )}
-                    <GyroscopeOrb level={level} title={title} />
+                    {/* Top-right */}
                     {recentNotes[1] && (
-                      <div className="absolute" style={{ right: '-115px', bottom: '-25px', zIndex: 4 }}>
-                        <FloatingCard title={recentNotes[1].title} subject={recentNotes[1].subject} rotate="5deg" delay="1.5s" colorFrom="#10b981" colorTo="#0ea5e9" href={`/dashboard/notes/${recentNotes[1].slug ?? recentNotes[1].id}`} />
+                      <div className="absolute" style={{ right: '-120px', top: '-30px', zIndex: 4 }}>
+                        <FloatingCard title={recentNotes[1].title} subject={recentNotes[1].subject} rotate="6deg" delay="0.8s" colorFrom="#10b981" colorTo="#0ea5e9" href={`/dashboard/notes/${recentNotes[1].slug ?? recentNotes[1].id}`} />
+                      </div>
+                    )}
+                    <GyroscopeOrb level={level} title={title} />
+                    {/* Bottom-left */}
+                    {recentNotes[2] && (
+                      <div className="absolute" style={{ left: '-115px', bottom: '-30px', zIndex: 4 }}>
+                        <FloatingCard title={recentNotes[2].title} subject={recentNotes[2].subject} rotate="5deg" delay="1.6s" colorFrom="#f59e0b" colorTo="#ef4444" href={`/dashboard/notes/${recentNotes[2].slug ?? recentNotes[2].id}`} />
+                      </div>
+                    )}
+                    {/* Bottom-right */}
+                    {recentNotes[3] && (
+                      <div className="absolute" style={{ right: '-115px', bottom: '-30px', zIndex: 4 }}>
+                        <FloatingCard title={recentNotes[3].title} subject={recentNotes[3].subject} rotate="-5deg" delay="2.2s" colorFrom="#ec4899" colorTo="#8b5cf6" href={`/dashboard/notes/${recentNotes[3].slug ?? recentNotes[3].id}`} />
                       </div>
                     )}
                   </div>
