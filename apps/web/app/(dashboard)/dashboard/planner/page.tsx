@@ -439,7 +439,7 @@ function TaskRow({ e, onToggle, onCommit, onRemove, onOpen }: {
 
 // ============ DAY VIEW — inline multi-activity planner ============
 // ── Confetti celebration (canvas-based, no dependencies) ──
-interface Confetto { x: number; y: number; vx: number; vy: number; size: number; color: string; rot: number; vr: number; shape: number }
+interface Confetto { x: number; y: number; vx: number; vy: number; size: number; color: string; rot: number; vr: number; shape: number; born: number; life: number }
 function fireConfetti(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   const canvas = document.createElement('canvas')
@@ -452,35 +452,53 @@ function fireConfetti(): void {
   const w = window.innerWidth, h = window.innerHeight
   canvas.width = w * dpr; canvas.height = h * dpr
   ctx.scale(dpr, dpr)
-  const colors = ['#6366f1', '#8b5cf6', '#34d399', '#fbbf24', '#38bdf8', '#f472b6', '#f87171']
+  const colors = ['#6366f1', '#8b5cf6', '#34d399', '#fbbf24', '#38bdf8', '#f472b6', '#f87171', '#a855f7']
+  const origins = [0.10, 0.26, 0.74, 0.90] // two cannons on the left, two on the right
   const parts: Confetto[] = []
-  const N = 170
-  for (let i = 0; i < N; i++) {
-    const fromLeft = i % 2 === 0
-    parts.push({
-      x: fromLeft ? w * 0.15 : w * 0.85,
-      y: h * 0.45,
-      vx: (fromLeft ? 1 : -1) * (4 + Math.random() * 7),
-      vy: -10 - Math.random() * 12,
-      size: 6 + Math.random() * 7,
-      color: colors[(Math.random() * colors.length) | 0]!,
-      rot: Math.random() * Math.PI,
-      vr: (Math.random() - 0.5) * 0.35,
-      shape: Math.random() < 0.5 ? 0 : 1,
-    })
-  }
-  const gravity = 0.32
-  const DURATION = 2800
+  const PARTICLE_LIFE = 2600
+  const EMIT_MS = 4200   // keep launching fresh bursts for ~4.2s
+  const TOTAL_MS = 5000  // sustain the show for ~5s
+  const MAX_MS = 7000    // hard safety cap
+  const WAVE_GAP = 550
+  const gravity = 0.3
   const start = performance.now()
+  let lastWave = -1
+  const spawn = (now: number): void => {
+    for (let o = 0; o < origins.length; o++) {
+      const ox = w * origins[o]!
+      const left = origins[o]! < 0.5
+      for (let i = 0; i < 14; i++) {
+        parts.push({
+          x: ox + (Math.random() - 0.5) * 30,
+          y: h * 0.5 + (Math.random() - 0.5) * 30,
+          vx: (left ? 1 : -1) * (2 + Math.random() * 8),
+          vy: -9 - Math.random() * 13,
+          size: 6 + Math.random() * 7,
+          color: colors[(Math.random() * colors.length) | 0]!,
+          rot: Math.random() * Math.PI,
+          vr: (Math.random() - 0.5) * 0.35,
+          shape: Math.random() < 0.5 ? 0 : 1,
+          born: now,
+          life: PARTICLE_LIFE,
+        })
+      }
+    }
+  }
   const draw = (now: number): void => {
     const t = now - start
+    if (t <= EMIT_MS) {
+      const waveIndex = Math.floor(t / WAVE_GAP)
+      if (waveIndex !== lastWave) { lastWave = waveIndex; spawn(now) }
+    }
     ctx.clearRect(0, 0, w, h)
     let alive = false
-    const fade = Math.max(0, 1 - t / DURATION)
     for (const p of parts) {
+      const age = now - p.born
+      if (age > p.life) continue
       p.vy += gravity; p.vx *= 0.99
       p.x += p.vx; p.y += p.vy; p.rot += p.vr
-      if (fade > 0 && p.y < h + 30) alive = true
+      const fade = Math.max(0, 1 - age / p.life)
+      if (fade > 0 && p.y < h + 40) alive = true
       ctx.save()
       ctx.globalAlpha = fade
       ctx.translate(p.x, p.y)
@@ -490,7 +508,7 @@ function fireConfetti(): void {
       else { ctx.beginPath(); ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2); ctx.fill() }
       ctx.restore()
     }
-    if (t < DURATION && alive) requestAnimationFrame(draw)
+    if ((t < TOTAL_MS || alive) && t < MAX_MS) requestAnimationFrame(draw)
     else canvas.remove()
   }
   requestAnimationFrame(draw)
