@@ -758,6 +758,13 @@ function buildPublishedPage(note: {
       letter-spacing:.13em; color:var(--text4);
       padding:16px 18px 8px; flex-shrink:0;
     }
+    .sb-tools{display:flex; flex-direction:column; gap:6px; padding:0 12px 10px; flex-shrink:0;}
+    .sb-input,.sb-select{
+      width:100%; font-size:11px; padding:6px 8px; border-radius:7px;
+      background:var(--bg3); border:1px solid var(--border); color:var(--text2); outline:none;
+    }
+    .sb-input::placeholder{color:var(--text4);}
+    .sb-select{cursor:pointer;}
     .sb-scroll{
       flex:1; overflow-y:auto; padding:0 8px 24px;
       scrollbar-width:thin; scrollbar-color:var(--border) transparent;
@@ -979,14 +986,23 @@ function buildPublishedPage(note: {
 
   <!-- Left sidebar -->
   <aside class="sidebar" id="sidebar">
-    <div class="sb-brand">
+    <a href="/" class="sb-brand" title="Go to CogniBloom home" style="text-decoration:none;">
       <div class="sb-logo">✨</div>
       <div>
         <div class="sb-name">CogniBloom</div>
         <div class="sb-sub">Daniel's Learning Diary</div>
       </div>
-    </div>
+    </a>
     <div class="sb-section-label">All Entries</div>
+    <div class="sb-tools">
+      <input id="nl-search" class="sb-input" type="text" placeholder="Filter entries…" oninput="renderList()" />
+      <select id="nl-subject" class="sb-select" onchange="renderList()"><option value="">All subjects</option></select>
+      <select id="nl-sort" class="sb-select" onchange="renderList()">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="az">Title A–Z</option>
+      </select>
+    </div>
     <div class="sb-scroll" id="note-list">
       <div class="sb-loading">Loading entries…</div>
     </div>
@@ -1107,11 +1123,11 @@ function buildPublishedPage(note: {
     function fb(){var t=document.createElement('textarea');t.value=s;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);cb();}
   };
   var flash=function(el,lbl){var o=el.textContent;el.textContent=lbl;el.classList.add('ok');setTimeout(function(){el.textContent=o;el.classList.remove('ok');},2000);};
-  window.copyPost=function(){clip(T()+'\n\n'+U(),function(){flash(document.getElementById('cpbtn'),'✓ Copied!');});};
-  window.copyFor=function(el){clip(T()+'\n\n'+U(),function(){flash(el,'✓ Copied!');});};
-  window.shareX=function(){window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(T()+'\n\n')+'&url='+encodeURIComponent(U()),'_blank','width=600,height=480');};
+  window.copyPost=function(){clip(T()+'\\n\\n'+U(),function(){flash(document.getElementById('cpbtn'),'✓ Copied!');});};
+  window.copyFor=function(el){clip(T()+'\\n\\n'+U(),function(){flash(el,'✓ Copied!');});};
+  window.shareX=function(){window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(T()+'\\n\\n')+'&url='+encodeURIComponent(U()),'_blank','width=600,height=480');};
   window.shareFB=function(){window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(U()),'_blank','width=600,height=480');};
-  window.shareTH=function(){window.open('https://www.threads.net/intent/post?text='+encodeURIComponent(T()+'\n\n'+U()),'_blank','width=600,height=560');};
+  window.shareTH=function(){window.open('https://www.threads.net/intent/post?text='+encodeURIComponent(T()+'\\n\\n'+U()),'_blank','width=600,height=560');};
 
   // ── Dark / Light toggle ─────────────────────────
   window.toggleTheme=function(){
@@ -1141,12 +1157,47 @@ function buildPublishedPage(note: {
     document.getElementById('overlay').classList.remove('open');
   };
 
-  // ── Sidebar note list ───────────────────────────
+  // ── Sidebar note list (filter + sort) ───────────
   var currentSlug='${safeSlug}';
-  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  function fmtDate(iso){
-    if(!iso)return'';
-    return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  var ALL=[];
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function fmtDate(iso){if(!iso)return'';try{return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return'';}}
+  function ts(n){return new Date(n.publishedAt||n.createdAt||0).getTime()||0;}
+  window.renderList=function(){
+    var list=document.getElementById('note-list');
+    if(!list)return;
+    var qEl=document.getElementById('nl-search');
+    var subjEl=document.getElementById('nl-subject');
+    var sortEl=document.getElementById('nl-sort');
+    var q=(qEl&&qEl.value?qEl.value:'').toLowerCase().trim();
+    var subj=subjEl&&subjEl.value?subjEl.value:'';
+    var sort=sortEl&&sortEl.value?sortEl.value:'newest';
+    var rows=ALL.filter(function(n){
+      if(subj&&(n.subject||'')!==subj)return false;
+      if(!q)return true;
+      var hay=((n.title||'')+' '+(n.subject||'')+' '+((n.tags||[]).join(' '))).toLowerCase();
+      return hay.indexOf(q)>=0;
+    });
+    rows.sort(function(a,b){
+      if(sort==='az')return (a.title||'').localeCompare(b.title||'');
+      return sort==='oldest'?ts(a)-ts(b):ts(b)-ts(a);
+    });
+    if(!rows.length){list.innerHTML='<div class="sb-loading">No matching entries.</div>';return;}
+    list.innerHTML=rows.map(function(n){
+      var active=n.publishedSlug===currentSlug?' active':'';
+      var subj2=n.subject?'<div class="nl-subj">'+esc(n.subject)+'</div>':'';
+      var slug2=n.publishedSlug?esc(n.publishedSlug):'';
+      return '<a href="/notes/view/'+slug2+'" class="note-link'+active+'">'+subj2+
+        '<div class="nl-title">'+esc(n.title||'Untitled')+'</div>'+
+        '<div class="nl-date">'+fmtDate(n.publishedAt||n.createdAt)+'</div></a>';
+    }).join('');
+  };
+  function fillSubjects(){
+    var sel=document.getElementById('nl-subject');
+    if(!sel)return;
+    var seen={},opts='<option value="">All subjects</option>';
+    ALL.forEach(function(n){var s=n.subject;if(s&&!seen[s]){seen[s]=1;opts+='<option value="'+esc(s)+'">'+esc(s)+'</option>';}});
+    sel.innerHTML=opts;
   }
   window.loadSidebar=function(isRetry){
     var list=document.getElementById('note-list');
@@ -1155,32 +1206,17 @@ function buildPublishedPage(note: {
     var ctrl=new AbortController();
     var timer=setTimeout(function(){ctrl.abort();},30000);
     fetch('/api/notes/published',{signal:ctrl.signal})
-      .then(function(r){
-        clearTimeout(timer);
-        if(!r.ok)throw new Error('HTTP '+r.status);
-        return r.json();
-      })
+      .then(function(r){clearTimeout(timer);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
       .then(function(res){
-        if(!list)return;
-        if(!res||!res.success||!Array.isArray(res.data)||!res.data.length){
-          list.innerHTML='<div class="sb-loading">No entries yet.</div>';return;
-        }
-        list.innerHTML=res.data.map(function(n){
-          var active=n.publishedSlug===currentSlug?' active':'';
-          var subj=n.subject?'<div class="nl-subj">'+esc(n.subject)+'</div>':'';
-          var slug2=n.publishedSlug?esc(n.publishedSlug):'';
-          return '<a href="/notes/view/'+slug2+'" class="note-link'+active+'">'+
-            subj+
-            '<div class="nl-title">'+esc(n.title||'Untitled')+'</div>'+
-            '<div class="nl-date">'+fmtDate(n.publishedAt||n.createdAt)+'</div>'+
-            '</a>';
-        }).join('');
+        if(!res||!res.success||!Array.isArray(res.data))throw new Error('Bad response');
+        ALL=res.data;
+        fillSubjects();
+        window.renderList();
       })
       .catch(function(e){
         clearTimeout(timer);
         var msg=e&&e.name==='AbortError'?'Timed out':(e&&e.message?e.message.slice(0,60):'Network error');
-        if(list)list.innerHTML='<div class="sb-loading" style="color:#fb7185;font-size:11px;">'+msg+
-          '<br><button onclick="loadSidebar(true)" style="margin-top:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;display:block;">Retry</button></div>';
+        if(list)list.innerHTML='<div class="sb-loading" style="color:#fb7185;font-size:11px;">'+msg+'<br><button onclick="loadSidebar(true)" style="margin-top:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;display:block;">Retry</button></div>';
       });
   };
   window.loadSidebar(false);

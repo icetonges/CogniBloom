@@ -13,6 +13,7 @@ export async function GET() {
       where: { userId, publishedSlug: { not: null } },
       select: {
         id: true,
+        slug: true,
         title: true,
         subject: true,
         publishedSlug: true,

@@ -4,11 +4,12 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { Loader2, ExternalLink, BookOpen, Archive, Tag, Calendar, Brain, RefreshCw, Trash2 } from 'lucide-react'
+import { Loader2, ExternalLink, BookOpen, Archive, Tag, Calendar, Brain, RefreshCw, Trash2, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PublishedNote {
   id: string
+  slug: string | null
   title: string
   subject: string | null
   publishedSlug: string
@@ -115,11 +116,16 @@ function NoteCard({ note, onUnpublish, onRepublish }: {
         {note.title}
       </h3>
 
-      {/* AI tutor preview */}
-      {preview && (
+      {/* AI tutor preview — only present if the note has an AI Tutor summary */}
+      {preview ? (
         <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed flex items-start gap-1.5">
           <Brain className={cn('w-3.5 h-3.5 mt-0.5 shrink-0', colors.text)} />
           {preview}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground/60 italic leading-relaxed flex items-start gap-1.5">
+          <Brain className="w-3.5 h-3.5 mt-0.5 shrink-0 opacity-50" />
+          No AI summary yet — open the note and run <span className="not-italic font-medium">Analyze</span> to add one.
         </p>
       )}
 
@@ -128,6 +134,16 @@ function NoteCard({ note, onUnpublish, onRepublish }: {
         <Calendar className="w-3 h-3" />
         Published {fmtDate(note.publishedAt)}
       </div>
+
+      {/* Source-note hint — which note this Chronicle was generated from */}
+      <a
+        href={`/dashboard/notes/${note.slug ?? note.id}`}
+        title="Open the original note this Learning Chronicle was generated from"
+        className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/80 hover:text-foreground transition-colors w-fit"
+      >
+        <FileText className="w-3 h-3 shrink-0" />
+        <span className="truncate max-w-[230px]">From note: {note.title} · {fmtDate(note.createdAt)}</span>
+      </a>
 
       {/* Tags */}
       {note.tags.length > 0 && (
