@@ -438,6 +438,64 @@ function TaskRow({ e, onToggle, onCommit, onRemove, onOpen }: {
 }
 
 // ============ DAY VIEW — inline multi-activity planner ============
+// ── Confetti celebration (canvas-based, no dependencies) ──
+interface Confetto { x: number; y: number; vx: number; vy: number; size: number; color: string; rot: number; vr: number; shape: number }
+function fireConfetti(): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  const canvas = document.createElement('canvas')
+  canvas.setAttribute('aria-hidden', 'true')
+  canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:9999;'
+  document.body.appendChild(canvas)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) { canvas.remove(); return }
+  const dpr = window.devicePixelRatio || 1
+  const w = window.innerWidth, h = window.innerHeight
+  canvas.width = w * dpr; canvas.height = h * dpr
+  ctx.scale(dpr, dpr)
+  const colors = ['#6366f1', '#8b5cf6', '#34d399', '#fbbf24', '#38bdf8', '#f472b6', '#f87171']
+  const parts: Confetto[] = []
+  const N = 170
+  for (let i = 0; i < N; i++) {
+    const fromLeft = i % 2 === 0
+    parts.push({
+      x: fromLeft ? w * 0.15 : w * 0.85,
+      y: h * 0.45,
+      vx: (fromLeft ? 1 : -1) * (4 + Math.random() * 7),
+      vy: -10 - Math.random() * 12,
+      size: 6 + Math.random() * 7,
+      color: colors[(Math.random() * colors.length) | 0]!,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.35,
+      shape: Math.random() < 0.5 ? 0 : 1,
+    })
+  }
+  const gravity = 0.32
+  const DURATION = 2800
+  const start = performance.now()
+  const draw = (now: number): void => {
+    const t = now - start
+    ctx.clearRect(0, 0, w, h)
+    let alive = false
+    const fade = Math.max(0, 1 - t / DURATION)
+    for (const p of parts) {
+      p.vy += gravity; p.vx *= 0.99
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr
+      if (fade > 0 && p.y < h + 30) alive = true
+      ctx.save()
+      ctx.globalAlpha = fade
+      ctx.translate(p.x, p.y)
+      ctx.rotate(p.rot)
+      ctx.fillStyle = p.color
+      if (p.shape === 0) ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6)
+      else { ctx.beginPath(); ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2); ctx.fill() }
+      ctx.restore()
+    }
+    if (t < DURATION && alive) requestAnimationFrame(draw)
+    else canvas.remove()
+  }
+  requestAnimationFrame(draw)
+}
+
 function DayView({
   entries, cursor, onOpenEntry, onRestoreRoutine, onRefresh,
 }: {
@@ -535,6 +593,13 @@ function DayView({
   }
   const done = tasks.filter((e) => e.status === 'done').length
   const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0
+
+  // ── Celebrate the moment the day hits 100% (only on the transition, not on reload) ──
+  const prevPctRef = useRef(pct)
+  useEffect(() => {
+    if (tasks.length > 0 && pct === 100 && prevPctRef.current < 100) fireConfetti()
+    prevPctRef.current = pct
+  }, [pct, tasks.length])
 
   const rowInput = 'flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/50 py-0.5'
   const sectionTitle = 'text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5'
