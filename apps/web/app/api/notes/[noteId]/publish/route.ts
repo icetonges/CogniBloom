@@ -1230,17 +1230,14 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     const noteBase = { title: note.title, subject: note.subject, tutorSummary: note.tutorSummary, content: note.content, knowledgePoints: note.knowledgePoints }
     const pageBase = { originalTitle: note.title, subject: note.subject, originalContent: note.content, tutorSummary: note.tutorSummary, knowledgePoints: note.knowledgePoints, mindMap: note.mindMap, reasoningHints: note.reasoningHints, publishedSlug: slug, createdAt: note.createdAt }
 
-    let publishedHtml: string
-    let publishTitle: string
-
     // ── Unified Learning Chronicle writer for ALL note types ──
     let storedWriter: WriterOutput | null = null
     if (note.writerJson) {
       try { storedWriter = JSON.parse(note.writerJson) as WriterOutput } catch { /* ignore */ }
     }
     const writer = await generateWriterContent(noteBase, storedWriter)
-    publishedHtml = buildPublishedPage({ ...pageBase, writer })
-    publishTitle = writer.publishTitle
+    const publishedHtml = buildPublishedPage({ ...pageBase, writer })
+    const publishTitle = writer.publishTitle
     await db.note.update({
       where: { id: noteId },
       data: { publishedHtml, publishedSlug: slug, publishedAt: new Date(), writerJson: JSON.stringify(writer) },
