@@ -221,10 +221,12 @@ interface BigIdea {
 }
 
 interface Mistake {
-  whatHappened: string
-  whyConfusing: string
-  keyIdea: string
-  howToRemember: string
+  whatHappened: string   // what was wrong / not understood
+  keyIdea: string        // the correct knowledge point / concept
+  whyItMatters: string   // why this concept matters
+  howItWorks: string     // the logic and reasoning, step by step
+  example: string        // a concrete worked example
+  howToRemember: string  // how to lock it in / avoid it next time
 }
 
 interface WriterOutput {
@@ -280,8 +282,8 @@ The note may be messy: typos, unfinished sentences, repeated ideas, copied text,
 Your goals:
 - Turn the note into a clear, engaging, publish-ready Learning Chronicle.
 - Explain the knowledge BEHIND the note, not just what happened: why it matters, how it works, where it connects.
-- Gently correct misunderstandings. If the note shows an error, explain the concept behind it and how to avoid it next time.
-- If the note shows confusion, explain it with age-appropriate examples, analogies, and simple reasoning.
+- Treat every wrong answer, error, or "I still don't understand this" as the MOST IMPORTANT part of the note and the single biggest opportunity to teach. Never gloss over it. Teach the underlying knowledge point in full: name the concept, explain what it is, why it matters, how it works (the logic and reasoning, step by step), and give a concrete worked example. Then show how to remember it and avoid the slip next time. Be encouraging and specific, never shaming.
+- If the note shows confusion or a half-formed idea, rebuild the concept from the ground up with age-appropriate examples, analogies, and clear reasoning until it would actually click.
 - If the note asks a question, answer it and expand it into a learning opportunity.
 - Train the student to connect dots, reason logically, and reflect on growth.
 - Build confidence, curiosity, discipline, and a growth mindset.
@@ -386,7 +388,7 @@ OUTPUT — return ONLY this JSON object. No markdown fences, no preamble, no tra
   "subjectSections": [{ "emoji": "single emoji for the subject", "subjectTitle": "Subject — a vivid description of what happened", "body": "2-4 prose paragraphs separated by \\n\\n; no bullet points; explain WHY the idea works, gently correct any misunderstanding, treat open questions as cliffhangers; use <strong> for exactly one key insight and <em> for a term on first use" }],
   "bigIdeas": [{ "idea": "the concept name", "whatItMeans": "one clear sentence", "whyItMatters": "one sentence", "howItWorks": "one or two sentences", "example": "one concrete example", "analogy": "a think-of-it-like analogy" }],
   "learningTips": ["3-6 SPECIFIC tips tied to the actual topic; never generic advice like study harder or review more"],
-  "mistakes": [{ "whatHappened": "the mistake or confusion, only if the note shows one", "whyConfusing": "why it trips students up", "keyIdea": "the correct concept, step by step", "howToRemember": "how to avoid it next time" }],
+  "mistakes": [{ "whatHappened": "what was wrong or not understood (include this for EVERY error or confusion in the note)", "keyIdea": "the correct knowledge point / concept, named clearly", "whyItMatters": "why this concept matters", "howItWorks": "the logic and reasoning, step by step", "example": "a concrete worked example that makes it click", "howToRemember": "how to lock it in and avoid the slip next time" }],
   "connections": ["2-5 connect-the-dots links from today's learning to other subjects or real life"],
   "selfQuiz": [{ "question": "3-5 reasoning questions that train logic and explanation, not memorization", "answer": "a short model answer, hint, or thinking path" }],
   "tryThisNext": { "practice": "one small, doable practice action for tomorrow", "reflection": "one reflection question", "habit": "one habit to build", "challenge": "one optional stretch challenge" },
@@ -623,7 +625,7 @@ function buildPublishedPage(note: {
   // ── Mistakes / Aha ──
   const mistakesHtml = (writer.mistakes ?? []).map((m) => `
     <div style="margin-bottom:14px;padding:13px 15px;border:1px solid rgba(245,158,11,0.28);border-radius:12px;background:rgba(245,158,11,0.06);">
-      ${biRow('What happened', m.whatHappened)}${biRow('Why it was tricky', m.whyConfusing)}${biRow('The key idea', m.keyIdea)}${biRow('Remember it by', m.howToRemember)}
+      ${biRow('What went wrong', m.whatHappened)}${biRow('The key idea', m.keyIdea)}${biRow('Why it matters', m.whyItMatters)}${biRow('How it works', m.howItWorks)}${biRow('Worked example', m.example)}${biRow('Remember it by', m.howToRemember)}
     </div>`).join('')
 
   // ── Connect the Dots ──
@@ -677,7 +679,6 @@ function buildPublishedPage(note: {
   const safeSlug        = escapeHtml(note.publishedSlug)
   const safeOpening     = writer.openingHook.split(/\n+/).map(p => `<p>${escapeHtml(p.trim())}</p>`).filter(p => p !== '<p></p>').join('\n')
   const safeClosing     = writer.closingSection.split(/\n+/).map(p => `<p>${escapeHtml(p.trim())}</p>`).filter(p => p !== '<p></p>').join('\n')
-  const safeOrigContent = sanitizeRichHtml(note.originalContent)
   const safeSummary     = note.tutorSummary ? sanitizeRichHtml(note.tutorSummary) : null
   const safeSocial      = escapeHtml(writer.socialPost)
   const safeSubject     = note.subject ? escapeHtml(note.subject) : ''
@@ -1057,11 +1058,6 @@ function buildPublishedPage(note: {
       <!-- Try This Next -->
       ${tryThisNextHtml ? `<div class="ai-box"><div class="card-label" style="margin-bottom:12px;">🚀 Try This Next</div>${tryThisNextHtml}</div>` : ''}
 
-      <!-- Original Notes -->
-      <details class="raw">
-        <summary>📓 Original Study Notes</summary>
-        <div class="raw-body">${safeOrigContent}</div>
-      </details>
 
       <!-- AI Tutor Summary -->
       ${safeSummary ? `<div class="ai-box"><div class="card-label" style="margin-bottom:10px;">✨ AI Tutor Summary</div><div class="tutor-body">${safeSummary}</div></div>` : ''}
