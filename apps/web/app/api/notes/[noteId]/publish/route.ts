@@ -758,13 +758,22 @@ function buildPublishedPage(note: {
       letter-spacing:.13em; color:var(--text4);
       padding:16px 18px 8px; flex-shrink:0;
     }
-    .sb-tools{display:flex; flex-direction:column; gap:6px; padding:0 12px 10px; flex-shrink:0;}
+    .sb-tools{display:flex; flex-direction:column; gap:7px; padding:0 12px 12px; flex-shrink:0;}
     .sb-input,.sb-select{
-      width:100%; font-size:11px; padding:6px 8px; border-radius:7px;
-      background:var(--bg3); border:1px solid var(--border); color:var(--text2); outline:none;
+      width:100%; font-size:12.5px; font-weight:500; padding:7px 9px; border-radius:8px;
+      background:var(--bg2); border:1px solid var(--border); color:var(--text); outline:none;
     }
+    .sb-input:focus,.sb-select:focus{border-color:var(--accent);}
     .sb-input::placeholder{color:var(--text4);}
-    .sb-select{cursor:pointer;}
+    .sb-select{
+      cursor:pointer; -webkit-appearance:none; appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 9px center; padding-right:26px;
+    }
+    /* Native option menus ignore translucent vars — force solid, theme-aware colors */
+    .sb-select option{font-size:13px;}
+    [data-theme="dark"] .sb-select option{background:#0f1629; color:#e2e8f0;}
+    [data-theme="light"] .sb-select option{background:#ffffff; color:#1e293b;}
     .sb-scroll{
       flex:1; overflow-y:auto; padding:0 8px 24px;
       scrollbar-width:thin; scrollbar-color:var(--border) transparent;
