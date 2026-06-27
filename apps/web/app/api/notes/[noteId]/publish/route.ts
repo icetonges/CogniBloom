@@ -87,17 +87,21 @@ interface DanielInputSections {
 }
 
 const TEMPLATE_NOISE: RegExp[] = [
+  // Form instructions
   /^check the boxes you worked on/i,
   /^fill this out at the end/i,
   /^keep answers short and honest/i,
+  /^short, honest answers/i,
   /^copy this file and rename/i,
+  /^change ☐ to ☑/i,
   /^write the question[,\s]/i,
   /^the real reason \(rushed/i,
   /^be specific\s*[—-]/i,
-  /^save these for a parent/i,
+  /^be specific[—\s]/i,
+  /^save (for|these for) a parent/i,
   /^how does today link/i,
   /^something i.m proud of/i,
-  /^a few sentences describing/i,
+  /^a few sentences (describing|as if)/i,
   /^example:/i,
   /^today.s ___/i,
   /^write 3 questions/i,
@@ -111,6 +115,22 @@ const TEMPLATE_NOISE: RegExp[] = [
   /^subject\s*\|\s*question/i,
   /^\|-+\|/,
   /^\|[\s_]*\|/,
+  // "e.g." example lines (form placeholder examples)
+  /^e\.g\.\s/i,
+  /^e\.g\.,/i,
+  // Empty or near-empty form fields
+  /^date:\s*$/i,
+  /^day of week:\s*$/i,
+  /^focus level[^:]*:\s*$/i,
+  /^energy level[^:]*:\s*$/i,
+  /^one word for today:\s*$/i,
+  /^q:\s*a:\s*$/i,
+  /^q\d*:\s*a\d*:\s*$/i,
+  // Section header of the form itself
+  /^📘\s*daily learning reflection/i,
+  /^date & check.in/i,
+  /^progress summary/i,
+  /^format:\s*(subject|q:)/i,
 ]
 
 function isNoiseLine(line: string): boolean {
@@ -123,6 +143,10 @@ function isNoiseLine(line: string): boolean {
   if (/^[📚🧠📝🎯🔗📅🌍💡🎉🔍⭐]+\s*$/.test(l)) return true
   if (/^\s*[-*]\s+_{3,}/.test(l)) return true
   if (/^[-*]\s*$/.test(l)) return true
+  // Unfilled checkbox items: "☐ Math —" or "☐ " with nothing after the dash
+  if (/^☐\s/.test(l)) return true
+  // Lines that are just a checkbox + subject stub (no actual content after the dash)
+  if (/^[•\-]\s*☐/.test(l)) return true
   for (const p of TEMPLATE_NOISE) if (p.test(l)) return true
   return false
 }
@@ -198,6 +222,19 @@ interface WriterOutput {
   socialPost: string            // max 250 chars, genuine teen voice
 }
 
+// ── Note type detection ───────────────────────────────────────────────────────
+
+function isReflectionNote(note: { subject: string | null; tags: string[]; title: string }): boolean {
+  const sub = (note.subject ?? '').toLowerCase()
+  const t = note.title.toLowerCase()
+  return (
+    sub.includes('reflection') ||
+    sub.includes('daily') ||
+    t.startsWith('daily learning reflection') ||
+    note.tags.some(tag => ['reflection', 'daily'].includes(tag.toLowerCase()))
+  )
+}
+
 // ── Title pattern tracker (in-process rotation only) ─────────────────────────
 let lastTitlePattern = 0
 
@@ -230,6 +267,19 @@ async function generateWriterContent(note: {
     ? parts.join('\n\n')
     : htmlToText(note.content).slice(0, 4000)
 
+  // Gate: if the note has almost no real content, throw a clear error
+  // rather than letting the AI hallucinate from the blank template
+  const meaningfulChars = rawContent
+    .replace(/[A-Z\s,.:;!?•\-\[\]()#]+/g, ' ')  // strip structural chars
+    .replace(/\s+/g, ' ')
+    .trim().length
+  if (meaningfulChars < 60) {
+    throw Object.assign(
+      new Error('NOTE_TOO_EMPTY'),
+      { userMessage: 'This reflection has very little content. Fill in at least a few sections before publishing.' }
+    )
+  }
+
   let aiContext = ''
   if (note.tutorSummary) {
     aiContext += `\nAI TUTOR CONTEXT: ${htmlToText(note.tutorSummary).slice(0, 600)}`
@@ -244,16 +294,26 @@ async function generateWriterContent(note: {
   // Rotate title pattern suggestion
   lastTitlePattern = (lastTitlePattern % 6) + 1
 
-  const titlePatterns = `
-Pattern A — Two big ideas + one human anchor: "Gauss, Fibonacci, and a $5 Bet on the Future"
-Pattern B — One concept + its implication: "The Only Even Prime and Why That Changes Everything"
-Pattern C — A surprising contrast: "While True: Runs Forever. The Vocab Test Did Not."
-Pattern D — A question from the day: "What Does a Flipped Sequence Actually Cost You?"
-Pattern E — A vivid moment: "The Day the Pairing Trick Changed Addition Forever"
-Pattern F — A concept name used poetically: "Indefinite Loops and the Interminable Beauty of Fibonacci"
-Today, use Pattern ${lastTitlePattern}.`
+  const titlePatternGuide = `
+  Use structural Pattern ${lastTitlePattern} below.
 
-  const prompt = `You are a professional writer and expert educator producing a published daily learning diary entry for Daniel, a motivated student.
+  The title must be grounded in what Daniel actually studied — but you are ENCOURAGED to elevate it with the
+  deeper intellectual context: the historical figures behind the concept, the mathematical origin, the real-world
+  implication. If Daniel learned a pairing trick, name Gauss even if Daniel didn't. If Daniel studied Fibonacci,
+  bring the golden ratio even if Daniel only wrote about the sequence. This is HOW the Learning Chronicle teaches
+  the "why" and helps Daniel connect dots.
+
+  What you must NOT do: copy or lightly rephrase an example title from the skill guide. Generate freshly.
+
+  Pattern A — Two big ideas + one human anchor:    "Gauss, Fibonacci, and a $5 Bet on the Future"
+  Pattern B — One concept + its implication:        "The Only Even Prime and Why That Changes Everything"
+  Pattern C — A surprising contrast:                "While True: Runs Forever. The Vocab Test Did Not."
+  Pattern D — A question from the day:              "What Does a Flipped Sequence Actually Cost You?"
+  Pattern E — A vivid moment:                       "The Wednesday the Pairing Trick Changed Addition Forever"
+  Pattern F — A concept name used poetically:       "Indefinite Loops and the Interminable Beauty of Fibonacci"
+  → Today's assigned pattern: ${lastTitlePattern}`
+
+  const prompt = `You are a professional literary writer and master educator. Your job is to transform Daniel's raw study notes into a published Learning Chronicle entry — a story-driven narrative piece Daniel would be proud to share publicly.
 
 ─── DANIEL'S RAW NOTES ───────────────────────────────────────────────────────
 Note title: ${note.title}
@@ -262,62 +322,86 @@ Subject area: ${note.subject ?? 'Multiple subjects'}
 ${rawContent}${aiContext}
 ──────────────────────────────────────────────────────────────────────────────
 
-Your job is to transform these raw notes into a polished, story-driven piece that Daniel would be proud to publish. This is NOT a summary. It is literary, intellectually serious, and human.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WRITING PHILOSOPHY — read this before you write a single word
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-━━ TITLE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Title rotation patterns (use the assigned one):
-${titlePatterns}
+This is NOT a summary. NOT a report. NOT a list of facts.
 
-Rule: The title must name the actual intellectual content — a concept, a breakthrough, a vivid moment. It must be specific enough that it could not describe any other day.
-NEVER: "Math Reflection" / "Today's Learning" / "A Productive Study Session"
+This IS: a story. Daniel is the protagonist. He is not a passive recipient of information — he made decisions, hit walls, noticed things, won small battles. Every concept he encountered is a scene, not a bullet point.
+
+WHAT GREAT LOOKS LIKE (example transformation):
+
+  Raw input: "Sunshine academy: Gauss 1-100 addition logic, group up the numbers and find the amount of pairs. Then you multiply, this trick can save loads of time."
+
+  ❌ BAD (summary style):
+  "Today the student learned the Gauss trick for adding 1 to 100. You pair the numbers and multiply."
+
+  ✅ GOOD (story style):
+  "Young Carl Friedrich Gauss, legend has it, was handed a punishment assignment as a child: add every integer from 1 to 100. He produced the answer almost instantly. His insight: pair 1 with 100 (sum: 101), pair 2 with 99 (sum: 101)… fifty pairs, each summing to 101. <strong>50 × 101 = 5,050.</strong> Done in seconds.
+
+  This isn't a trick to memorize — it's a <em>way of seeing</em>. Instead of marching forward through a hundred numbers, you look at the whole sequence at once and notice its symmetry. The arithmetic collapses into something elegant."
+
+ELEVATION RULE — this is what separates great from good:
+Daniel's raw notes are the seed. Your job is to grow the tree. You are EXPECTED to bring in context Daniel did
+not write — the mathematician who discovered the technique, the historical origin of the concept, the real-world
+consequence, the deeper "why". If Daniel wrote about a pairing trick, you bring Gauss. If Daniel wrote about a
+sequence, you bring Fibonacci and the golden ratio. If Daniel wrote about a loop, you bring the halting problem.
+This enrichment IS the Learning Chronicle — it teaches Daniel the connections he hasn't made yet.
+
+PROSE RULES (non-negotiable):
+• Vary sentence length deliberately. Short sentences land hard after longer ones.
+• Use em-dashes for asides and emphasis — sparingly, but confidently.
+• Use <strong> for EXACTLY ONE key insight per section — the single thing worth remembering.
+• Use <em> for emphasis within a sentence, or vocabulary words on first use.
+• NO bullet points in the narrative body. NO lists. Pure prose paragraphs only.
+• Write in third person for the day summary. First person only for thoughts attributed directly to Daniel.
+• Correct all spelling/grammar silently — never flag it.
+• If Daniel's understanding of a concept is partially wrong, write the correct version gently, without contradiction.
+• If input on a subject is thin or empty, skip that subject entirely.
+• If the input has something unexpectedly vivid or wise, amplify it.
+• Treat every concept as genuinely interesting — because it is.
+
+━━ TITLE (publishTitle) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Must name the actual intellectual content — a concept, a breakthrough, a specific moment. Could not apply to any other day.
+NEVER: "Math Reflection" / "Daily Learning" / "A Productive Session" / anything counting subjects.
 Max 95 characters.
+${titlePatternGuide}
 
 ━━ OPENING HOOK (openingHook) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2–4 sentences. Set the human scene before any academic content. Reference the energy/focus level of the day without being clinical. Use one vivid specific detail. The reader should feel the texture of the day before they learn anything.
-NEVER open with "Today I learned…" or "In today's session…"
-GOOD: "I wasn't running at full speed today — energy at a 3, focus holding at a 4. But I showed up for five subjects, passed a vocabulary test, and made my first real investment before the day was over."
+2–4 sentences. Set the human scene BEFORE any academic content. Reference energy/focus without being clinical. Use one vivid specific detail that grounds the reader in the day.
+NEVER start with "Today I learned…" or "In today's session…" or listing subjects.
+GOOD EXAMPLE: "He wasn't running at full speed — energy at a 3, focus holding at a 4. But five subjects got covered, a vocabulary test got passed, and before the day was over, he made his first real investment."
 
 ━━ SUBJECT SECTIONS (subjectSections) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Write one section per subject Daniel actually worked on. Skip subjects with no real content.
-IMPORTANT: For daily reflection notes covering multiple subjects (Math + Coding + Language + Vocab + Finance etc.), write ALL subjects that have real content — do NOT abbreviate or skip any. Each section deserves equal depth and craft.
+One section per subject Daniel actually worked on. Write ALL subjects with real content — never abbreviate or skip.
 
 For each section:
-- "emoji": single emoji that fits the subject (🔢 math, 💻 coding, 📖 vocabulary, 🌍 language, ∞ or 🏛️ theory, 💰 finance/real life, etc.)
-- "subjectTitle": "SubjectName — A Short Vivid Description of What Happened" (NOT just the subject name)
-  Example: "Math — The Sequence That Flipped and Fooled Me" (NOT "Math")
-- "body": 2–4 paragraphs of flowing prose. Rules for body:
-  * Use your expert knowledge to explain concepts deeply and correctly — if Daniel's understanding is partial or slightly off, write the correct version gently, without calling it out
-  * Treat every concept as genuinely interesting. Find the elegance in math. Connect code to real-world use. Bring vocabulary words alive with scenes. Find structures hiding inside language phrases.
-  * For any mistake Daniel made: name it specifically ("I read the sequence backwards — and then swapped the digits on top of that. Two errors folded into one wrong answer. Not a knowledge gap. A reading gap.") and state the lesson clearly
-  * For any open question: treat it as an intellectual cliffhanger, not a gap to apologize for
-  * Use <strong> for exactly ONE key insight per section — the thing worth remembering
-  * Use <em> for emphasis within a sentence, or vocabulary words on first use
-  * NO bullet points inside the body. No lists. Pure prose.
-  * Vary sentence length: short sentences land hard after longer ones
-  * Tone by subject type:
-    - Math / Number Theory: precise but warm; show WHY the rule works, not just what it is; find the elegance
-    - Coding / Programming: concrete and mechanical, but connect to what it unlocks in the real world
-    - Vocabulary: bring words alive with context and scenes, not just definitions
-    - Language learning: notice structures and patterns hiding inside phrases, not just words
-    - Science / History / Other: lead with the most surprising or counterintuitive idea
-    - Finance / Real life: connect to bigger thinking about the future
+• "emoji": single emoji matching the subject (🔢 math, 💻 coding, 📖 vocabulary, 🌍 language, 💰 finance, 🧪 science, 🏛️ history/theory)
+• "subjectTitle": "SubjectName — A Vivid Description of What Happened in That Subject"
+  WRONG: "Math"  RIGHT: "Math — The Sequence That Flipped and Fooled Him"
+• "body": 2–4 paragraphs of pure prose (NO bullet points, NO lists). For each:
+  - Explain the concept as if to a smart curious reader who is not a specialist — find the elegance, show WHY it works
+  - For any mistake: name it specifically with its cause and the lesson — this is NOT a failure, it is a story beat
+  - For any open question: treat it as an intellectual cliffhanger, not a gap to apologize for
+  - Tone by subject: Math = precise + warm + elegant; Coding = mechanical + real-world connection; Vocab = words alive in scenes; Language = patterns hiding inside phrases; Finance = connect to bigger future thinking; Science/History = lead with the most surprising idea
 
 ━━ CLOSING SECTION (closingSection) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-3–5 sentences that synthesize the whole day. Connect at least two subjects to each other if possible. End with something specific — the small win, a decision, a moment of pride — without being sentimental. 
-NEVER end with "Overall it was a great day." End with something real and specific.
+3–5 sentences. Synthesize what the whole session built. Connect at least two subjects to each other. End on the small win, the investment, the moment of quiet pride — specific, never sentimental.
+NEVER: "Overall it was a great day." END WITH SOMETHING REAL AND SPECIFIC.
 
 ━━ KEY TERMS (keyTerms) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-3–6 terms from today's learning. Write definitions the way a brilliant teacher would explain them in one sentence — precise AND memorable, not dictionary-style.
-COLOR options: "violet", "emerald", "amber", "sky", "rose"
+3–6 terms from today's content. Definitions written how a brilliant teacher explains in one sentence — precise AND memorable, not dictionary-dry.
+Colors: "violet", "emerald", "amber", "sky", "rose"
 
 ━━ SELF-QUIZ (selfQuiz) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2–4 questions that test genuine understanding, not surface recall. Answers should be mini-explanations.
+2–4 questions testing genuine understanding (not surface recall). Answers = mini-explanations of the concept.
 
 ━━ REVIEW TOMORROW (reviewTomorrow) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2–4 specific items worth revisiting. Concrete, not vague.
+2–4 specific, concrete items worth revisiting. Not vague ("review math") — specific ("Re-check: why does Fibonacci's ratio converge to φ?").
 
 ━━ SOCIAL POST (socialPost) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HARD LIMIT: 250 characters including hashtags. Lead with the most surprising specific from the day. Include one concrete fact or number if possible. 1–3 hashtags max. Sound genuine, not performative — like a teen who's actually proud of something they figured out, not marketing copy.
+HARD LIMIT: 250 characters total including hashtags. Lead with the most surprising or vivid specific. Include one concrete fact or number if possible. 1–3 hashtags max. Genuine teen voice — proud of something figured out, not marketing copy.
 
 Return ONLY this JSON (no markdown fences, no preamble, no trailing text):
 {
@@ -1070,6 +1154,415 @@ function buildPublishedPage(note: {
 }
 
 
+// ── Regular Note Writer ───────────────────────────────────────────────────────
+
+interface RegularNoteWriterOutput {
+  publishTitle: string
+  introHook: string         // 2–3 sentences setting the intellectual scene
+  closingInsight: string    // 2–3 sentence synthesis / takeaway
+  keyTerms: Array<{ term: string; definition: string; color: string }>
+  socialPost: string        // max 250 chars
+}
+
+async function generateRegularNoteContent(note: {
+  title: string
+  subject: string | null
+  tutorSummary: string | null
+  content: string
+  knowledgePoints: string | null
+}, storedWriter: RegularNoteWriterOutput | null = null): Promise<RegularNoteWriterOutput> {
+  const rawContent = htmlToText(note.content).slice(0, 4000)
+
+  let aiContext = ''
+  if (note.tutorSummary) {
+    aiContext += `\nAI TUTOR SUMMARY: ${htmlToText(note.tutorSummary).slice(0, 500)}`
+  }
+  if (note.knowledgePoints) {
+    try {
+      const kps = JSON.parse(note.knowledgePoints) as { term: string; definition: string; importance: string }[]
+      aiContext += `\nKEY CONCEPTS: ${kps.map(k => `${k.term}: ${k.definition}`).join(' | ')}`
+    } catch { /* ignore */ }
+  }
+
+
+  const prompt = `You are a professional literary writer and master educator. Your job is to transform Daniel's raw study note into a published Learning Chronicle entry — a story-driven piece he would be proud to share publicly.
+
+─── DANIEL'S NOTE ────────────────────────────────────────────────────────────
+Title: ${note.title}
+Subject: ${note.subject ?? 'General'}
+
+${rawContent}${aiContext}
+──────────────────────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WRITING PHILOSOPHY — read this before writing
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is NOT a summary or a report. This IS a story. Daniel is the protagonist — he noticed things, hit walls, figured things out. Every concept is a scene, not a bullet point.
+
+WHAT GREAT LOOKS LIKE:
+  Raw input: "Gauss 1-100 addition logic, group up the numbers and find the pairs. Then multiply."
+  ❌ BAD: "The student learned the Gauss trick for adding 1 to 100."
+  ✅ GOOD: "Young Gauss was handed a punishment assignment: add every integer from 1 to 100. He produced the answer instantly — pair 1 with 100, pair 2 with 99, fifty pairs each summing to 101. <strong>50 × 101 = 5,050.</strong> Done in seconds. This isn't a trick to memorize — it's a <em>way of seeing</em>."
+
+ELEVATION RULE — this is what separates great from good:
+Daniel's raw note is the seed. Your job is to grow the tree. You are EXPECTED to bring in context Daniel did
+not write — the discoverer behind the technique, the historical origin of the concept, the real-world consequence,
+the deeper "why". If Daniel wrote about a pairing trick, bring Gauss. If Daniel wrote about recursion, bring the
+history of the halting problem. If Daniel wrote about a formula, name who derived it and why it matters beyond
+the textbook. This enrichment IS the Learning Chronicle — it teaches Daniel the connections he hasn't made yet.
+
+PROSE RULES (non-negotiable):
+• Storytelling first. Specific always beats general.
+• Vary sentence length — short sentences land hard after longer ones.
+• Use <strong> for exactly ONE key insight total — the thing worth remembering.
+• Use <em> for emphasis or key terms on first use.
+• No bullet points in the narrative body. Pure prose only.
+• Correct all spelling silently. Fix partial understanding gently, without flagging it.
+
+━━ TITLE (publishTitle) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Grounded in what Daniel studied — but elevated with the deeper intellectual context: the originator of the idea,
+the historical figure behind the concept, the real-world implication. If Daniel learned a technique, name the
+mathematician or inventor who discovered it. That elevation IS the point — it teaches Daniel the "why" and
+creates a title someone would want to read.
+NEVER: "Math Notes" / "Study Session" / "Today's Notes" / any generic phrase
+Max 95 characters.
+
+━━ INTRO HOOK (introHook) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2–3 sentences. Draw the reader in with the most surprising or vivid idea from this note. Do NOT start with "In this note…" or "Today I…". Open on a moment, a question, a counterintuitive fact.
+
+━━ CLOSING INSIGHT (closingInsight) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2–3 sentences. What does this content unlock? What door does it open? End with something specific and memorable — never "In conclusion…"
+
+━━ KEY TERMS (keyTerms) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3–6 terms from the note. Definitions: one sentence, written how a brilliant teacher explains it — precise AND memorable, not dictionary-dry.
+Colors: "violet", "emerald", "amber", "sky", "rose"
+
+━━ SOCIAL POST (socialPost) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HARD LIMIT: 250 characters including hashtags. Most surprising specific first. One concrete fact or number if possible. 1–3 hashtags max. Genuine teen voice.
+
+Return ONLY this JSON (no markdown fences, no preamble):
+{
+  "publishTitle": "...",
+  "introHook": "...",
+  "closingInsight": "...",
+  "keyTerms": [
+    { "term": "...", "definition": "...", "color": "violet" }
+  ],
+  "socialPost": "..."
+}`
+
+  const defaults: RegularNoteWriterOutput = {
+    publishTitle: note.title,
+    introHook: `Here's what came out of today's deep dive into ${note.subject ?? 'this topic'}.`,
+    closingInsight: `Every concept here builds toward something bigger. The work is in the details.`,
+    keyTerms: [],
+    socialPost: `learning something new every day 🧠 #studentlife #CogniBloom`,
+  }
+
+  try {
+    const res = await chatWithFallback({
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.72,
+      maxTokens: 2000,
+    })
+    const parsed = JSON.parse(extractJSON(res.content)) as Partial<RegularNoteWriterOutput>
+    return {
+      publishTitle:    (typeof parsed.publishTitle === 'string' && parsed.publishTitle.trim()) ? parsed.publishTitle.trim() : defaults.publishTitle,
+      introHook:       (typeof parsed.introHook === 'string' && parsed.introHook.trim())       ? parsed.introHook.trim()   : defaults.introHook,
+      closingInsight:  (typeof parsed.closingInsight === 'string' && parsed.closingInsight.trim()) ? parsed.closingInsight.trim() : defaults.closingInsight,
+      keyTerms:        Array.isArray(parsed.keyTerms) ? parsed.keyTerms : defaults.keyTerms,
+      socialPost:      (typeof parsed.socialPost === 'string' && parsed.socialPost.trim()) ? parsed.socialPost.trim() : defaults.socialPost,
+    }
+  } catch {
+    if (storedWriter) return storedWriter
+    return defaults
+  }
+}
+
+// ── Regular Note Page Builder ─────────────────────────────────────────────────
+
+function buildRegularNotePage(note: {
+  originalTitle: string
+  subject: string | null
+  originalContent: string
+  tutorSummary: string | null
+  knowledgePoints: string | null
+  mindMap: string | null
+  reasoningHints: string | null
+  publishedSlug: string
+  createdAt: Date
+  writer: RegularNoteWriterOutput
+}): string {
+  const date = new Date(note.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  const { writer } = note
+
+  const termPillsHtml = writer.keyTerms.map(kt => {
+    const c = TERM_COLORS[kt.color] ?? TERM_COLORS['violet']!
+    return `<div class="term-row">
+      <span class="term-pill" style="background:${c.bg};border-color:${c.border};color:${c.text};">${escapeHtml(kt.term)}</span>
+      <span class="term-def">${escapeHtml(kt.definition)}</span>
+    </div>`
+  }).join('')
+
+  let mindMapHtml = ''
+  try {
+    interface MindNode { label: string; children?: MindNode[] }
+    const renderNode = (node: MindNode, depth = 0): string => {
+      const ch = node.children?.length
+        ? `<ul style="margin:4px 0 4px 18px;padding:0;list-style:none;">${node.children.map((c: MindNode) => renderNode(c, depth + 1)).join('')}</ul>` : ''
+      const bg = depth === 0 ? '#6366f1' : depth === 1 ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)'
+      return `<li style="margin:4px 0;"><span style="display:inline-block;background:${bg};color:${depth === 0 ? '#fff' : 'inherit'};padding:${depth === 0 ? '5px 14px' : '3px 10px'};border-radius:7px;font-size:${depth === 0 ? '13px' : '12px'};font-weight:${depth === 0 ? 700 : 500};">${escapeHtml(node.label)}</span>${ch}</li>`
+    }
+    const root = JSON.parse(note.mindMap ?? 'null') as MindNode | null
+    if (root) mindMapHtml = `<ul style="list-style:none;margin:0;padding:0;">${renderNode(root)}</ul>`
+  } catch { /* */ }
+
+  let reasoningHtml = ''
+  try {
+    const hints = JSON.parse(note.reasoningHints ?? '[]') as { step: number; hint: string }[]
+    reasoningHtml = hints.map(h => `
+      <div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">
+        <span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;">${h.step}</span>
+        <span style="font-size:14px;line-height:1.7;color:var(--text3);padding-top:3px;">${escapeHtml(h.hint)}</span>
+      </div>`).join('')
+  } catch { /* */ }
+
+  const safeTitle       = escapeHtml(writer.publishTitle)
+  const safeSlug        = escapeHtml(note.publishedSlug)
+  const safeIntro       = writer.introHook.split(/\n+/).map(p => `<p>${escapeHtml(p.trim())}</p>`).filter(p => p !== '<p></p>').join('\n')
+  const safeClosing     = writer.closingInsight.split(/\n+/).map(p => `<p>${escapeHtml(p.trim())}</p>`).filter(p => p !== '<p></p>').join('\n')
+  const safeOrigContent = sanitizeRichHtml(note.originalContent)
+  const safeSummary     = note.tutorSummary ? sanitizeRichHtml(note.tutorSummary) : null
+  const safeSocial      = escapeHtml(writer.socialPost)
+  const safeSubject     = note.subject ? escapeHtml(note.subject) : ''
+
+  const xSvg  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.259 5.631L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/></svg>`
+  const fbSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.411c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.971h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>`
+  const igSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>`
+  const ttSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.32 6.32 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.75a4.85 4.85 0 01-1.02-.06z"/></svg>`
+  const thSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.069V12c.024-3.506.906-6.346 2.621-8.44C5.854 1.338 8.496.024 11.988 0h.013c2.7.016 4.987.758 6.787 2.205 1.72 1.385 2.768 3.24 3.116 5.515l-2.898.53c-.287-1.67-.971-3.027-2.033-4.033-1.11-1.05-2.65-1.603-4.574-1.632H12.1c-2.59.034-4.567.941-5.881 2.695C5.127 6.718 4.5 8.9 4.48 11.996v.07c.02 3.1.647 5.285 1.74 6.729 1.315 1.752 3.294 2.66 5.882 2.694h.08c2.19-.027 3.77-.517 4.879-1.496.985-.864 1.597-2.15 1.82-3.821l2.898.53c-.292 2.36-1.2 4.2-2.69 5.47-1.637 1.39-3.848 2.11-6.594 2.118h-.31z"/></svg>`
+
+  return `<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${safeTitle} — Daniel's Learning Chronicle</title>
+  <meta property="og:title" content="${safeTitle}">
+  <meta property="og:type" content="article">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html{transition:background-color .18s ease,color .18s ease;}
+    body,.sidebar,.topbar,.main,.note-link,.terms-card,.ai-box,.raw,.sb-brand{transition:background-color .18s ease,color .18s ease,border-color .18s ease;}
+    [data-theme="dark"]{--bg:#090e1a;--bg2:#0f1629;--bg3:rgba(255,255,255,0.025);--border:rgba(255,255,255,0.07);--border2:rgba(99,102,241,0.25);--text:#f1f5f9;--text2:#e2e8f0;--text3:#cbd5e1;--text4:#64748b;--accent:#6366f1;--accent2:#8b5cf6;--tag-bg:rgba(99,102,241,0.12);--tag-text:#a5b4fc;--card-bg:rgba(255,255,255,0.02);}
+    [data-theme="light"]{--bg:#f1f5f9;--bg2:#ffffff;--bg3:rgba(0,0,0,0.02);--border:rgba(0,0,0,0.09);--border2:rgba(99,102,241,0.3);--text:#0f172a;--text2:#1e293b;--text3:#334155;--text4:#94a3b8;--accent:#6366f1;--accent2:#8b5cf6;--tag-bg:rgba(99,102,241,0.09);--tag-text:#6366f1;--card-bg:rgba(0,0,0,0.025);}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;line-height:1;}
+    .sidebar{width:264px;min-width:264px;height:100vh;position:sticky;top:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;z-index:100;}
+    .sb-brand{display:flex;align-items:center;gap:10px;padding:18px 18px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .sb-logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+    .sb-name{font-size:13.5px;font-weight:800;color:var(--text);line-height:1.2;}
+    .sb-sub{font-size:10px;color:var(--text4);margin-top:2px;font-weight:500;}
+    .sb-section-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.13em;color:var(--text4);padding:16px 18px 8px;flex-shrink:0;}
+    .sb-scroll{flex:1;overflow-y:auto;padding:0 8px 24px;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+    .sb-scroll::-webkit-scrollbar{width:4px;}
+    .sb-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+    .note-link{display:block;padding:9px 10px;border-radius:8px;text-decoration:none;margin-bottom:2px;border:1px solid transparent;transition:background .12s,border-color .12s;}
+    .note-link:hover{background:var(--bg3);border-color:var(--border);}
+    .note-link.active{background:var(--tag-bg);border-color:var(--border2);}
+    .nl-subj{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:3px;}
+    .nl-title{font-size:12px;font-weight:600;color:var(--text);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .note-link.active .nl-title{color:var(--tag-text);}
+    .nl-date{font-size:10px;color:var(--text4);margin-top:3px;}
+    .sb-loading{padding:12px 18px;font-size:12px;color:var(--text4);}
+    .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+    .topbar{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 36px;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:0;z-index:50;flex-shrink:0;}
+    .topbar-left{display:flex;align-items:center;gap:10px;}
+    .ham{display:none;background:none;border:none;cursor:pointer;padding:6px;color:var(--text4);font-size:18px;line-height:1;}
+    .breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text4);}
+    .breadcrumb a{color:var(--accent);text-decoration:none;font-weight:600;}
+    .breadcrumb a:hover{text-decoration:underline;}
+    .bc-sep{color:var(--border);}
+    .bc-cur{color:var(--text3);font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .topbar-right{display:flex;align-items:center;gap:10px;}
+    .theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .13s;}
+    .theme-btn:hover{border-color:var(--accent);color:var(--accent);}
+    .back-btn{text-decoration:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--accent);border:1px solid var(--border2);background:var(--tag-bg);transition:opacity .13s;}
+    .back-btn:hover{opacity:.8;}
+    .article-wrap{padding:52px clamp(24px,5%,80px) 96px;}
+    .eyebrow{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.15em;color:var(--text4);margin-bottom:16px;}
+    .pub-title{font-size:2.9rem;font-weight:900;line-height:1.08;letter-spacing:-.02em;background:linear-gradient(135deg,#a5b4fc,#c4b5fd 50%,#f0abfc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px;}
+    .meta{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text4);margin-bottom:44px;}
+    .meta-chip{display:inline-flex;align-items:center;background:var(--tag-bg);color:var(--tag-text);border:1px solid var(--border2);border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;}
+    .meta-dot{width:3px;height:3px;border-radius:50%;background:var(--border);}
+    .intro{margin-bottom:44px;}
+    .intro p{font-size:21px;line-height:1.9;color:var(--text3);margin-bottom:22px;}
+    .intro p:last-child{margin-bottom:0;}
+    .divider{height:1px;background:linear-gradient(90deg,transparent,rgba(99,102,241,0.3),transparent);margin:44px 0;}
+    .note-body{font-size:19px;line-height:1.85;color:var(--text3);margin-bottom:52px;}
+    .note-body p{margin-bottom:18px;}
+    .note-body h1,.note-body h2,.note-body h3{color:var(--text2);font-weight:800;margin:28px 0 12px;line-height:1.3;}
+    .note-body h1{font-size:1.4rem;}.note-body h2{font-size:1.2rem;}.note-body h3{font-size:1.05rem;}
+    .note-body strong{color:var(--text2);font-weight:700;}
+    .note-body em{color:#c4b5fd;font-style:italic;}
+    .note-body code{background:rgba(99,102,241,0.12);color:#a5b4fc;padding:1px 6px;border-radius:4px;font-family:monospace;font-size:.82em;}
+    .note-body ul,.note-body ol{padding-left:22px;margin-bottom:14px;}
+    .note-body li{margin-bottom:6px;}
+    .closing-card{background:linear-gradient(135deg,rgba(99,102,241,0.07),rgba(139,92,246,0.04));border:1px solid var(--border2);border-radius:16px;padding:26px 30px;margin-bottom:44px;}
+    .closing-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:12px;}
+    .closing-card p{font-size:20px;line-height:1.9;color:var(--text3);margin-bottom:14px;}
+    .closing-card p:last-child{margin-bottom:0;}
+    .terms-card{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:24px;}
+    .card-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text4);margin-bottom:14px;}
+    .term-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+    .term-pill{flex-shrink:0;display:inline-block;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:700;border-width:1px;border-style:solid;}
+    .term-def{font-size:17px;color:var(--text4);line-height:1.65;padding-top:2px;}
+    .ai-box{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px;}
+    .tutor-body{font-size:17px;color:var(--text3);line-height:1.85;}
+    .tutor-body strong{color:#c4b5fd;}
+    .social{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:26px;margin-top:32px;}
+    .soc-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+    .soc-icon-wrap{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+    .soc-head h3{font-size:14px;font-weight:800;color:var(--text);}
+    .soc-head p{font-size:11px;color:var(--text4);margin-top:1px;}
+    .post-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;position:relative;}
+    .post-text{font-size:14px;line-height:1.75;color:var(--text3);white-space:pre-wrap;padding-right:70px;}
+    .cpbtn{position:absolute;top:10px;right:10px;background:rgba(99,102,241,.18);border:1px solid rgba(99,102,241,.35);color:#a5b4fc;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;}
+    .cpbtn:hover{background:rgba(99,102,241,.3);}
+    .cpbtn.ok{color:#34d399;border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.1);}
+    .plat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;}
+    .pbtn{display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 10px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all .15s;color:#fff;}
+    .pbtn:hover{transform:translateY(-1px);filter:brightness(1.12);}
+    .p-x{background:#000;border:1px solid #2d2d2d;}.p-fb{background:#1877f2;}
+    .p-ig{background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af);}
+    .p-tt{background:#010101;border:1px solid #2d2d2d;}.p-th{background:#111;border:1px solid #2d2d2d;}
+    .copy-hint{font-size:10.5px;color:var(--text4);margin-top:10px;text-align:center;}
+    .article-footer{margin-top:52px;padding-top:20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+    .brand{font-size:12px;font-weight:800;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .slug-txt{font-family:monospace;font-size:10px;color:var(--text4);}
+    .sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99;}
+    @media(max-width:960px){.sidebar{position:fixed;left:-280px;top:0;height:100%;transition:left .22s ease;z-index:200;box-shadow:4px 0 24px rgba(0,0,0,.55);}.sidebar.open{left:0;}.sb-overlay.open{display:block;}.ham{display:flex;}.article-wrap{padding:36px 24px 72px;}.pub-title{font-size:2rem;}.intro p{font-size:18px;}.closing-card p{font-size:17px;}}
+    @media(max-width:600px){.topbar{padding:0 16px;}.back-btn{display:none;}.article-wrap{padding:24px 16px 56px;}.plat-grid{grid-template-columns:1fr 1fr;}.pub-title{font-size:1.65rem;}.intro p{font-size:16px;}.closing-card p,.term-def,.tutor-body{font-size:15px;}}
+    body{overflow-x:hidden;}
+    .katex-display{overflow-x:auto;overflow-y:hidden;padding:6px 0;}
+    .katex{font-size:1.05em;color:inherit;}
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div class="sb-overlay" id="overlay" onclick="closeSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <div class="sb-logo">📖</div>
+      <div><div class="sb-name">CogniBloom</div><div class="sb-sub">Learning Chronicle</div></div>
+    </div>
+    <div class="sb-section-label">All Entries</div>
+    <div class="sb-scroll" id="note-list"><div class="sb-loading">Loading entries…</div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="ham" onclick="toggleSidebar()">☰</button>
+        <nav class="breadcrumb">
+          <a href="/dashboard/notes/archive">Learning Chronicle</a>
+          <span class="bc-sep">/</span>
+          <span class="bc-cur">${safeTitle}</span>
+        </nav>
+      </div>
+      <div class="topbar-right">
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀ Light</button>
+        <a href="/dashboard/notes/archive" class="back-btn">← All entries</a>
+      </div>
+    </div>
+    <div class="article-wrap">
+      <div class="eyebrow">Learning Chronicle · CogniBloom · ${date}</div>
+      <h1 class="pub-title">${safeTitle}</h1>
+      <div class="meta">
+        <span>📅 ${date}</span>
+        ${safeSubject ? `<span class="meta-dot"></span><span class="meta-chip">${safeSubject}</span>` : ''}
+      </div>
+      <div class="intro">${safeIntro}</div>
+      <div class="divider"></div>
+      <div class="note-body">${safeOrigContent}</div>
+      <div class="closing-card">
+        <div class="closing-label">Key Takeaway</div>
+        ${safeClosing}
+      </div>
+      ${termPillsHtml ? `<div class="terms-card"><div class="card-label">🔑 Key Terms</div>${termPillsHtml}</div>` : ''}
+      ${safeSummary ? `<div class="ai-box"><div class="card-label" style="margin-bottom:10px;">✨ AI Tutor Summary</div><div class="tutor-body">${safeSummary}</div></div>` : ''}
+      ${reasoningHtml ? `<div class="ai-box"><div class="card-label" style="margin-bottom:10px;">🧠 Reasoning Logic</div>${reasoningHtml}</div>` : ''}
+      ${mindMapHtml ? `<div class="ai-box"><div class="card-label" style="margin-bottom:10px;">🗺️ Mind Map</div>${mindMapHtml}</div>` : ''}
+      <div class="social">
+        <div class="soc-head">
+          <div class="soc-icon-wrap">📱</div>
+          <div><h3>Share What I Learned</h3><p>Inspire someone with your progress</p></div>
+        </div>
+        <div class="post-card">
+          <div class="post-text" id="spt">${safeSocial}</div>
+          <button class="cpbtn" id="cpbtn" onclick="copyPost()">Copy</button>
+        </div>
+        <div class="plat-grid">
+          <button class="pbtn p-x"  onclick="shareX()">${xSvg} X</button>
+          <button class="pbtn p-fb" onclick="shareFB()">${fbSvg} Facebook</button>
+          <button class="pbtn p-ig" onclick="copyFor(this)">${igSvg} Instagram</button>
+          <button class="pbtn p-tt" onclick="copyFor(this)">${ttSvg} TikTok</button>
+          <button class="pbtn p-th" onclick="shareTH()">${thSvg} Threads</button>
+        </div>
+        <p class="copy-hint">Instagram &amp; TikTok: copies caption → paste in your post</p>
+      </div>
+      <div class="article-footer">
+        <span class="brand">CogniBloom — Learning Chronicle</span>
+        <span class="slug-txt">${safeSlug}</span>
+      </div>
+    </div>
+  </div>
+<script>
+(function(){
+  var T=function(){return document.getElementById('spt').textContent.trim();};
+  var U=function(){return window.location.href;};
+  var clip=function(s,cb){if(navigator.clipboard){navigator.clipboard.writeText(s).then(cb).catch(fb);}else{fb();}function fb(){var t=document.createElement('textarea');t.value=s;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);cb();}};
+  var flash=function(el,lbl){var o=el.textContent;el.textContent=lbl;el.classList.add('ok');setTimeout(function(){el.textContent=o;el.classList.remove('ok');},2000);};
+  window.copyPost=function(){clip(T()+'\n\n'+U(),function(){flash(document.getElementById('cpbtn'),'✓ Copied!');});};
+  window.copyFor=function(el){clip(T()+'\n\n'+U(),function(){flash(el,'✓ Copied!');});};
+  window.shareX=function(){window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(T()+'\n\n')+'&url='+encodeURIComponent(U()),'_blank','width=600,height=480');};
+  window.shareFB=function(){window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(U()),'_blank','width=600,height=480');};
+  window.shareTH=function(){window.open('https://www.threads.net/intent/post?text='+encodeURIComponent(T()+'\n\n'+U()),'_blank','width=600,height=560');};
+  window.toggleTheme=function(){var html=document.documentElement;var dark=html.getAttribute('data-theme')==='dark';html.setAttribute('data-theme',dark?'light':'dark');document.getElementById('themeBtn').textContent=dark?'🌙 Dark':'☀ Light';try{localStorage.setItem('cogni-theme',dark?'light':'dark');}catch(e){}};
+  (function(){try{var saved=localStorage.getItem('cogni-theme');if(saved==='light'){document.documentElement.setAttribute('data-theme','light');document.getElementById('themeBtn').textContent='🌙 Dark';}}catch(e){}})();
+  window.toggleSidebar=function(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('overlay').classList.toggle('open');};
+  window.closeSidebar=function(){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('open');};
+  var currentSlug='${safeSlug}';
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function fmtDate(iso){if(!iso)return'';return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+  window.loadSidebar=function(isRetry){
+    var list=document.getElementById('note-list');if(!list)return;
+    if(!isRetry)list.innerHTML='<div class="sb-loading">Loading entries…</div>';
+    var ctrl=new AbortController();var timer=setTimeout(function(){ctrl.abort();},30000);
+    fetch('/api/notes/published',{signal:ctrl.signal})
+      .then(function(r){clearTimeout(timer);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(function(res){
+        if(!list)return;
+        if(!res||!res.success||!Array.isArray(res.data)||!res.data.length){list.innerHTML='<div class="sb-loading">No entries yet.</div>';return;}
+        list.innerHTML=res.data.map(function(n){
+          var active=n.publishedSlug===currentSlug?' active':'';
+          var subj=n.subject?'<div class="nl-subj">'+esc(n.subject)+'</div>':'';
+          var slug2=n.publishedSlug?esc(n.publishedSlug):'';
+          return '<a href="/notes/view/'+slug2+'" class="note-link'+active+'">'+subj+'<div class="nl-title">'+esc(n.title||'Untitled')+'</div>'+'<div class="nl-date">'+fmtDate(n.publishedAt||n.createdAt)+'</div>'+'</a>';
+        }).join('');
+      })
+      .catch(function(e){clearTimeout(timer);var msg=e&&e.name==='AbortError'?'Timed out':(e&&e.message?e.message.slice(0,60):'Network error');if(list)list.innerHTML='<div class="sb-loading" style="color:#fb7185;font-size:11px;">'+msg+'<br><button onclick="loadSidebar(true)" style="margin-top:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;display:block;">Retry</button></div>';});
+  };
+  window.loadSidebar(false);
+  function _tryKatex(){if(window.renderMathInElement){renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false,ignoredTags:['script','noscript','style','textarea','pre','code','button']});}else{setTimeout(_tryKatex,120);}}
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_tryKatex);}else{_tryKatex();}
+})();
+</script>
+</body>
+</html>`
+}
+
 // ── POST /api/notes/[noteId]/publish ─────────────────────────────────────────
 
 export async function POST(_request: NextRequest, { params }: RouteParams) {
@@ -1080,51 +1573,69 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
 
     const slug = note.publishedSlug ?? await generateSlug(note.subject, note.createdAt)
-    // Parse stored writer JSON as fallback so republish never overwrites with raw defaults
-    let storedWriter: WriterOutput | null = null
-    if (note.writerJson) {
-      try { storedWriter = JSON.parse(note.writerJson) as WriterOutput } catch { /* ignore */ }
+    const noteBase = { title: note.title, subject: note.subject, tutorSummary: note.tutorSummary, content: note.content, knowledgePoints: note.knowledgePoints }
+    const pageBase = { originalTitle: note.title, subject: note.subject, originalContent: note.content, tutorSummary: note.tutorSummary, knowledgePoints: note.knowledgePoints, mindMap: note.mindMap, reasoningHints: note.reasoningHints, publishedSlug: slug, createdAt: note.createdAt }
+
+    let publishedHtml: string
+    let publishTitle: string
+
+    if (isReflectionNote(note)) {
+      // ── Daily reflection note: full story-driven multi-subject writer ──
+      let storedWriter: WriterOutput | null = null
+      if (note.writerJson) {
+        try { storedWriter = JSON.parse(note.writerJson) as WriterOutput } catch { /* ignore */ }
+      }
+      const writer = await generateWriterContent(noteBase, storedWriter)
+      publishedHtml = buildPublishedPage({ ...pageBase, writer })
+      publishTitle = writer.publishTitle
+      await db.note.update({
+        where: { id: noteId },
+        data: { publishedHtml, publishedSlug: slug, publishedAt: new Date(), writerJson: JSON.stringify(writer) },
+      })
+    } else {
+      // ── Regular note: article-style storytelling writer ──
+      let storedWriter: RegularNoteWriterOutput | null = null
+      if (note.writerJson) {
+        try { storedWriter = JSON.parse(note.writerJson) as RegularNoteWriterOutput } catch { /* ignore */ }
+      }
+      const writer = await generateRegularNoteContent(noteBase, storedWriter)
+      publishedHtml = buildRegularNotePage({ ...pageBase, writer })
+      publishTitle = writer.publishTitle
+      await db.note.update({
+        where: { id: noteId },
+        data: { publishedHtml, publishedSlug: slug, publishedAt: new Date(), writerJson: JSON.stringify(writer) },
+      })
     }
-    const writer = await generateWriterContent({
-      title: note.title, subject: note.subject, tutorSummary: note.tutorSummary,
-      content: note.content, knowledgePoints: note.knowledgePoints,
-    }, storedWriter)
-    const publishedHtml = buildPublishedPage({
-      originalTitle: note.title, subject: note.subject, originalContent: note.content,
-      tutorSummary: note.tutorSummary, knowledgePoints: note.knowledgePoints,
-      mindMap: note.mindMap, reasoningHints: note.reasoningHints,
-      publishedSlug: slug, createdAt: note.createdAt, writer,
-    })
-    const updated = await db.note.update({
-      where: { id: noteId },
-      data: { publishedHtml, publishedSlug: slug, publishedAt: new Date(), writerJson: JSON.stringify(writer) },
-    })
+
+    const updated = await db.note.findFirst({ where: { id: noteId }, select: { publishedSlug: true, publishedAt: true } })
     return NextResponse.json({
       success: true,
-      data: { slug: updated.publishedSlug, publishedAt: updated.publishedAt, url: `/notes/view/${slug}`, publishTitle: writer.publishTitle },
+      data: { slug: updated?.publishedSlug, publishedAt: updated?.publishedAt, url: `/notes/view/${slug}`, publishTitle },
     })
-  } catch {
+  } catch (err) {
+    const e = err as { message?: string; userMessage?: string }
+    if (e?.message === 'NOTE_TOO_EMPTY') {
+      return NextResponse.json({ error: e.userMessage ?? 'Note has too little content to publish.' }, { status: 400 })
+    }
     return NextResponse.json({ error: 'Publish failed' }, { status: 500 })
   }
 }
 
-// ── DELETE /api/notes/[noteId]/publish ── (unpublish) ────────────────────────
+// ── DELETE /api/notes/[noteId]/publish ───────────────────────────────────────
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
     const note = await db.note.findFirst({
       where: { id: noteId, userId: DANIEL_USER_ID },
-      select: { id: true, publishedSlug: true },
+      select: { id: true },
     })
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
-    if (!note.publishedSlug) return NextResponse.json({ error: 'Note is not published' }, { status: 400 })
-
     await db.note.update({
       where: { id: noteId },
       data: { publishedHtml: null, publishedSlug: null, publishedAt: null },
     })
-    return NextResponse.json({ success: true, message: 'Note unpublished' })
+    return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

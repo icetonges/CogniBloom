@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
-  CalendarDays, BookMarked, FileText, GraduationCap, Archive,
+  CalendarDays, BookMarked, FileText, GraduationCap, ScrollText,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -14,9 +14,10 @@ import { cn } from '@/lib/utils'
 import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
 
 const navItems = [
-  { href: '/dashboard/planner',         icon: CalendarDays,  label: 'Planner',           color: 'text-cyan-400'   },
-  { href: '/dashboard/study-coach',     icon: GraduationCap, label: '🌟 Study Coach',    color: 'text-lime-400'   },
-  { href: '/dashboard/notes',            icon: BookOpen,      label: 'Notes',            color: 'text-emerald-400'},
+  { href: '/dashboard/planner',         icon: CalendarDays,  label: 'Planner',              color: 'text-cyan-400'   },
+  { href: '/dashboard/study-coach',     icon: GraduationCap, label: '🌟 Study Coach',       color: 'text-lime-400'   },
+  { href: '/dashboard/notes/archive',   icon: ScrollText,    label: '📖 Learning Chronicle', color: 'text-amber-400'  },
+  { href: '/dashboard/notes',            icon: BookOpen,      label: 'Notes',               color: 'text-emerald-400'},
   { href: '/dashboard/review',          icon: Brain,         label: 'Daily Review',      color: 'text-fuchsia-400', badge: 'review-due' },
   { href: '/dashboard/overview',         icon: BarChart3,     label: 'Dashboard',        color: 'text-blue-400'   },
   { href: '/dashboard/chat',            icon: MessageSquare, label: 'AI Tutor',          color: 'text-violet-400' },
@@ -66,10 +67,11 @@ function Sidebar({
       {/* ── Navigation ── */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ href, icon: Icon, label, badge, color }) => {
-          // Notes nav item is special: active whenever pathname is under /dashboard/notes
+          // Notes nav item is active for /dashboard/notes/** but NOT for /dashboard/notes/archive
+          // Learning Chronicle (/dashboard/notes/archive) gets its own top-level active state
           const notesItem = href === '/dashboard/notes'
           const active = notesItem
-            ? pathname.startsWith('/dashboard/notes')
+            ? pathname.startsWith('/dashboard/notes') && !pathname.startsWith('/dashboard/notes/archive')
             : pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           const badgeCount = badge === 'flashcards-due' ? flashcardsDue : badge === 'review-due' ? reviewDue : 0
           const showBadge = !!badge && badgeCount > 0
@@ -136,14 +138,6 @@ function Sidebar({
                       <FileText className="w-3.5 h-3.5 shrink-0" />
                       Regular Note
                     </a>
-                    <Link
-                      href="/dashboard/notes/archive"
-                      onClick={onClose}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors"
-                    >
-                      <Archive className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                      Archive
-                    </Link>
                     <div className="h-px mx-1 my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
                   </div>
                   {/* SubjectGroupList has its own ml-3 — not nested inside the div above */}
@@ -320,3 +314,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
   )
 }
+
