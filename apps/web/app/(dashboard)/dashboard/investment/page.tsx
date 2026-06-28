@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   TrendingUp, Sparkles, Loader2, RefreshCw, Info, Plus, Trash2,
   ShieldCheck, Bot, BookOpen, Target, Clock, ExternalLink,
+  Gauge, Globe, Layers, GitBranch,
 } from 'lucide-react'
 import { cn, localISODate } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer'
@@ -35,6 +36,21 @@ const SCORE_ROWS: { key: string; label: string }[] = [
   { key: 'longterm', label: 'Long-term potential' },
   { key: 'risk', label: 'The risk feels acceptable' },
   { key: 'nothype', label: 'I am NOT buying from hype' },
+]
+
+const VALUE_VERDICTS = ['Undervalued', 'Fairly valued', 'Overvalued'] as const
+const MARKET_TRENDS = ['Bull (rising)', 'Bear (falling)', 'Sideways'] as const
+const RATE_DIR = ['Rising', 'Steady', 'Falling'] as const
+const ACTIONS = ['Buy', 'Hold', 'Sell', 'Watch'] as const
+const DECISION_CHECKS = [
+  'I understand how the business makes money',
+  'KPIs look healthy (growth, profit, manageable debt)',
+  'Valuation is fair or undervalued — not hype-priced',
+  'I considered market & economic conditions',
+  'I checked how other markets (housing, crypto, oil, rates) could affect it',
+  'It fits my risk tolerance and time horizon',
+  'My long-term thesis is intact',
+  'I am NOT buying just because it is popular',
 ]
 
 interface PortRow {
@@ -187,10 +203,17 @@ export default function InvestmentPage() {
   const [daily, setDaily] = useStored(dailyKey, {
     ticker: '', name: '', price: '', decision: '', confidence: '', riskFeel: '', timeSpent: '',
     business: '', numbers: '', news: '', riskCheck: '', reason: '', lesson: '',
+    kpiRevGrowth: '', kpiMargin: '', kpiEps: '', kpiPe: '', kpiDebt: '', kpiFcf: '',
+    valueVerdict: '', valueWhy: '',
+    marketTrend: '', rates: '', macroNotes: '', microNotes: '',
+    crossHousing: '', crossCrypto: '', crossOil: '', crossBonds: '', crossImpact: '',
+    finalAction: '', buyThesis: '', sellTrigger: '',
   })
   const setD = (k: string, v: string) => setDaily((p) => ({ ...p, [k]: v }))
 
   const [score, setScore] = useStored<Record<string, number>>(`cb:invest:score:${today}`, {})
+  const [checks, setChecks] = useStored<Record<string, boolean>>(`cb:invest:checks:${today}`, {})
+  const checksDone = DECISION_CHECKS.filter((_, i) => checks[i]).length
   const scoreTotal = SCORE_ROWS.reduce((sum, r) => sum + (score[r.key] || 0), 0)
   const scoreComplete = SCORE_ROWS.every((r) => (score[r.key] || 0) > 0)
   const band =
@@ -248,6 +271,14 @@ export default function InvestmentPage() {
       `My risk check: ${daily.riskCheck || '—'}`,
       `My reason: ${daily.reason || '—'}`,
       `Research scorecard: ${scoreComplete ? scoreTotal + '/30' : 'incomplete'}`,
+      `KPIs — rev growth: ${daily.kpiRevGrowth || '—'}, margin: ${daily.kpiMargin || '—'}, EPS: ${daily.kpiEps || '—'}, P/E: ${daily.kpiPe || '—'}, debt: ${daily.kpiDebt || '—'}, FCF: ${daily.kpiFcf || '—'}`,
+      `Valuation verdict: ${daily.valueVerdict || '—'} — ${daily.valueWhy || '—'}`,
+      `Market trend: ${daily.marketTrend || '—'} · Interest rates: ${daily.rates || '—'}`,
+      `Macro notes: ${daily.macroNotes || '—'}`,
+      `Micro notes: ${daily.microNotes || '—'}`,
+      `Cross-asset — housing: ${daily.crossHousing || '—'}, crypto: ${daily.crossCrypto || '—'}, oil: ${daily.crossOil || '—'}, bonds/gold: ${daily.crossBonds || '—'}; impact: ${daily.crossImpact || '—'}`,
+      `Decision gates: ${checksDone}/${DECISION_CHECKS.length} · Action: ${daily.finalAction || '—'}`,
+      `Buy/hold thesis: ${daily.buyThesis || '—'} · Sell trigger: ${daily.sellTrigger || '—'}`,
     ]
     const prompt =
       `Here is my investing research for today. Please coach me: point out any behavioral biases, ` +
@@ -387,6 +418,73 @@ export default function InvestmentPage() {
         </div>
       </SectionCard>
 
+      {/* KPIs & Value */}
+      <SectionCard icon={Gauge} title="KPIs & Value Determination" subtitle="The key numbers — hover the ⓘ to learn each one" accent="#22d3ee">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <Field label="Revenue growth" hint="e.g. +12% vs last year" value={daily.kpiRevGrowth} onChange={(v) => setD('kpiRevGrowth', v)}
+            tip="Is the company selling more than before? Compare this year's revenue with last year's. Steady growth is usually a good sign." />
+          <Field label="Profit margin" hint="e.g. 21%" value={daily.kpiMargin} onChange={(v) => setD('kpiMargin', v)}
+            tip="Of every $1 of sales, how much becomes profit? Higher margins often mean a stronger, more efficient business." />
+          <Field label="EPS (earnings/share)" hint="e.g. $6.40" value={daily.kpiEps} onChange={(v) => setD('kpiEps', v)}
+            tip="Earnings Per Share = profit divided by number of shares. Rising EPS over time is a healthy sign." />
+          <Field label="P/E ratio" hint="e.g. 28" value={daily.kpiPe} onChange={(v) => setD('kpiPe', v)}
+            tip="Price divided by earnings per share — roughly how many years of profit you pay for. Compare with similar companies; a very high P/E means big growth expectations and bigger risk." />
+          <Field label="Debt level" hint="e.g. low · D/E 0.4" value={daily.kpiDebt} onChange={(v) => setD('kpiDebt', v)}
+            tip="How much the company owes. Too much debt is risky, especially when interest rates rise. Debt-to-equity compares debt with owners' money." />
+          <Field label="Free cash flow" hint="e.g. positive & growing" value={daily.kpiFcf} onChange={(v) => setD('kpiFcf', v)}
+            tip="Cash left after running and maintaining the business. Positive, growing free cash flow means real money, not just paper profit." />
+        </div>
+        <div className="mt-4">
+          <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">My valuation verdict</span>
+          <Chips options={VALUE_VERDICTS} value={daily.valueVerdict} onChange={(v) => setD('valueVerdict', v)} />
+        </div>
+        <div className="mt-3">
+          <Field textarea label="Why — and my margin of safety" value={daily.valueWhy} onChange={(v) => setD('valueWhy', v)}
+            tip="Margin of safety = buying below what you think it's worth, so mistakes hurt less."
+            hint="Compared with similar companies, why is it cheap, fair, or expensive? Am I leaving a margin of safety?" />
+        </div>
+      </SectionCard>
+
+      {/* Market & economy */}
+      <SectionCard icon={Globe} title="Market & Economy Conditions" subtitle="The big picture you can't control — but should respect" accent="#a78bfa">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Overall market trend</span>
+            <Chips options={MARKET_TRENDS} value={daily.marketTrend} onChange={(v) => setD('marketTrend', v)} />
+          </div>
+          <div>
+            <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Interest rates (the Fed)</span>
+            <Chips options={RATE_DIR} value={daily.rates} onChange={(v) => setD('rates', v)} />
+          </div>
+        </div>
+        <div className="mt-3 space-y-3">
+          <Field textarea label="Macro check — the whole economy" value={daily.macroNotes} onChange={(v) => setD('macroNotes', v)}
+            tip="Macro = the big economy that affects everything: inflation, jobs/unemployment, GDP growth, interest rates, recession risk."
+            hint="Inflation, jobs, GDP, rates, recession risk — anything that could move the whole market?" />
+          <Field textarea label="Micro check — this company & industry" value={daily.microNotes} onChange={(v) => setD('microNotes', v)}
+            tip="Micro = up close: this company and its industry — competition, customer demand, pricing power, supply costs, new products."
+            hint="Competition, demand, pricing power, costs, new products — what's happening up close?" />
+        </div>
+      </SectionCard>
+
+      {/* Cross-asset */}
+      <SectionCard icon={Layers} title="Cross-Asset Watch" subtitle="How other markets ripple into your pick" accent="#f59e0b">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Field label="Housing market" hint="strong / cooling" value={daily.crossHousing} onChange={(v) => setD('crossHousing', v)}
+            tip="A strong or weak housing market signals consumer wealth and spending, and affects banks and homebuilders." />
+          <Field label="Crypto" hint="risk-on / risk-off" value={daily.crossCrypto} onChange={(v) => setD('crossCrypto', v)}
+            tip="Crypto is very volatile and 'risk-on'. Big crypto swings can reflect how much risk investors want to take overall." />
+          <Field label="Oil / energy" hint="rising / falling" value={daily.crossOil} onChange={(v) => setD('crossOil', v)}
+            tip="Oil and energy prices affect inflation, transport, and many companies' costs. Rising oil can squeeze profits and push prices up." />
+          <Field label="Bonds / gold" hint="yields up? gold up?" value={daily.crossBonds} onChange={(v) => setD('crossBonds', v)}
+            tip="Bonds and gold are 'safe havens'. Higher bond yields compete with stocks; gold often rises when people are fearful." />
+        </div>
+        <div className="mt-3">
+          <Field textarea label="How could these affect my pick?" value={daily.crossImpact} onChange={(v) => setD('crossImpact', v)}
+            hint="One or two lines connecting the other markets to your company or ETF." />
+        </div>
+      </SectionCard>
+
       {/* Scorecard */}
       <SectionCard icon={ShieldCheck} title="Research Scorecard" subtitle="Rate 1–5. A thinking tool, not a guarantee.">
         <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
@@ -397,6 +495,45 @@ export default function InvestmentPage() {
         <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: `${band.color}14`, border: `1px solid ${band.color}40` }}>
           <span className="text-sm font-bold">Total: {scoreTotal}/30</span>
           <span className="text-xs font-semibold" style={{ color: band.color }}>{band.text}</span>
+        </div>
+      </SectionCard>
+
+      {/* Buy / Sell / Hold decision process */}
+      <SectionCard icon={GitBranch} title="Buy / Sell / Hold Decision Process" subtitle="Tick the gates, then choose — a calm process beats a hot tip" accent="#34d399">
+        <div className="space-y-1.5">
+          {DECISION_CHECKS.map((c, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setChecks((p) => ({ ...p, [i]: !p[i] }))}
+              className="w-full flex items-center gap-2.5 text-left rounded-xl px-3 py-2 transition-all"
+              style={checks[i]
+                ? { background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)' }
+                : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+            >
+              <span className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 text-[11px] font-black"
+                style={checks[i] ? { background: '#10b981', color: 'white' } : { border: '1px solid rgba(255,255,255,0.25)' }}>
+                {checks[i] ? '✓' : ''}
+              </span>
+              <span className="text-sm">{c}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2.5"
+          style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+          <span className="text-sm font-bold">{checksDone} of {DECISION_CHECKS.length} gates checked</span>
+          <span className="text-[11px] text-muted-foreground text-right">More gates = a calmer, better-researched decision (never a guarantee)</span>
+        </div>
+        <div className="mt-4">
+          <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">My action today</span>
+          <Chips options={ACTIONS} value={daily.finalAction} onChange={(v) => setD('finalAction', v)} />
+        </div>
+        <div className="mt-3 space-y-3">
+          <Field textarea label="My buy/hold thesis (one sentence)" value={daily.buyThesis} onChange={(v) => setD('buyThesis', v)}
+            hint="Why would I want to own this for the long term?" />
+          <Field textarea label="My sell trigger — decide BEFORE buying" value={daily.sellTrigger} onChange={(v) => setD('sellTrigger', v)}
+            tip="Pros decide their exit in advance so emotion doesn't decide for them later."
+            hint="What specific change would make me sell? e.g. 'the thesis breaks' or 'revenue shrinks two quarters' — not just 'the price dropped'." />
         </div>
       </SectionCard>
 
