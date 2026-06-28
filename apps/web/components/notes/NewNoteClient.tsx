@@ -167,6 +167,208 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
   }
 }
 
+function buildInvestmentTemplate(): { title: string; subject: string; tags: string; html: string } {
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  const isoDate = localISODate(now)   // local date, not UTC
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
+
+  const html = `
+<h1>📈 Investment Reflection — My $5 Research Lab</h1>
+<blockquote>This is <strong>your</strong> lab, not a test. Spend 10–15 minutes researching one stock or ETF, then decide what to do with today's $5. There is no single "best stock," and a loss is not a failure — it is a signal you can learn from. Be honest, be patient, and think like a part-owner of a business. <em>Nothing here is a promise of returns or financial advice.</em></blockquote>
+
+<h2>⏱️ My 10–15 Minute Daily Routine</h2>
+<blockquote>Follow the clock so research stays short and consistent. Tick each step as you go.</blockquote>
+<ul>
+  <li>☐ <strong>Min 1–2:</strong> Pick a stock, ETF, or company</li>
+  <li>☐ <strong>Min 3–5:</strong> Understand what it does</li>
+  <li>☐ <strong>Min 6–8:</strong> Check a few simple numbers</li>
+  <li>☐ <strong>Min 9–11:</strong> Read one or two news items</li>
+  <li>☐ <strong>Min 12–13:</strong> Complete the risk check</li>
+  <li>☐ <strong>Min 14–15:</strong> Make the $5 decision and write one lesson</li>
+</ul>
+
+<hr>
+
+<h2>1. Daily Stock Research Entry</h2>
+<blockquote>The quick facts for today. <em>e.g. Ticker: VOO | Name: Vanguard S&amp;P 500 ETF | Price: $512 | Decision: Add to Watchlist | Confidence: 3 | Risk I feel: Low | Time: 12 min</em></blockquote>
+<ul>
+  <li><strong>Date:</strong> ${isoDate} (${dayName})</li>
+  <li><strong>Stock or ETF ticker:</strong> </li>
+  <li><strong>Company or fund name:</strong> </li>
+  <li><strong>Today's price:</strong> $</li>
+  <li><strong>Amount I plan to invest today:</strong> $5</li>
+  <li><strong>My decision today:</strong> Buy / Hold Cash / Add to Watchlist / Research More</li>
+  <li><strong>Confidence level (1–5):</strong> </li>
+  <li><strong>Risk level I feel:</strong> Low / Medium / High</li>
+  <li><strong>Time spent researching:</strong> </li>
+</ul>
+
+<h2>2. Business Understanding</h2>
+<blockquote>If you can't explain what a company does in one sentence, that's useful to notice. <em>e.g. "Apple sells iPhones, Macs, and services — I use their products, so I get it."</em></blockquote>
+<ul>
+  <li><strong>What does this company or ETF do?</strong> </li>
+  <li><strong>How does it make money?</strong> </li>
+  <li><strong>Who are its customers?</strong> </li>
+  <li><strong>Why do people need or want this product/service?</strong> </li>
+  <li><strong>Is this business easy for me to understand? (Yes / Sort of / No)</strong> </li>
+  <li><strong>Would this business still matter in 5–10 years? Why?</strong> </li>
+</ul>
+
+<h2>3. Simple Numbers Check</h2>
+<blockquote>Fill in what you can find. You don't need every number — just enough to get a feel for the business. Plain-English meaning is next to each one.</blockquote>
+<ul>
+  <li><strong>Market cap:</strong>  — <em>the total price of the whole company (share price × number of shares). Big = more established, small = riskier but more room to grow.</em></li>
+  <li><strong>Revenue:</strong>  — <em>total money coming in from sales before any costs.</em></li>
+  <li><strong>Profit / net income:</strong>  — <em>what's left after all costs. Positive = the business actually makes money.</em></li>
+  <li><strong>Revenue growth:</strong>  — <em>is the business getting bigger or smaller over time?</em></li>
+  <li><strong>Stock price change today:</strong>  — <em>one day means almost nothing on its own.</em></li>
+  <li><strong>Stock price change over 1 year:</strong>  — <em>a longer view of how it has done.</em></li>
+  <li><strong>P/E ratio (if available):</strong>  — <em>price vs. profit. A high number means investors expect lots of growth (and it can fall hard if growth slows).</em></li>
+  <li><strong>Dividend (if any):</strong>  — <em>cash some companies pay you just for holding shares. Many young companies pay none — that's normal.</em></li>
+</ul>
+
+<h2>4. News and Reason Check</h2>
+<blockquote>Separate real business news from noise and emotion. <em>e.g. "New product launched (real, long-term) vs. one analyst's price target (short-term noise)."</em></blockquote>
+<ul>
+  <li><strong>What news did I find today?</strong> </li>
+  <li><strong>Is this news good, bad, or unclear for the company?</strong> </li>
+  <li><strong>Is the stock moving because of real business news or market emotion?</strong> </li>
+  <li><strong>Did I check more than one source? (Yes / No — which ones?)</strong> </li>
+  <li><strong>Could this news matter long-term, or is it just short-term noise?</strong> </li>
+</ul>
+
+<h2>5. Risk Tolerance Check</h2>
+<blockquote>Risk tolerance = how much drop you can handle without panicking. There are no wrong answers — the point is to know yourself.</blockquote>
+<ul>
+  <li><strong>If this $5 drops to $4, how would I feel?</strong> </li>
+  <li><strong>If this stock drops 20%, would I panic, hold, or research more?</strong> </li>
+  <li><strong>Am I buying because I understand the company, or because it is popular?</strong> </li>
+  <li><strong>What could go wrong with this company or industry?</strong> </li>
+  <li><strong>Compared with my other choices, is this safer, medium, or higher risk?</strong> </li>
+</ul>
+
+<h2>6. Decision Box ✅</h2>
+<blockquote>Make the call and write down your reasoning — so future-you can check whether the thinking was sound, separate from the result.</blockquote>
+<ul>
+  <li><strong>Today I choose to:</strong> ☐ Invest $5 &nbsp; ☐ Save the $5 as cash &nbsp; ☐ Add this stock to my watchlist &nbsp; ☐ Research more before investing</li>
+  <li><strong>Reason for my decision:</strong> </li>
+  <li><strong>What evidence supports my decision?</strong> </li>
+  <li><strong>What would make me change my mind later?</strong> </li>
+</ul>
+
+<h2>7. Learning From Gain or Loss</h2>
+<blockquote>Look back at a previous decision. Good reasoning can still lead to a bad result, and a lucky win can come from bad reasoning — judge the <em>thinking</em>, not just the score.</blockquote>
+<ul>
+  <li><strong>What happened after my last decision?</strong> </li>
+  <li><strong>Did the price go up, down, or stay about the same?</strong> </li>
+  <li><strong>Was my reasoning good, even if the result was bad?</strong> </li>
+  <li><strong>Did I make an emotional decision?</strong> </li>
+  <li><strong>What did I learn from the gain or loss?</strong> </li>
+  <li><strong>What will I do better next time?</strong> </li>
+</ul>
+
+<h2>8. Weekly Review</h2>
+<blockquote>Fill this in once a week (e.g. every Sunday) to zoom out from the daily details.</blockquote>
+<ul>
+  <li><strong>Total invested this week:</strong> $</li>
+  <li><strong>Number of stocks / ETFs researched:</strong> </li>
+  <li><strong>Best decision I made:</strong> </li>
+  <li><strong>Worst decision I made:</strong> </li>
+  <li><strong>Biggest lesson learned:</strong> </li>
+  <li><strong>One mistake I noticed:</strong> </li>
+  <li><strong>One investing term I understand better now:</strong> </li>
+  <li><strong>My risk tolerance this week:</strong> Low / Medium / High</li>
+  <li><strong>Next week I want to research:</strong> </li>
+</ul>
+
+<h2>9. Portfolio Tracker</h2>
+<blockquote>One block per holding you actually own. <em>Gain/loss $ = (Current price − Average price) × Shares. Gain/loss % = (Current ÷ Average − 1) × 100.</em></blockquote>
+<h3>Holding 1</h3>
+<ul>
+  <li><strong>Ticker:</strong> </li>
+  <li><strong>Company / ETF name:</strong> </li>
+  <li><strong>Total invested:</strong> $</li>
+  <li><strong>Number of shares:</strong> </li>
+  <li><strong>Average price:</strong> $</li>
+  <li><strong>Current price:</strong> $</li>
+  <li><strong>Gain/loss ($):</strong> </li>
+  <li><strong>Gain/loss (%):</strong> </li>
+  <li><strong>Reason I own it:</strong> </li>
+  <li><strong>Risk level:</strong> Low / Medium / High</li>
+  <li><strong>Keep / Add / Watch / Exit:</strong> </li>
+</ul>
+<h3>Holding 2</h3>
+<ul>
+  <li><strong>Ticker:</strong> </li>
+  <li><strong>Company / ETF name:</strong> </li>
+  <li><strong>Total invested:</strong> $</li>
+  <li><strong>Number of shares:</strong> </li>
+  <li><strong>Average price:</strong> $</li>
+  <li><strong>Current price:</strong> $</li>
+  <li><strong>Gain/loss ($):</strong> </li>
+  <li><strong>Gain/loss (%):</strong> </li>
+  <li><strong>Reason I own it:</strong> </li>
+  <li><strong>Risk level:</strong> Low / Medium / High</li>
+  <li><strong>Keep / Add / Watch / Exit:</strong> </li>
+</ul>
+
+<h2>10. Watchlist 👀</h2>
+<blockquote>Companies you're curious about but not ready to buy. Curiosity is free — buying can wait until you've answered your questions.</blockquote>
+<h3>Watchlist item 1</h3>
+<ul>
+  <li><strong>Ticker:</strong> </li>
+  <li><strong>Company name:</strong> </li>
+  <li><strong>Why I'm watching it:</strong> </li>
+  <li><strong>What I need to learn before buying:</strong> </li>
+  <li><strong>My target question:</strong> </li>
+  <li><strong>Risk level:</strong> Low / Medium / High</li>
+  <li><strong>Review date:</strong> </li>
+</ul>
+<h3>Watchlist item 2</h3>
+<ul>
+  <li><strong>Ticker:</strong> </li>
+  <li><strong>Company name:</strong> </li>
+  <li><strong>Why I'm watching it:</strong> </li>
+  <li><strong>What I need to learn before buying:</strong> </li>
+  <li><strong>My target question:</strong> </li>
+  <li><strong>Risk level:</strong> Low / Medium / High</li>
+  <li><strong>Review date:</strong> </li>
+</ul>
+
+<h2>11. Teen-Friendly Research Scorecard</h2>
+<blockquote>Rate each area from 1 (weak) to 5 (strong), then add them up. This is a <strong>thinking tool, not a guarantee</strong> — a high score still carries risk.</blockquote>
+<ul>
+  <li><strong>I understand the business (1–5):</strong> </li>
+  <li><strong>The company has strong products/services (1–5):</strong> </li>
+  <li><strong>The company seems financially healthy (1–5):</strong> </li>
+  <li><strong>The company has long-term potential (1–5):</strong> </li>
+  <li><strong>The risk feels acceptable to me (1–5):</strong> </li>
+  <li><strong>I am NOT buying from hype (1–5):</strong> </li>
+  <li><strong>➡️ Total score (out of 30):</strong> </li>
+</ul>
+<blockquote><strong>Decision guide:</strong> 24–30 = strong research candidate · 18–23 = needs more research · 12–17 = high uncertainty · below 12 = avoid for now or keep on watchlist. <em>The score helps you think; it does not predict the future.</em></blockquote>
+
+<h2>12. What I Learned Today 📝</h2>
+<blockquote>One or two sentences. The single most important habit in this whole lab.</blockquote>
+<ul>
+  <li></li>
+</ul>
+
+<hr>
+<p><em>Remember: small, controlled $5 decisions · patience over hype · losses are lessons · no day trading, options, or meme chasing · become wiser over time. 🌱</em></p>
+<p></p>
+`.trim()
+
+  return {
+    title: `Investment Reflection — ${dateStr}`,
+    subject: 'Investment',
+    tags: 'investment,reflection,daily',
+    html,
+  }
+}
+
+
 export function NewNoteClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -203,11 +405,12 @@ export function NewNoteClient() {
 
   // Restore draft or load template on first mount
   useEffect(() => {
-    // If ?template=reflection, skip draft restore and load template directly.
+    // If ?template=reflection|investment, skip draft restore and load template directly.
     // Also clear any stale regular-note draft so it doesn't leak into future sessions.
-    if (searchParams.get('template') === 'reflection') {
+    const templateParam = searchParams.get('template')
+    if (templateParam === 'reflection' || templateParam === 'investment') {
       try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
-      const tpl = buildReflectionTemplate()
+      const tpl = templateParam === 'investment' ? buildInvestmentTemplate() : buildReflectionTemplate()
       setTitle(tpl.title)
       setSubject(tpl.subject)
       setTags(tpl.tags)

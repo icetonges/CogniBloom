@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
-  CalendarDays, BookMarked, FileText, GraduationCap, ScrollText,
+  CalendarDays, BookMarked, FileText, GraduationCap, ScrollText, TrendingUp,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -129,6 +129,14 @@ function Sidebar({
                     >
                       <BookMarked className="w-3.5 h-3.5 text-primary shrink-0" />
                       Daily Reflection
+                    </a>
+                    <a
+                      href="/dashboard/notes/new?template=investment"
+                      onClick={onClose}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors"
+                    >
+                      <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      Investment Reflection
                     </a>
                     <a
                       href="/dashboard/notes/new"
