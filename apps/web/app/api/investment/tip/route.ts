@@ -4,22 +4,28 @@ import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 export const maxDuration = 60
 
 /**
- * GET /api/investment/tip?date=YYYY-MM-DD
+ * GET /api/investment/tip?date=YYYY-MM-DD&n=<nonce>
  *
- * Returns one inspiring, story-led daily read written in the voice of a
- * best-selling teen finance author. It has THREE sections (a true story, a
- * technical insight, and how to beat a bias), each ~100–200 words.
+ * One inspiring, story-led daily read written in the voice of a best-selling teen
+ * finance author. THREE sections (a true story, a technical insight, and beating a
+ * bias), each ~100–200 words → ~300–500 words total.
  *
  * Every fact is GROUNDED in an authoritative knowledge base (SEC / Investor.gov,
- * Federal Reserve, CFA Institute, Nobel Prize, Britannica, Goldman Sachs history).
- * The model only retells the supplied facts — it is told NOT to invent numbers,
- * dates, or quotes, promise returns, or recommend specific stocks. Source links
- * come from the knowledge base itself (never the model), so citations are always
- * correct. If the model call fails, a factual fallback assembled directly from the
- * knowledge base is returned, so the endpoint always works.
+ * Federal Reserve, CFA Institute, Nobel Prize, Britannica, Goldman Sachs, NYT).
+ * The model only retells the supplied facts — never invents numbers, dates, or
+ * quotes, never promises returns, never names a stock to buy. Source links come
+ * from the knowledge base (not the model), so citations are always correct.
+ *
+ * Robustness:
+ *  - A large output-token budget so "thinking" models still finish the full answer.
+ *  - A completeness guard: if the model output is missing a section or too short,
+ *    we retry on a proven model, then fall back to a complete factual version.
+ *  - A random "creative angle" + a per-request nonce so "New wording" truly differs.
+ *  - no-store caching so each request hits the model fresh.
  *
  * The story rotates deterministically by calendar day — fresh daily, stable within
  * the day.
@@ -56,6 +62,7 @@ const KB: KbEntry[] = [
     },
     sources: [
       { label: 'CNBC — Buffett’s NYT Op-Ed “Buy American. I Am.”', url: 'https://www.cnbc.com/2008/10/16/warren-buffetts-ny-times-oped-buy-american-i-am.html' },
+      { label: 'The New York Times — “Buy American. I Am.” (Buffett, 2008)', url: 'https://www.nytimes.com/2008/10/17/opinion/17buffett.html' },
       { label: 'CFA Institute — The Herding Mentality', url: 'https://blogs.cfainstitute.org/investor/2015/08/06/the-herding-mentality-behavioral-finance-and-investor-biases/' },
     ],
   },
@@ -79,6 +86,7 @@ const KB: KbEntry[] = [
     },
     sources: [
       { label: 'Goldman Sachs — The 2000 Dot-Com Bubble', url: 'https://www.goldmansachs.com/our-firm/history/moments/2000-dot-com-bubble' },
+      { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
       { label: 'CFA Institute — The Herding Mentality', url: 'https://blogs.cfainstitute.org/investor/2015/08/06/the-herding-mentality-behavioral-finance-and-investor-biases/' },
     ],
   },
@@ -103,6 +111,7 @@ const KB: KbEntry[] = [
     sources: [
       { label: 'Federal Reserve — Bernanke: Lessons from the Failure of Lehman Brothers', url: 'https://www.federalreserve.gov/newsevents/testimony/bernanke20100420a.htm' },
       { label: 'SEC / Investor.gov — Diversification', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/diversification' },
+      { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
     ],
   },
   {
@@ -125,6 +134,7 @@ const KB: KbEntry[] = [
     },
     sources: [
       { label: 'Federal Reserve — Greenspan Speech, Dec 5 1996', url: 'https://www.federalreserve.gov/boarddocs/speeches/1996/19961205.htm' },
+      { label: 'SEC / Investor.gov — Asset Allocation', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
       { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
     ],
   },
@@ -149,6 +159,7 @@ const KB: KbEntry[] = [
     sources: [
       { label: 'NobelPrize.org — Ben Bernanke, 2022', url: 'https://www.nobelprize.org/prizes/economic-sciences/2022/bernanke/biographical/' },
       { label: 'Britannica Money — Ben Bernanke', url: 'https://www.britannica.com/money/Ben-Bernanke' },
+      { label: 'Federal Reserve — Bernanke on the Lehman Failure', url: 'https://www.federalreserve.gov/newsevents/testimony/bernanke20100420a.htm' },
     ],
   },
   {
@@ -171,6 +182,7 @@ const KB: KbEntry[] = [
     },
     sources: [
       { label: 'Federal Reserve History — Stock Market Crash of 1987', url: 'https://www.federalreservehistory.org/essays/stock-market-crash-of-1987' },
+      { label: 'Britannica — Black Monday (1987)', url: 'https://www.britannica.com/topic/Black-Monday-1987' },
       { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
     ],
   },
@@ -195,6 +207,7 @@ const KB: KbEntry[] = [
     sources: [
       { label: 'Britannica Money — John Bogle', url: 'https://www.britannica.com/money/John-Bogle' },
       { label: 'Vanguard — Indexing since 1976', url: 'https://corporate.vanguard.com/content/corporatesite/us/en/corp/articles/50-years-50-facts-indexing-since-1976.html' },
+      { label: 'SEC / Investor.gov — Understanding Fees', url: 'https://www.investor.gov/introduction-investing/getting-started/understanding-fees' },
     ],
   },
   {
@@ -218,6 +231,7 @@ const KB: KbEntry[] = [
     sources: [
       { label: 'Investopedia — Peter Lynch', url: 'https://www.investopedia.com/terms/p/peterlynch.asp' },
       { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
+      { label: 'SEC / Investor.gov — Asset Allocation', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
     ],
   },
   {
@@ -241,6 +255,7 @@ const KB: KbEntry[] = [
     sources: [
       { label: 'Investopedia — Benjamin Graham', url: 'https://www.investopedia.com/terms/b/bengraham.asp' },
       { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
+      { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
     ],
   },
   {
@@ -264,8 +279,18 @@ const KB: KbEntry[] = [
     sources: [
       { label: 'Investopedia — Warren Buffett', url: 'https://www.investopedia.com/terms/w/warrenbuffett.asp' },
       { label: 'SEC / Investor.gov — Compound Interest', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/compound-interest' },
+      { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
     ],
   },
+]
+
+const ANGLES = [
+  'Open the story with a vivid, cinematic scene the reader can picture.',
+  'Open with a surprising question that hooks the reader instantly.',
+  'Open by putting the teen reader right in the moment ("Picture this: you are...").',
+  'Open with a bold one-line hook, then unfold the story.',
+  'Frame the story like the trailer for a movie.',
+  'Start from the lesson, then reveal the true story behind it.',
 ]
 
 function dayIndex(dateStr: string): number {
@@ -276,12 +301,8 @@ function dayIndex(dateStr: string): number {
 }
 
 function easternDateString(): string {
-  // App standard: New York time.
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
 }
 
@@ -298,11 +319,17 @@ function fallbackMarkdown(e: KbEntry): string {
   ].join('\n')
 }
 
-export async function GET(request: NextRequest) {
-  const url = new URL(request.url)
-  const date = url.searchParams.get('date') || easternDateString()
-  const entry = KB[dayIndex(date)]
+// Did the model actually return all three sections at a sensible length?
+function isComplete(md: string): boolean {
+  if (!md) return false
+  const hasStory = /📖|the story/i.test(md)
+  const hasTech = /📊|technical insight/i.test(md)
+  const hasBias = /🧠|beating a bias/i.test(md)
+  const words = md.trim().split(/\s+/).length
+  return hasStory && hasTech && hasBias && words >= 230
+}
 
+function buildMessages(entry: KbEntry, angle: string): ChatMessage[] {
   const grounding = [
     `THEME: ${entry.topic}`,
     ``,
@@ -322,42 +349,59 @@ export async function GET(request: NextRequest) {
 
   const system =
     'You are a best-selling author who makes money, investing, and financial psychology genuinely exciting for teenagers — vivid, warm, and inspiring, like the best young-adult nonfiction. ' +
-    'Write today’s daily read in Markdown with EXACTLY three sections, each about 100–200 words, using ONLY the facts provided to you: ' +
-    '"### 📖 The Story", "### 📊 Technical Insight", and "### 🧠 Beating a Bias". ' +
+    'Write today’s daily read in Markdown with EXACTLY three sections, and write 100–200 words in EACH section (about 300–500 words total), using ONLY the facts provided to you. ' +
+    'Use these exact headings: "### 📖 The Story", "### 📊 Technical Insight", and "### 🧠 Beating a Bias". ' +
     'In The Story, bring the real person or event to life and pull out the lesson for a young $5-a-day investor. ' +
     'Rules you must follow strictly: do NOT invent or change any numbers, dates, names, or quotes — use only what is given; ' +
     'do NOT promise or imply any returns; do NOT recommend or name a specific stock, ticker, or fund to buy; ' +
     'do NOT encourage day trading, options, leverage, crypto speculation, or hype-chasing; do NOT give personalized financial advice. ' +
     'Keep it teen-friendly and encouraging. End the final section with one short, inspiring sentence. ' +
-    'Do not add a disclaimer or a sources list — those are shown separately.'
+    'Do not add a disclaimer or a sources list — those are shown separately. Write the full three sections; do not stop early.'
 
-  const messages: ChatMessage[] = [
+  return [
     { role: 'system', content: system },
-    { role: 'user', content: `Write today’s three-section read from these facts only:\n\n${grounding}` },
+    { role: 'user', content: `Creative angle for THIS retelling (keep it fresh and different from other days): ${angle}\n\nWrite today’s three-section read (100–200 words per section) from these facts only:\n\n${grounding}` },
   ]
+}
+
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url)
+  const date = url.searchParams.get('date') || easternDateString()
+  const entry = KB[dayIndex(date)]
+  const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)]
+
+  const noStore = { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+  let markdown = ''
+  let generated = false
 
   try {
-    const r = await chatWithFallback({ messages, temperature: 0.7, maxTokens: 1400 }, DEFAULT_MODEL_ID)
-    const markdown = (r.content || '').trim() || fallbackMarkdown(entry)
-    return NextResponse.json({
-      date,
-      topic: entry.topic,
-      storyTitle: entry.story.title,
-      biasName: entry.bias.name,
-      markdown,
-      sources: entry.sources,
-      generated: true,
-    })
+    // Generous output budget so "thinking" models still finish all three sections.
+    const r1 = await chatWithFallback({ messages: buildMessages(entry, angle), temperature: 0.85, maxTokens: 8000 }, DEFAULT_MODEL_ID)
+    markdown = (r1.content || '').trim()
+    generated = isComplete(markdown)
+
+    if (!generated) {
+      // Retry once on a proven, reliable model with a different angle.
+      const angle2 = ANGLES[Math.floor(Math.random() * ANGLES.length)]
+      const r2 = await chatWithFallback({ messages: buildMessages(entry, angle2), temperature: 0.8, maxTokens: 8000 }, 'gemini-2.5-flash')
+      const md2 = (r2.content || '').trim()
+      if (isComplete(md2)) { markdown = md2; generated = true }
+    }
+
+    if (!generated) { markdown = fallbackMarkdown(entry) }
   } catch (err) {
     console.error('[GET /api/investment/tip]', err)
-    return NextResponse.json({
-      date,
-      topic: entry.topic,
-      storyTitle: entry.story.title,
-      biasName: entry.bias.name,
-      markdown: fallbackMarkdown(entry),
-      sources: entry.sources,
-      generated: false,
-    })
+    markdown = fallbackMarkdown(entry)
+    generated = false
   }
+
+  return NextResponse.json({
+    date,
+    topic: entry.topic,
+    storyTitle: entry.story.title,
+    biasName: entry.bias.name,
+    markdown,
+    sources: entry.sources,
+    generated,
+  }, noStore)
 }

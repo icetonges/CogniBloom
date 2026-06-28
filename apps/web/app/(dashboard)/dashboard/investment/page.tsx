@@ -209,16 +209,17 @@ export default function InvestmentPage() {
   const [tipLoading, setTipLoading] = useState(true)
 
   const loadTip = async (force = false) => {
-    const cacheKey = `cb:invest:tip:v2:${today}`
+    const cacheKey = `cb:invest:tip:v3:${today}`
     if (!force) {
       try {
         const cached = localStorage.getItem(cacheKey)
         if (cached) { setTip(JSON.parse(cached)); setTipLoading(false); return }
       } catch { /* ignore */ }
     }
+    if (force) setTip(null)
     setTipLoading(true)
     try {
-      const r = await fetch(`/api/investment/tip?date=${today}${force ? '&n=' + Date.now() : ''}`)
+      const r = await fetch(`/api/investment/tip?date=${today}&n=${Date.now()}`, { cache: 'no-store' })
       const data = await r.json()
       setTip(data)
       try { localStorage.setItem(cacheKey, JSON.stringify(data)) } catch { /* ignore */ }
