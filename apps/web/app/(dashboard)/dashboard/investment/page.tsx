@@ -235,7 +235,8 @@ export default function InvestmentPage() {
     finalAction: '', buyThesis: '', sellTrigger: '',
     whyOver: '', bullCase: '', bearCase: '', catalyst: '', leanIdx: '',
   })
-  const setD = (k: string, v: string) => setDaily((p) => ({ ...p, [k]: v }))
+  const interactedRef = useRef(false)
+  const setD = (k: string, v: string) => { interactedRef.current = true; setDaily((p) => ({ ...p, [k]: v })) }
 
   const [score, setScore] = useStored<Record<string, number>>(`cb:invest:score:${today}`, {})
   const [checks, setChecks] = useStored<Record<string, boolean>>(`cb:invest:checks:${today}`, {})
@@ -382,30 +383,39 @@ export default function InvestmentPage() {
   }, [daily, candidates, portfolio, watchlist, scoreComplete, scoreTotal, band, checksDone])
 
   const doSave = useCallback(async (html: string) => {
+    if (!/<h2>|<li>/.test(html)) return            // nothing meaningful to save yet
     if (savingRef.current) return
     savingRef.current = true
     setSaveStatus('saving')
+    lastSnapshotRef.current = html                 // mark this content attempted (prevents retry loops)
+    const payload = {
+      title: `Investment Reflection — ${today}`,
+      content: html,
+      contentFormat: 'html',
+      subject: 'Investment',
+      tags: ['investment', 'reflection', 'daily'],
+      hasMath: false, hasCode: false, hasImages: false,
+    }
+    const createNew = async () => {
+      const r = await fetch('/api/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (!r.ok) throw new Error('create failed')
+      const data = (await r.json()).data
+      try { if (data?.id) localStorage.setItem(noteIdKey, data.id) } catch { /* ignore */ }
+    }
     try {
       let existing: string | null = null
       try { existing = localStorage.getItem(noteIdKey) } catch { /* ignore */ }
-      const payload = {
-        title: `Investment Reflection — ${today}`,
-        content: html,
-        contentFormat: 'html',
-        subject: 'Investment',
-        tags: ['investment', 'reflection', 'daily'],
-        hasMath: false, hasCode: false, hasImages: false,
-      }
       if (existing) {
         const r = await fetch(`/api/notes/${existing}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-        if (!r.ok) throw new Error()
+        if (r.status === 404) {
+          try { localStorage.removeItem(noteIdKey) } catch { /* ignore */ }
+          await createNew()                          // stale id — make a fresh note
+        } else if (!r.ok) {
+          throw new Error('update failed')
+        }
       } else {
-        const r = await fetch('/api/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-        if (!r.ok) throw new Error()
-        const data = (await r.json()).data
-        try { if (data?.id) localStorage.setItem(noteIdKey, data.id) } catch { /* ignore */ }
+        await createNew()
       }
-      lastSnapshotRef.current = html
       setLastSavedAt(new Date())
       setSaveStatus('saved')
     } catch {
@@ -423,6 +433,7 @@ export default function InvestmentPage() {
       daily.business, daily.numbers, daily.news, daily.riskCheck, daily.reason, daily.lesson,
       daily.buyThesis, daily.sellTrigger, daily.valueWhy, daily.macroNotes, daily.microNotes, daily.crossImpact,
     ].some((x) => (x || '').trim())
+    if (!interactedRef.current) return
     if (!candFilled && !filled) return
     const html = buildNoteHtml()
     if (html === lastSnapshotRef.current) return
@@ -531,7 +542,7 @@ export default function InvestmentPage() {
       <SectionCard icon={Lightbulb} title="Today’s Shortlist" subtitle="Scout a few ideas like a talent scout — no commitment yet. Tap ⭐ on the one you lean toward." accent="#fbbf24">
         <div className="space-y-2">
           {candidates.map((c, i) => {
-            const setC = (k: keyof Cand, v: string) => setCandidates((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
+            const setC = (k: keyof Cand, v: string) => { interactedRef.current = true; setCandidates((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r))) }
             const leaning = daily.leanIdx === String(i)
             return (
               <div key={i} className="rounded-xl p-2.5" style={leaning
@@ -543,6 +554,7 @@ export default function InvestmentPage() {
                     title="Lean toward this one"
                     onClick={() => {
                       const on = daily.leanIdx === String(i)
+                      interactedRef.current = true
                       setDaily((prev) => ({ ...prev, leanIdx: on ? '' : String(i), ...(on ? {} : { ticker: candidates[i].ticker }) }))
                     }}
                     className="shrink-0 mt-1.5 text-lg leading-none transition-transform hover:scale-110"
@@ -565,7 +577,7 @@ export default function InvestmentPage() {
               </div>
             )
           })}
-          <button onClick={() => setCandidates((p) => [...p, emptyCand()])}
+          <button onClick={() => { interactedRef.current = true; setCandidates((p) => [...p, emptyCand()]) }}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
             <Plus className="w-3.5 h-3.5" /> Add another idea
           </button>
@@ -708,7 +720,7 @@ export default function InvestmentPage() {
       <SectionCard icon={ShieldCheck} title="Research Scorecard" subtitle="Rate 1–5. A thinking tool, not a guarantee.">
         <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
           {SCORE_ROWS.map((r) => (
-            <ScoreRow key={r.key} label={r.label} value={score[r.key] || 0} onChange={(n) => setScore((p) => ({ ...p, [r.key]: n }))} />
+            <ScoreRow key={r.key} label={r.label} value={score[r.key] || 0} onChange={(n) => { interactedRef.current = true; setScore((p) => ({ ...p, [r.key]: n })) }} />
           ))}
         </div>
         <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: `${band.color}14`, border: `1px solid ${band.color}40` }}>
@@ -724,7 +736,7 @@ export default function InvestmentPage() {
             <button
               key={i}
               type="button"
-              onClick={() => setChecks((p) => ({ ...p, [i]: !p[i] }))}
+              onClick={() => { interactedRef.current = true; setChecks((p) => ({ ...p, [i]: !p[i] })) }}
               className="w-full flex items-center gap-2.5 text-left rounded-xl px-3 py-2 transition-all"
               style={checks[i]
                 ? { background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)' }
@@ -775,7 +787,7 @@ export default function InvestmentPage() {
             const gain = hasCalc ? (cur - avg) * sh : null
             const gainPct = hasCalc ? (cur / avg - 1) * 100 : null
             const up = (gain ?? 0) >= 0
-            const set = (k: keyof PortRow, v: string) => setPortfolio((p) => p.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
+            const set = (k: keyof PortRow, v: string) => { interactedRef.current = true; setPortfolio((p) => p.map((r, idx) => idx === i ? { ...r, [k]: v } : r)) }
             return (
               <div key={i} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -812,7 +824,7 @@ export default function InvestmentPage() {
             )
           })}
           <div className="flex items-center justify-between">
-            <button onClick={() => setPortfolio((p) => [...p, emptyPort()])}
+            <button onClick={() => { interactedRef.current = true; setPortfolio((p) => [...p, emptyPort()]) }}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
               <Plus className="w-3.5 h-3.5" /> Add holding
             </button>
@@ -830,7 +842,7 @@ export default function InvestmentPage() {
       <SectionCard icon={BookOpen} title="Watchlist" subtitle="Curious but not ready to buy" accent="#38bdf8">
         <div className="space-y-3">
           {watchlist.map((row, i) => {
-            const set = (k: keyof WatchRow, v: string) => setWatchlist((p) => p.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
+            const set = (k: keyof WatchRow, v: string) => { interactedRef.current = true; setWatchlist((p) => p.map((r, idx) => idx === i ? { ...r, [k]: v } : r)) }
             return (
               <div key={i} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -852,7 +864,7 @@ export default function InvestmentPage() {
               </div>
             )
           })}
-          <button onClick={() => setWatchlist((p) => [...p, emptyWatch()])}
+          <button onClick={() => { interactedRef.current = true; setWatchlist((p) => [...p, emptyWatch()]) }}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
             <Plus className="w-3.5 h-3.5" /> Add to watchlist
           </button>
