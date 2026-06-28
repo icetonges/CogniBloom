@@ -2,12 +2,13 @@ name: Daily Feed & Summary
 
 on:
   schedule:
-    # 7 AM New York time — two crons cover the DST shift:
-    #   EDT (Mar–Nov, UTC-4): 7 AM ET = 11:00 UTC
-    #   EST (Nov–Mar, UTC-5): 7 AM ET = 12:00 UTC
-    # GitHub de-dupes if both fire within the same minute, so this is safe.
+    # Runs once daily at 11:00 UTC.
+    #   EDT (Mar–Nov, UTC-4): 11:00 UTC = 7 AM ET
+    #   EST (Nov–Mar, UTC-5): 11:00 UTC = 6 AM ET
+    # Single cron so the summary email is sent exactly once per day.
+    # (Previously a second '0 12 * * *' cron also ran the full job, which
+    #  sent the daily summary email twice — removed to fix duplicates.)
     - cron: '0 11 * * *'
-    - cron: '0 12 * * *'
 
   # Manual trigger — optionally target a single category
   workflow_dispatch:
