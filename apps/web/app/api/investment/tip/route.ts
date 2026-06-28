@@ -394,43 +394,65 @@ function isComplete(md: string): boolean {
   return has101 && hasStory && hasTech && hasBias && words >= 340
 }
 
-function buildMessages(entry: KbEntry, angle: string): ChatMessage[] {
-  const grounding = [
+interface MenuSource extends Source { id: string }
+
+// A small pool of always-available, verified authoritative sources the writer may also pick.
+const GENERAL_SOURCES: Source[] = [
+  { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
+  { label: 'FINRA — For Investors', url: 'https://www.finra.org/investors' },
+]
+
+// Build the source menu for a topic: its curated sources + the general pool, de-duped, each given an id.
+function sourceMenu(entry: KbEntry): MenuSource[] {
+  const seen = new Set<string>()
+  const out: MenuSource[] = []
+  for (const src of [...entry.sources, ...GENERAL_SOURCES]) {
+    if (seen.has(src.url)) continue
+    seen.add(src.url)
+    out.push({ id: 's' + (out.length + 1), label: src.label, url: src.url })
+  }
+  return out
+}
+
+// Pull the writer's chosen source ids out of the response, map them to VERIFIED links,
+// and strip the SOURCES line from the displayed markdown. Falls back to the first few.
+function extractSources(text: string, menu: MenuSource[]): { markdown: string; sources: Source[] } {
+  let chosen: MenuSource[] = []
+  const m = text.match(/SOURCES:\s*([a-z0-9_,\s-]+)/i)
+  if (m) {
+    const ids = m[1].split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)
+    chosen = menu.filter((src) => ids.includes(src.id.toLowerCase()))
+  }
+  if (chosen.length < 2) chosen = menu.slice(0, Math.min(4, menu.length))
+  const markdown = text.replace(/^\s*SOURCES:.*$/gim, '').trim()
+  return { markdown, sources: chosen.slice(0, 4).map(({ label, url }) => ({ label, url })) }
+}
+
+function buildMessages(entry: KbEntry, angle: string, menu: MenuSource[]): ChatMessage[] {
+  const anchors = [
     `THEME: ${entry.topic}`,
     ``,
-    `INVESTMENT 101 BASICS (authoritative — teach this clearly and simply):`,
-    `- Title: ${entry.basics.title}`,
-    `- ${entry.basics.facts}`,
+    `ANCHOR FACTS — these specifics MUST stay exactly right (keep every number, date, name, and quote as written). Everything else, expand richly from your own expert knowledge.`,
     ``,
-    `TRUE STORY (authoritative facts — do not change names, numbers, dates, or quotes):`,
-    `- Title: ${entry.story.title}`,
-    `- ${entry.story.facts}`,
-    ``,
-    `TECHNICAL INSIGHT (authoritative):`,
-    `- Title: ${entry.technical.title}`,
-    `- ${entry.technical.facts}`,
-    ``,
-    `BEHAVIORAL BIAS (authoritative):`,
-    `- Name: ${entry.bias.name}`,
-    `- ${entry.bias.facts}`,
-    `- How to beat it: ${entry.bias.fix}`,
+    `Investment 101 — ${entry.basics.title}: ${entry.basics.facts}`,
+    `The Story — ${entry.story.title}: ${entry.story.facts}`,
+    `Technical Insight — ${entry.technical.title}: ${entry.technical.facts}`,
+    `Beating a Bias — ${entry.bias.name}: ${entry.bias.facts} (How to beat it: ${entry.bias.fix})`,
   ].join('\n')
 
+  const menuText = menu.map((src) => `- ${src.id}: ${src.label}`).join('\n')
+
   const system =
-    'You are both a best-selling teen finance author and a professional investment tutor. You make money, investing, and financial psychology genuinely exciting for teenagers — vivid, warm, and inspiring like the best young-adult nonfiction — while patiently building their financial IQ (knowledge) and EQ (emotional self-control). ' +
-    'Write today’s daily read in Markdown with EXACTLY four sections, using ONLY the facts provided to you. Write about 200 words for Investment 101 and 100–200 words for each of the other three (about 500–800 words total). ' +
-    'Use these exact headings in this order: "### 🎓 Investment 101", "### 📖 The Story", "### 📊 Technical Insight", and "### 🧠 Beating a Bias". ' +
-    'In Investment 101, teach the core concept clearly like a great tutor — define it simply, give a relatable teen example, and add one short note on the EMOTIONAL side (EQ) of handling it well. ' +
-    'In The Story, bring the real person or event to life and pull out the lesson for a young $5-a-day investor. ' +
-    'Rules you must follow strictly: do NOT invent or change any numbers, dates, names, or quotes — use only what is given; ' +
-    'do NOT promise or imply any returns; do NOT recommend or name a specific stock, ticker, or fund to buy; ' +
-    'do NOT encourage day trading, options, leverage, crypto speculation, or hype-chasing; do NOT give personalized financial advice. ' +
-    'Keep it teen-friendly and encouraging. End the final section with one short, inspiring sentence. ' +
-    'Do not add a disclaimer or a sources list — those are shown separately. Write the full three sections; do not stop early.'
+    'You are one of the best investing-education writers alive — imagine the crystal clarity of Morgan Housel’s "The Psychology of Money" combined with the warmth of a favorite teacher, writing for a 13–17-year-old who just started investing $5 a day. You are a genuine expert in investing, financial history, and behavioral psychology, and you write from deep knowledge — never from a script. ' +
+    'Write today’s read in Markdown with EXACTLY four sections, in this order and with these exact headings: ' +
+    '"### 🎓 Investment 101", "### 📖 The Story", "### 📊 Technical Insight", "### 🧠 Beating a Bias". ' +
+    'CRAFT (this is what makes it special): short, punchy sentences and active voice; talk straight to "you"; give each section ONE clear, vivid metaphor or mini-scene and never mix metaphors inside a section; ground every idea in a concrete teen-relatable example (sneakers, phones, games, a part-time job, concert tickets); the instant you use a money word (diversification, ETF, volatility…), explain it in plain English in the same breath; make the four sections flow as ONE connected story, not four separate blurbs; keep each section about 120–170 words; end the final section with one short, genuinely inspiring line (no clichés); aim for a reading level a sharp 13-year-old breezes through. ' +
+    'KNOWLEDGE & ACCURACY: teach from your own expertise — bring fresh analogies, context, and analysis a textbook would not. The ANCHOR FACTS are the must-be-correct specifics: keep every number, date, name, and quote exactly as given. Do NOT invent any other specific statistics, dates, or quotes; if you are unsure of an exact figure, speak in general terms. No promises of returns. Never tell the reader to buy or sell a specific stock, ticker, or fund. No hype, day trading, options, or crypto speculation. ' +
+    'SOURCES: you are given a short menu of trusted sources, each with an id. After the four sections, add ONE final line exactly like "SOURCES: id1, id2, id3" listing the 3–4 source ids you actually leaned on. Use only ids from the menu — never write a URL yourself. Do not add any other disclaimer or sources list; those are shown separately.'
 
   return [
     { role: 'system', content: system },
-    { role: 'user', content: `Creative angle for THIS retelling (keep it fresh and different from other days): ${angle}\n\nWrite today’s four-section read (about 200 words for Investment 101, 100–200 words for the others) from these facts only:\n\n${grounding}` },
+    { role: 'user', content: `Today’s creative angle (keep it fresh and different from other days): ${angle}\n\n${anchors}\n\nSOURCE MENU (pick the 3–4 most relevant ids):\n${menuText}` },
   ]
 }
 
@@ -438,30 +460,33 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const date = url.searchParams.get('date') || easternDateString()
   const entry = KB[dayIndex(date)]
+  const menu = sourceMenu(entry)
   const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)]
 
   const noStore = { headers: { 'Cache-Control': 'no-store, max-age=0' } }
   let markdown = ''
+  let sources: Source[] = entry.sources
   let generated = false
 
   try {
-    // Generous output budget so "thinking" models still finish all three sections.
-    const r1 = await chatWithFallback({ messages: buildMessages(entry, angle), temperature: 0.85, maxTokens: 8000 }, DEFAULT_MODEL_ID)
-    markdown = (r1.content || '').trim()
-    generated = isComplete(markdown)
+    // Generous output budget so "thinking" models still finish all four sections.
+    const r1 = await chatWithFallback({ messages: buildMessages(entry, angle, menu), temperature: 0.85, maxTokens: 8000 }, DEFAULT_MODEL_ID)
+    let parsed = extractSources((r1.content || '').trim(), menu)
+    if (isComplete(parsed.markdown)) { markdown = parsed.markdown; sources = parsed.sources; generated = true }
 
     if (!generated) {
       // Retry once on a proven, reliable model with a different angle.
       const angle2 = ANGLES[Math.floor(Math.random() * ANGLES.length)]
-      const r2 = await chatWithFallback({ messages: buildMessages(entry, angle2), temperature: 0.8, maxTokens: 8000 }, 'gemini-2.5-flash')
-      const md2 = (r2.content || '').trim()
-      if (isComplete(md2)) { markdown = md2; generated = true }
+      const r2 = await chatWithFallback({ messages: buildMessages(entry, angle2, menu), temperature: 0.8, maxTokens: 8000 }, 'gemini-2.5-flash')
+      parsed = extractSources((r2.content || '').trim(), menu)
+      if (isComplete(parsed.markdown)) { markdown = parsed.markdown; sources = parsed.sources; generated = true }
     }
 
-    if (!generated) { markdown = fallbackMarkdown(entry) }
+    if (!generated) { markdown = fallbackMarkdown(entry); sources = entry.sources }
   } catch (err) {
     console.error('[GET /api/investment/tip]', err)
     markdown = fallbackMarkdown(entry)
+    sources = entry.sources
     generated = false
   }
 
@@ -471,7 +496,7 @@ export async function GET(request: NextRequest) {
     storyTitle: entry.story.title,
     biasName: entry.bias.name,
     markdown,
-    sources: entry.sources,
+    sources,
     generated,
   }, noStore)
 }
