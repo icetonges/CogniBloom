@@ -2,11 +2,11 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   TrendingUp, Sparkles, Loader2, RefreshCw, Info, Plus, Trash2,
   ShieldCheck, Bot, BookOpen, Target, Clock, ExternalLink,
-  Gauge, Globe, Layers, GitBranch, Lightbulb, Scale,
+  Gauge, Globe, Layers, GitBranch, Lightbulb, Scale, Save, Check,
 } from 'lucide-react'
 import { cn, localISODate } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer'
@@ -85,6 +85,29 @@ function useStored<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => vo
   return [val, setVal]
 }
 
+// Auto-growing multiline textarea — expands with content and wraps long lines.
+function AutoTextarea({ value, onChange, placeholder, className }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; className?: string
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.max(el.scrollHeight, 38) + 'px'
+  }, [value])
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={2}
+      className={cn('resize-none overflow-hidden leading-snug', className)}
+    />
+  )
+}
+
 // ── small reusable field with instruction-as-placeholder (nothing pre-filled) ──
 function Field({
   label, hint, value, onChange, textarea, type = 'text', tip,
@@ -107,12 +130,11 @@ function Field({
         )}
       </span>
       {textarea ? (
-        <textarea
+        <AutoTextarea
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={onChange}
           placeholder={hint}
-          rows={2}
-          className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none resize-y placeholder:text-muted-foreground/45"
+          className="cb-input w-full px-3 py-2 rounded-xl text-sm focus:outline-none placeholder:text-muted-foreground/45"
         />
       ) : (
         <input
@@ -398,7 +420,7 @@ export default function InvestmentPage() {
               <div key={i} className="rounded-xl p-2.5" style={leaning
                 ? { background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.45)' }
                 : { background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-2">
                   <button
                     type="button"
                     title="Lean toward this one"
@@ -406,19 +428,19 @@ export default function InvestmentPage() {
                       const on = daily.leanIdx === String(i)
                       setDaily((prev) => ({ ...prev, leanIdx: on ? '' : String(i), ...(on ? {} : { ticker: candidates[i].ticker }) }))
                     }}
-                    className="shrink-0 text-lg leading-none transition-transform hover:scale-110"
+                    className="shrink-0 mt-1.5 text-lg leading-none transition-transform hover:scale-110"
                     style={{ color: leaning ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}
                   >
                     {leaning ? '★' : '☆'}
                   </button>
                   <input value={c.ticker} onChange={(e) => setC('ticker', e.target.value)} placeholder="Ticker"
-                    className="cb-input w-24 px-2.5 py-1.5 rounded-lg text-sm focus:outline-none placeholder:text-muted-foreground/45" />
-                  <input value={c.why} onChange={(e) => setC('why', e.target.value)}
+                    className="cb-input w-24 mt-1 px-2.5 py-1.5 rounded-lg text-sm focus:outline-none placeholder:text-muted-foreground/45" />
+                  <AutoTextarea value={c.why} onChange={(v) => setC('why', v)}
                     placeholder="Why it caught my eye — e.g. main challenger to Nvidia in AI GPUs; MI300 could grab data-center share"
                     className="cb-input flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-sm focus:outline-none placeholder:text-muted-foreground/45" />
                   {candidates.length > 1 && (
                     <button onClick={() => setCandidates((p) => p.filter((_, idx) => idx !== i))}
-                      className="text-muted-foreground hover:text-rose-400 shrink-0" title="Remove idea">
+                      className="text-muted-foreground hover:text-rose-400 shrink-0 mt-2" title="Remove idea">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
