@@ -331,6 +331,105 @@ export default function InvestmentPage() {
     }
   }
 
+  // ── Save the reflection as a Note (shows under All Notes -> Investment) ──
+  const noteIdKey = `cb:invest:noteId:${today}`
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const savingRef = useRef(false)
+  const lastSnapshotRef = useRef('')
+
+  const buildNoteHtml = useCallback(() => {
+    const esc = (x: string) => (x || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const sec = (title: string, rows: [string, string][]) => {
+      const items = rows.filter(([, v]) => v && v.trim()).map(([k, v]) => `<li><strong>${esc(k)}:</strong> ${esc(v)}</li>`).join('')
+      return items ? `<h2>${esc(title)}</h2><ul>${items}</ul>` : ''
+    }
+    const shortlist = candidates
+      .filter((c) => (c.ticker || '').trim() || (c.why || '').trim())
+      .map((c, i) => `<li><strong>${esc(c.ticker) || '—'}</strong> — ${esc(c.why)}${daily.leanIdx === String(i) ? ' ⭐' : ''}</li>`)
+      .join('')
+    const ports = portfolio
+      .filter((r) => (r.ticker || '').trim())
+      .map((r) => `<li><strong>${esc(r.ticker)}</strong> ${esc(r.name)} · invested ${esc(r.invested)} · ${esc(r.action)}</li>`)
+      .join('')
+    const watches = watchlist
+      .filter((r) => (r.ticker || '').trim())
+      .map((r) => `<li><strong>${esc(r.ticker)}</strong> ${esc(r.name)} — ${esc(r.why)}</li>`)
+      .join('')
+    return [
+      `<h1>📈 Investment Reflection — ${today}</h1>`,
+      shortlist ? `<h2>Today's Shortlist</h2><ul>${shortlist}</ul>` : '',
+      sec('Compare & Choose', [
+        ['My pick', daily.ticker], ['Company', daily.name], ['Why this one over the others', daily.whyOver],
+        ['Bull case (upside)', daily.bullCase], ['Bear case (downside)', daily.bearCase], ['Catalyst / trend', daily.catalyst],
+        ['Conviction', daily.confidence ? `${daily.confidence}/5` : ''],
+      ]),
+      sec('$5 Decision', [['Price', daily.price], ['Time spent', daily.timeSpent], ['Decision', daily.decision], ['Risk I feel', daily.riskFeel]]),
+      sec('Quick Research', [['Business', daily.business], ['Numbers', daily.numbers], ['News & reason', daily.news], ['Risk tolerance', daily.riskCheck]]),
+      sec('KPIs & Value', [
+        ['Revenue growth', daily.kpiRevGrowth], ['Profit margin', daily.kpiMargin], ['EPS', daily.kpiEps],
+        ['P/E', daily.kpiPe], ['Debt', daily.kpiDebt], ['Free cash flow', daily.kpiFcf],
+        ['Valuation verdict', daily.valueVerdict], ['Why / margin of safety', daily.valueWhy],
+      ]),
+      sec('Market & Economy', [['Market trend', daily.marketTrend], ['Interest rates', daily.rates], ['Macro', daily.macroNotes], ['Micro', daily.microNotes]]),
+      sec('Cross-Asset Watch', [['Housing', daily.crossHousing], ['Crypto', daily.crossCrypto], ['Oil / energy', daily.crossOil], ['Bonds / gold', daily.crossBonds], ['Impact on my pick', daily.crossImpact]]),
+      scoreComplete ? `<h2>Research Scorecard</h2><ul><li><strong>Total:</strong> ${scoreTotal}/30 — ${esc(band.text)}</li></ul>` : '',
+      sec('Buy / Sell / Hold', [['Decision gates', `${checksDone}/${DECISION_CHECKS.length} checked`], ['Action', daily.finalAction], ['Buy / hold thesis', daily.buyThesis], ['Sell trigger', daily.sellTrigger]]),
+      sec('Decision & Lesson', [['Reason', daily.reason], ['Lesson', daily.lesson]]),
+      ports ? `<h2>Portfolio</h2><ul>${ports}</ul>` : '',
+      watches ? `<h2>Watchlist</h2><ul>${watches}</ul>` : '',
+    ].filter(Boolean).join('\n')
+  }, [daily, candidates, portfolio, watchlist, scoreComplete, scoreTotal, band, checksDone])
+
+  const doSave = useCallback(async (html: string) => {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaveStatus('saving')
+    try {
+      let existing: string | null = null
+      try { existing = localStorage.getItem(noteIdKey) } catch { /* ignore */ }
+      const payload = {
+        title: `Investment Reflection — ${today}`,
+        content: html,
+        contentFormat: 'html',
+        subject: 'Investment',
+        tags: ['investment', 'reflection', 'daily'],
+        hasMath: false, hasCode: false, hasImages: false,
+      }
+      if (existing) {
+        const r = await fetch(`/api/notes/${existing}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        if (!r.ok) throw new Error()
+      } else {
+        const r = await fetch('/api/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        if (!r.ok) throw new Error()
+        const data = (await r.json()).data
+        try { if (data?.id) localStorage.setItem(noteIdKey, data.id) } catch { /* ignore */ }
+      }
+      lastSnapshotRef.current = html
+      setLastSavedAt(new Date())
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('error')
+    } finally {
+      savingRef.current = false
+    }
+  }, [noteIdKey, today])
+
+  // Autosave 2s after the last change, once there's real content.
+  useEffect(() => {
+    const candFilled = candidates.some((c) => (c.ticker || '').trim() || (c.why || '').trim())
+    const filled = [
+      daily.ticker, daily.name, daily.whyOver, daily.bullCase, daily.bearCase, daily.catalyst,
+      daily.business, daily.numbers, daily.news, daily.riskCheck, daily.reason, daily.lesson,
+      daily.buyThesis, daily.sellTrigger, daily.valueWhy, daily.macroNotes, daily.microNotes, daily.crossImpact,
+    ].some((x) => (x || '').trim())
+    if (!candFilled && !filled) return
+    const html = buildNoteHtml()
+    if (html === lastSnapshotRef.current) return
+    const t = setTimeout(() => { void doSave(html) }, 2000)
+    return () => clearTimeout(t)
+  }, [daily, candidates, buildNoteHtml, doSave])
+
   const routine = useMemo(() => ([
     'Min 1–2 · Pick a stock or ETF',
     'Min 3–5 · Understand what it does',
@@ -360,6 +459,24 @@ export default function InvestmentPage() {
           <div>
             <h1 className="text-2xl font-black tracking-tight">Investment Reflection</h1>
             <p className="text-sm text-muted-foreground">My $5 research lab · {today}</p>
+          </div>
+          <div className="ml-auto flex flex-col items-end gap-1.5">
+            <button onClick={() => void doSave(buildNoteHtml())} disabled={saveStatus === 'saving'}
+              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl text-white disabled:opacity-50 hover:scale-[1.02] transition-transform"
+              style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 4px 14px rgba(16,185,129,0.4)' }}>
+              {saveStatus === 'saving' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Save to Notes
+            </button>
+            <div className="flex items-center gap-2">
+              {saveStatus === 'saved' && (
+                <span className="text-[10px] flex items-center gap-1" style={{ color: '#34d399' }}>
+                  <Check className="w-3 h-3" /> Saved{lastSavedAt ? ' · ' + lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+              )}
+              {saveStatus === 'saving' && <span className="text-[10px] text-muted-foreground">Saving…</span>}
+              {saveStatus === 'error' && <span className="text-[10px]" style={{ color: '#f87171' }}>Save failed — retry</span>}
+              <a href="/dashboard/notes?subject=Investment" className="text-[10px] text-muted-foreground hover:text-foreground underline">View in Notes</a>
+            </div>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
