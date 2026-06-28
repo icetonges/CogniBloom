@@ -4,278 +4,271 @@ import { DEFAULT_MODEL_ID } from '@/lib/ai/models'
 import type { ChatMessage } from '@/lib/ai/providers/types'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 45
+export const maxDuration = 60
 
 /**
  * GET /api/investment/tip?date=YYYY-MM-DD
  *
- * Returns one teen-friendly daily investing tip that is FACTUALLY GROUNDED in an
- * authoritative knowledge base (SEC / Investor.gov / FINRA / CFA Institute). The
- * model only rewrites the supplied facts into ~200 friendly words — it is told not
- * to invent numbers, promise returns, or recommend specific stocks. Source links
- * are returned from the knowledge base itself (never from the model), so citations
- * are always correct. If the model call fails, a factual fallback assembled
- * directly from the knowledge base is returned, so the endpoint always works.
+ * Returns one inspiring, story-led daily read written in the voice of a
+ * best-selling teen finance author. It has THREE sections (a true story, a
+ * technical insight, and how to beat a bias), each ~100–200 words.
  *
- * The topic rotates deterministically by calendar day, so each day is "fresh" but
- * stable within the day.
+ * Every fact is GROUNDED in an authoritative knowledge base (SEC / Investor.gov,
+ * Federal Reserve, CFA Institute, Nobel Prize, Britannica, Goldman Sachs history).
+ * The model only retells the supplied facts — it is told NOT to invent numbers,
+ * dates, or quotes, promise returns, or recommend specific stocks. Source links
+ * come from the knowledge base itself (never the model), so citations are always
+ * correct. If the model call fails, a factual fallback assembled directly from the
+ * knowledge base is returned, so the endpoint always works.
+ *
+ * The story rotates deterministically by calendar day — fresh daily, stable within
+ * the day.
  */
 
 interface Source { label: string; url: string }
 interface KbEntry {
   topic: string
+  story: { title: string; facts: string }
   technical: { title: string; facts: string }
   bias: { name: string; facts: string; fix: string }
   sources: Source[]
 }
 
-// ── Authoritative knowledge base (facts only — no opinions, no invented stats) ──
+// ── Authoritative knowledge base (verified facts only — no invented quotes/numbers) ──
 const KB: KbEntry[] = [
   {
-    topic: 'Diversification',
+    topic: 'Greedy when others are fearful',
+    story: {
+      title: 'Warren Buffett buys while others panic (2008)',
+      facts:
+        'In October 2008, during the worst of the global financial crisis after Lehman Brothers collapsed, the legendary investor Warren Buffett published a famous New York Times opinion piece titled “Buy American. I Am.” While most people were terrified and selling, Buffett said he was buying U.S. stocks. He shared his simple rule: “Be fearful when others are greedy, and be greedy when others are fearful.” His idea: fear can push prices below what good businesses are really worth, and patient long-term investors who buy quality during a panic have often been rewarded over time. He did not promise fast gains — he warned headlines would stay scary in the near term.',
+    },
     technical: {
-      title: 'Don’t put all your eggs in one basket',
+      title: 'A share is a piece of a real business',
       facts:
-        'The SEC explains diversification as spreading money across different investments to reduce risk. Owning only four or five stocks is NOT diversified — the SEC says you generally need at least a dozen carefully chosen stocks across different industries to be truly diversified. A low-cost index ETF holds hundreds of companies at once, which is an easy way for a beginner to diversify.',
-    },
-    bias: {
-      name: 'Familiarity bias',
-      facts:
-        'Investors often over-buy companies they already know or use, ignoring everything else. Familiar does not mean diversified or safe.',
-      fix: 'Before buying, ask: “Am I picking this because the business is strong, or just because I recognize the name?” Spread your bets.',
-    },
-    sources: [
-      { label: 'SEC / Investor.gov — Diversification', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/diversification' },
-      { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
-    ],
-  },
-  {
-    topic: 'Dollar-cost averaging',
-    technical: {
-      title: 'Investing the same amount on a schedule',
-      facts:
-        'The SEC defines dollar-cost averaging as investing equal amounts at regular intervals regardless of price. Because you buy more shares when prices are low and fewer when prices are high, it removes the pressure of trying to “time” the market. Your $5-a-day habit is dollar-cost averaging in action.',
-    },
-    bias: {
-      name: 'Timing temptation',
-      facts:
-        'Many beginners wait for the “perfect” moment to buy and end up doing nothing, or they pile in after a price has already jumped.',
-      fix: 'Stick to your fixed schedule. Consistency beats trying to guess the bottom.',
-    },
-    sources: [
-      { label: 'SEC / Investor.gov — Dollar-Cost Averaging', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/dollar-cost-averaging' },
-    ],
-  },
-  {
-    topic: 'Anchoring bias',
-    technical: {
-      title: 'A stock’s price is set by the business, not by what you paid',
-      facts:
-        'A share price reflects what buyers and sellers think a business is worth today. The price you happened to pay has no effect on where the price goes next.',
-    },
-    bias: {
-      name: 'Anchoring',
-      facts:
-        'The CFA Institute describes anchoring as fixating on a specific number — like your purchase price or a past high — instead of staying flexible. Example: refusing to sell a weak stock “until it gets back to what I paid.”',
-      fix: 'Judge a holding by the business and its future, not by your purchase price. Ask: “If I had cash today, would I still buy this?”',
-    },
-    sources: [
-      { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
-    ],
-  },
-  {
-    topic: 'Loss aversion',
-    technical: {
-      title: 'Why a 20% drop feels worse than a 20% gain feels good',
-      facts:
-        'A diversified, long-term portfolio will still have down days, weeks and months — that is normal market behavior, not a sign you did something wrong.',
-    },
-    bias: {
-      name: 'Loss aversion',
-      facts:
-        'The CFA Institute notes that people dislike losses more than they enjoy equal gains. This can make investors panic-sell good companies the moment they dip, locking in a loss.',
-      fix: 'Decide in advance what would actually change your view of the business. If nothing has changed, a dip is not a reason to sell.',
-    },
-    sources: [
-      { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
-    ],
-  },
-  {
-    topic: 'Herding & hype',
-    technical: {
-      title: 'Popular is not the same as good',
-      facts:
-        'A stock can rise simply because lots of people are buying it, not because the underlying business improved. Prices driven by excitement can fall just as fast.',
+        'A stock is part-ownership of an actual company, not just a number on a screen. Buying solid businesses and holding for years has historically rewarded patience more than jumping in and out trying to guess the perfect moment.',
     },
     bias: {
       name: 'Herding',
       facts:
-        'The CFA Institute describes herding as following the crowd into whatever is popular. Chasing hype or meme stocks is one of the most common ways beginners lose money.',
-      fix: 'Before buying something “everyone” is buying, write one sentence on why the BUSINESS is worth owning. If you can’t, it’s hype.',
+        'The CFA Institute describes herding as following the crowd into whatever is popular. In 2008 the crowd was selling in fear; Buffett did the opposite by focusing on value.',
+      fix: 'Before joining a stampede — in OR out — ask whether the business itself justifies it.',
     },
     sources: [
+      { label: 'CNBC — Buffett’s NYT Op-Ed “Buy American. I Am.”', url: 'https://www.cnbc.com/2008/10/16/warren-buffetts-ny-times-oped-buy-american-i-am.html' },
       { label: 'CFA Institute — The Herding Mentality', url: 'https://blogs.cfainstitute.org/investor/2015/08/06/the-herding-mentality-behavioral-finance-and-investor-biases/' },
     ],
   },
   {
-    topic: 'Reading a stock chart',
-    technical: {
-      title: 'What a price chart can and cannot tell you',
+    topic: 'When hype meets reality',
+    story: {
+      title: 'The Dot-Com Bubble bursts (2000)',
       facts:
-        'A price chart shows where a stock has traded over time — useful context like the 52-week high and low. A chart shows the past; it cannot predict the future. The SEC reminds investors that past performance does not guarantee future results.',
+        'In the late 1990s, internet “dot-com” stocks soared as investors got swept up in excitement. The tech-heavy Nasdaq index rose about 600% from 1995 and peaked around 5,048 on March 10, 2000. Then reality set in. Many of these companies had thrilling stories but little or no profit. The Nasdaq fell about 78% by October 2002, and famous names like Pets.com went bankrupt. The investors who chased the hype without ever checking whether the companies actually made money were the ones who lost the most.',
+    },
+    technical: {
+      title: 'A rising chart is not proof of a healthy business',
+      facts:
+        'A price going up does not mean a company earns money. The SEC reminds investors that past performance does not guarantee future results. Always check whether revenue and profit are real, not just the excitement.',
     },
     bias: {
-      name: 'Recency bias',
+      name: 'Herding & hype',
       facts:
-        'The CFA Institute describes recency/availability bias as over-weighting whatever happened most recently — assuming a stock that just went up will keep going up.',
-      fix: 'Zoom out. Look at a 1-year and 5-year view, not just today’s line, and remember recent moves don’t set the future.',
+        'Buying something just because everyone else is buying it. The CFA Institute calls this herding — and it is one of the most common ways beginners lose money.',
+      fix: 'Write one sentence on why the business is worth owning. If you can’t, it’s hype.',
     },
     sources: [
-      { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
-      { label: 'CFA Institute — Behavioral Biases', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
+      { label: 'Goldman Sachs — The 2000 Dot-Com Bubble', url: 'https://www.goldmansachs.com/our-firm/history/moments/2000-dot-com-bubble' },
+      { label: 'CFA Institute — The Herding Mentality', url: 'https://blogs.cfainstitute.org/investor/2015/08/06/the-herding-mentality-behavioral-finance-and-investor-biases/' },
     ],
   },
   {
-    topic: 'Market trend vs. timing',
-    technical: {
-      title: 'Time IN the market beats timing the market',
+    topic: 'Why spreading risk matters',
+    story: {
+      title: 'Lehman Brothers and the 2008 crisis',
       facts:
-        'Market trends move up and down, and even experts cannot reliably predict short-term moves. The SEC encourages a long-term plan and staying invested rather than jumping in and out based on headlines.',
+        'On September 15, 2008, the 158-year-old investment bank Lehman Brothers filed for bankruptcy — the largest in U.S. history, with more than $600 billion in assets. Lehman had taken on enormous risk tied to subprime home loans. Its collapse set off a global financial panic. Federal Reserve Chair Ben Bernanke and other officials worked through that weekend but could not save it. The episode showed how too much risk and borrowed money concentrated in one place can topple even a giant firm — a powerful lesson in why spreading your risk matters.',
+    },
+    technical: {
+      title: 'Don’t put all your eggs in one basket',
+      facts:
+        'The SEC explains diversification as spreading money across different investments so that one failure does not sink everything. A low-cost index ETF holds many companies at once, an easy way for a beginner to diversify.',
     },
     bias: {
       name: 'Overconfidence',
       facts:
-        'The CFA Institute lists overconfidence as overestimating your own ability to predict prices, which leads to over-trading.',
-      fix: 'Assume you cannot out-guess the market short-term. A steady $5-a-day plan needs no predictions.',
+        'The CFA Institute lists overconfidence as overestimating how safe or certain something is. Before 2008, many believed house prices could only go up.',
+      fix: 'For every investment, force yourself to answer: “What could go wrong here?”',
     },
     sources: [
-      { label: 'SEC / Investor.gov — Asset Allocation', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
+      { label: 'Federal Reserve — Bernanke: Lessons from the Failure of Lehman Brothers', url: 'https://www.federalreserve.gov/newsevents/testimony/bernanke20100420a.htm' },
+      { label: 'SEC / Investor.gov — Diversification', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/diversification' },
     ],
   },
   {
-    topic: 'Reading the numbers: revenue & profit',
-    technical: {
-      title: 'Does the business actually make money?',
+    topic: 'Markets can run on emotion',
+    story: {
+      title: 'Greenspan warns of “irrational exuberance” (1996)',
       facts:
-        'Revenue is the total money a company brings in from sales. Net income (profit) is what is left after all costs. A healthy business usually grows revenue over time and earns a profit. Some young companies are not yet profitable — that is higher risk.',
+        'On December 5, 1996, Federal Reserve Chairman Alan Greenspan gave a speech asking how anyone can tell when “irrational exuberance” has pushed asset prices too high. The phrase became instantly famous as a warning that markets can be driven by emotion, not just facts. Here’s the twist: stocks kept climbing for several more years before the dot-com crash finally came. Even the most powerful central banker in the world could not predict the exact moment the bubble would pop.',
+    },
+    technical: {
+      title: 'Nobody can reliably time the market',
+      facts:
+        'If even experts cannot call the top or bottom, a beginner shouldn’t try. A steady, scheduled plan beats guessing — which is exactly what your $5-a-day habit does.',
     },
     bias: {
-      name: 'Story over substance',
+      name: 'Recency bias',
       facts:
-        'Exciting stories can hide weak finances. A great-sounding product does not guarantee a profitable business.',
-      fix: 'Pair every story with one number: is revenue growing, and does the company make a profit?',
+        'The CFA Institute describes recency bias as assuming whatever happened lately will keep happening — like believing a rising stock must keep rising.',
+      fix: 'Zoom out to a 1-year and 5-year view; recent moves don’t decide the future.',
     },
     sources: [
-      { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
+      { label: 'Federal Reserve — Greenspan Speech, Dec 5 1996', url: 'https://www.federalreserve.gov/boarddocs/speeches/1996/19961205.htm' },
+      { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
     ],
   },
   {
-    topic: 'The P/E ratio',
-    technical: {
-      title: 'Price compared with earnings',
+    topic: 'Learning from history',
+    story: {
+      title: 'Ben Bernanke: the Depression scholar who fought a crisis',
       facts:
-        'The price-to-earnings (P/E) ratio compares a stock’s price to its profit per share. A high P/E means investors expect lots of future growth — and the price can fall hard if that growth slows. P/E is only useful when comparing similar companies, and some companies have no P/E because they have no profit yet.',
+        'Ben Bernanke spent his career studying the Great Depression, showing in a famous 1983 paper how failing banks made that disaster far worse. So when he became Federal Reserve Chair (2006–2014) and the 2008 crisis struck, he used those exact lessons to act fast and help keep the banking system from collapsing. In 2022 he shared the Nobel Prize in Economic Sciences for research on banks and financial crises. His story is proof that studying the past can pay off enormously when history rhymes.',
+    },
+    technical: {
+      title: 'Markets have recovered over the long run',
+      facts:
+        'Economies and markets have historically recovered from crises over time, which has rewarded patient, diversified, long-term investors rather than those who panic-sold at the bottom.',
     },
     bias: {
-      name: 'Anchoring on “cheap” vs “expensive”',
+      name: 'Loss aversion',
       facts:
-        'A low P/E is not automatically a bargain, and a high P/E is not automatically bad — the number needs context.',
-      fix: 'Compare a company’s P/E with similar companies, not with a random target in your head.',
+        'The CFA Institute notes that people dislike losses more than they enjoy equal gains, which can trigger panic-selling at the worst possible moment.',
+      fix: 'Decide in advance what would truly change your view of a business — and ignore the noise in between.',
     },
     sources: [
-      { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
+      { label: 'NobelPrize.org — Ben Bernanke, 2022', url: 'https://www.nobelprize.org/prizes/economic-sciences/2022/bernanke/biographical/' },
+      { label: 'Britannica Money — Ben Bernanke', url: 'https://www.britannica.com/money/Ben-Bernanke' },
     ],
   },
   {
-    topic: 'Risk and time horizon',
-    technical: {
-      title: 'How long until you need the money?',
+    topic: 'Scary drops are often temporary',
+    story: {
+      title: 'Black Monday (1987): the biggest one-day crash',
       facts:
-        'The SEC explains that the right mix of investments depends on your time horizon and risk tolerance. Money you won’t need for years can handle more ups and downs; money you need soon should take less risk.',
+        'On Monday, October 19, 1987, the Dow Jones Industrial Average fell 22.6% in a single day — still the largest one-day percentage drop in U.S. stock market history. It was genuinely terrifying for everyone watching. Yet markets recovered most of those losses within two trading sessions, and U.S. stocks surpassed their pre-crash highs less than two years later. The lesson for a young investor: a dramatic crash can feel like the end of the world while it’s happening, but for diversified, long-term investors it has often turned out to be temporary.',
+    },
+    technical: {
+      title: 'Big swings (volatility) are normal',
+      facts:
+        'Sharp ups and downs are a normal part of investing. For long-term investors, staying invested through the swings has historically mattered more than reacting to any single scary day.',
     },
     bias: {
-      name: 'Emotional risk-taking',
+      name: 'Loss aversion',
       facts:
-        'Feelings of fear or excitement can push investors to take more risk than they truly want.',
-      fix: 'Know your honest comfort level. If a 20% drop would make you panic, size your risk so you can stay calm.',
+        'Panic-selling during a crash locks in a loss. The fear of losing feels overwhelming exactly when prices are lowest.',
+      fix: 'If nothing about the actual businesses changed, a crash alone is not a reason to sell.',
     },
     sources: [
-      { label: 'SEC / Investor.gov — Asset Allocation', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
+      { label: 'Federal Reserve History — Stock Market Crash of 1987', url: 'https://www.federalreservehistory.org/essays/stock-market-crash-of-1987' },
+      { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
     ],
   },
   {
-    topic: 'Fees matter',
+    topic: 'Boring can be brilliant',
+    story: {
+      title: 'Jack Bogle invents the index fund (1976)',
+      facts:
+        'John “Jack” Bogle founded Vanguard in 1974, and in 1976 he launched the first index mutual fund for everyday people. Critics mocked it as “Bogle’s Folly” and even called it un-American to “settle” for matching the market instead of trying to beat it. But Bogle’s idea was simple and powerful: most investors do better owning a broad, low-cost slice of the whole market than paying high fees to chase winners. Decades later, index funds are one of the most popular ways in the world to invest.',
+    },
     technical: {
-      title: 'Small costs add up over time',
+      title: 'Diversification + low fees',
       facts:
-        'FINRA and the SEC stress that fees and expenses reduce your returns over time. A fund with a lower expense ratio keeps more money working for you. Even a 1% yearly fee can add up to a large amount over many years.',
-    },
-    bias: {
-      name: 'Ignoring the small print',
-      facts:
-        'Beginners often focus only on price moves and forget about costs, which quietly shrink returns.',
-      fix: 'Check the expense ratio of any ETF or fund before buying. Lower is usually better for long-term investors.',
-    },
-    sources: [
-      { label: 'SEC / Investor.gov — Understanding Fees', url: 'https://www.investor.gov/introduction-investing/getting-started/understanding-fees' },
-      { label: 'FINRA — Investors', url: 'https://www.finra.org/investors' },
-    ],
-  },
-  {
-    topic: 'Compounding',
-    technical: {
-      title: 'Earnings that earn more earnings',
-      facts:
-        'Compounding is when the returns you earn start earning returns of their own. The SEC notes that the earlier and more consistently you invest, the more time compounding has to work. This is why a small daily habit can grow meaningfully over many years.',
-    },
-    bias: {
-      name: 'Impatience',
-      facts:
-        'Compounding is slow at first, which tempts beginners to quit before it gets powerful.',
-      fix: 'Think in years, not days. The boring, consistent investor often wins.',
-    },
-    sources: [
-      { label: 'SEC / Investor.gov — Compound Interest', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/compound-interest' },
-    ],
-  },
-  {
-    topic: 'Confirmation bias',
-    technical: {
-      title: 'Look for reasons you might be WRONG',
-      facts:
-        'Good research includes the risks, not just the positives. Strong investors can explain what could go wrong with a company, not only why they like it.',
-    },
-    bias: {
-      name: 'Confirmation bias',
-      facts:
-        'The CFA Institute describes confirmation bias as seeking only information that supports what you already believe, and ignoring the rest.',
-      fix: 'For every stock, write one real risk and check more than one source before deciding.',
-    },
-    sources: [
-      { label: 'CFA Institute — Behavioral Biases', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
-    ],
-  },
-  {
-    topic: 'Index funds & ETFs',
-    technical: {
-      title: 'Owning a slice of many companies at once',
-      facts:
-        'An index fund or ETF holds a basket of many companies, so one bad pick has less impact. The SEC describes index funds as a low-cost, diversified way for beginners to invest, because they spread money across a whole market instead of a single bet.',
+        'An index fund spreads your money across many companies at once, at low cost. The SEC notes that fees quietly reduce your returns over time, so lower-cost funds keep more money working for you.',
     },
     bias: {
       name: 'Excitement bias',
       facts:
-        'Single “hot” stocks feel more exciting than a broad fund, even though the fund is usually less risky for a beginner.',
-      fix: 'It is okay to be boring. A diversified ETF can be the core, with small experiments around it.',
+        'A single “hot” stock feels thrilling, while a broad index fund feels boring — even though the boring option is usually less risky for a beginner.',
+      fix: 'It’s okay to be boring. A low-cost, diversified index can be your steady core.',
     },
     sources: [
-      { label: 'SEC / Investor.gov — Exchange-Traded Funds (ETFs)', url: 'https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-2' },
+      { label: 'Britannica Money — John Bogle', url: 'https://www.britannica.com/money/John-Bogle' },
+      { label: 'Vanguard — Indexing since 1976', url: 'https://corporate.vanguard.com/content/corporatesite/us/en/corp/articles/50-years-50-facts-indexing-since-1976.html' },
+    ],
+  },
+  {
+    topic: 'Invest in what you understand',
+    story: {
+      title: 'Peter Lynch: invest in what you know',
+      facts:
+        'Peter Lynch ran Fidelity’s Magellan Fund from 1977 to 1990 and averaged roughly a 29% annual return — one of the greatest records ever. His famous idea was that ordinary people can spot great companies in everyday life: at the mall, the grocery store, the places they love, sometimes before Wall Street notices. But Lynch was very clear that noticing a popular product is only step one. After that, you still have to study whether the business behind it is actually healthy and growing before you invest a cent.',
+    },
+    technical: {
+      title: 'Understand how the business makes money',
+      facts:
+        'Before buying, know what a company does, how it earns money, and whether its revenue and profit are growing. A great product is not the same as a great investment.',
+    },
+    bias: {
+      name: 'Confirmation bias',
+      facts:
+        'The CFA Institute describes confirmation bias as looking only for information that supports what you already believe — like loving a product and skipping the homework.',
+      fix: 'Liking the product isn’t enough: check the numbers and write down one real risk.',
+    },
+    sources: [
+      { label: 'Investopedia — Peter Lynch', url: 'https://www.investopedia.com/terms/p/peterlynch.asp' },
+      { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
+    ],
+  },
+  {
+    topic: 'Price is not the same as value',
+    story: {
+      title: 'Benjamin Graham and “Mr. Market”',
+      facts:
+        'Benjamin Graham is often called the father of value investing — and he was Warren Buffett’s teacher. In his classic 1949 book “The Intelligent Investor,” Graham imagined the stock market as a moody business partner he nicknamed “Mr. Market,” who shows up every single day shouting prices: sometimes wildly too high, sometimes far too low. Graham’s genius advice was that you don’t have to react to Mr. Market’s mood swings. Decide for yourself what a business is truly worth, and let his panic or excitement work for you, not against you.',
+    },
+    technical: {
+      title: 'Judge the business, not your purchase price',
+      facts:
+        'The price you happened to pay has no effect on where a stock goes next. What matters is the value of the business and its future, not the number you paid.',
+    },
+    bias: {
+      name: 'Anchoring',
+      facts:
+        'The CFA Institute describes anchoring as fixating on a specific number — like your purchase price — for example refusing to sell a weak stock “until it gets back to what I paid.”',
+      fix: 'Ask: “If I had cash today, would I still buy this?” — not “what did I pay?”',
+    },
+    sources: [
+      { label: 'Investopedia — Benjamin Graham', url: 'https://www.investopedia.com/terms/b/bengraham.asp' },
+      { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
+    ],
+  },
+  {
+    topic: 'Start small, start early',
+    story: {
+      title: 'Warren Buffett bought his first stock at age 11',
+      facts:
+        'Warren Buffett bought his very first stock when he was just 11 years old — and later joked that he had actually started too late! The stock dropped before it recovered, which taught him patience early on. Buffett built his enormous wealth largely by starting young and letting compounding — when your earnings start earning their own earnings — work for decades. He describes wealth-building like a snowball: small amounts, rolled forward consistently over a long time, can grow into something huge.',
+    },
+    technical: {
+      title: 'The quiet power of compounding',
+      facts:
+        'The SEC explains that the earlier and more consistently you invest, the more time compounding has to work. A $5-a-day habit looks tiny today but has many years to grow.',
+    },
+    bias: {
+      name: 'Impatience',
+      facts:
+        'Compounding is slow at the start, which tempts beginners to give up right before it becomes powerful.',
+      fix: 'Think in years, not days. The steady, patient investor often wins.',
+    },
+    sources: [
+      { label: 'Investopedia — Warren Buffett', url: 'https://www.investopedia.com/terms/w/warrenbuffett.asp' },
+      { label: 'SEC / Investor.gov — Compound Interest', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/compound-interest' },
     ],
   },
 ]
 
 function dayIndex(dateStr: string): number {
-  // Stable ordinal day number from a YYYY-MM-DD string.
   const ms = Date.parse(dateStr + 'T00:00:00Z')
   if (Number.isNaN(ms)) return 0
   const day = Math.floor(ms / 86_400_000)
@@ -283,7 +276,7 @@ function dayIndex(dateStr: string): number {
 }
 
 function easternDateString(): string {
-  // App standard: New York time (see project memory).
+  // App standard: New York time.
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/New_York',
     year: 'numeric',
@@ -294,6 +287,9 @@ function easternDateString(): string {
 
 function fallbackMarkdown(e: KbEntry): string {
   return [
+    `### 📖 The Story — ${e.story.title}`,
+    e.story.facts,
+    ``,
     `### 📊 Technical Insight — ${e.technical.title}`,
     e.technical.facts,
     ``,
@@ -308,9 +304,13 @@ export async function GET(request: NextRequest) {
   const entry = KB[dayIndex(date)]
 
   const grounding = [
-    `TOPIC: ${entry.topic}`,
+    `THEME: ${entry.topic}`,
     ``,
-    `TECHNICAL FACTS (authoritative):`,
+    `TRUE STORY (authoritative facts — do not change names, numbers, dates, or quotes):`,
+    `- Title: ${entry.story.title}`,
+    `- ${entry.story.facts}`,
+    ``,
+    `TECHNICAL INSIGHT (authoritative):`,
     `- Title: ${entry.technical.title}`,
     `- ${entry.technical.facts}`,
     ``,
@@ -321,26 +321,28 @@ export async function GET(request: NextRequest) {
   ].join('\n')
 
   const system =
-    'You are a calm, encouraging financial-literacy coach for a teenager who invests $5 a day to learn. ' +
-    'Write a SHORT daily tip of about 180–220 words in Markdown, using ONLY the facts provided to you. ' +
-    'Structure it in exactly two sections with these headings: ' +
-    '"### 📊 Technical Insight" and "### 🧠 Beating a Bias". ' +
-    'Rules you must follow: do NOT invent numbers, statistics, percentages, or dates that are not in the facts; ' +
-    'do NOT promise or imply any returns; do NOT recommend or name any specific stock, ticker, or fund to buy; ' +
-    'do NOT give personalized financial advice. Keep language simple, warm, and teen-friendly. ' +
-    'End with one short encouraging sentence. Do not add a disclaimer or a sources list — those are shown separately.'
+    'You are a best-selling author who makes money, investing, and financial psychology genuinely exciting for teenagers — vivid, warm, and inspiring, like the best young-adult nonfiction. ' +
+    'Write today’s daily read in Markdown with EXACTLY three sections, each about 100–200 words, using ONLY the facts provided to you: ' +
+    '"### 📖 The Story", "### 📊 Technical Insight", and "### 🧠 Beating a Bias". ' +
+    'In The Story, bring the real person or event to life and pull out the lesson for a young $5-a-day investor. ' +
+    'Rules you must follow strictly: do NOT invent or change any numbers, dates, names, or quotes — use only what is given; ' +
+    'do NOT promise or imply any returns; do NOT recommend or name a specific stock, ticker, or fund to buy; ' +
+    'do NOT encourage day trading, options, leverage, crypto speculation, or hype-chasing; do NOT give personalized financial advice. ' +
+    'Keep it teen-friendly and encouraging. End the final section with one short, inspiring sentence. ' +
+    'Do not add a disclaimer or a sources list — those are shown separately.'
 
   const messages: ChatMessage[] = [
     { role: 'system', content: system },
-    { role: 'user', content: `Write today’s tip from these facts only:\n\n${grounding}` },
+    { role: 'user', content: `Write today’s three-section read from these facts only:\n\n${grounding}` },
   ]
 
   try {
-    const r = await chatWithFallback({ messages, temperature: 0.6, maxTokens: 700 }, DEFAULT_MODEL_ID)
+    const r = await chatWithFallback({ messages, temperature: 0.7, maxTokens: 1400 }, DEFAULT_MODEL_ID)
     const markdown = (r.content || '').trim() || fallbackMarkdown(entry)
     return NextResponse.json({
       date,
       topic: entry.topic,
+      storyTitle: entry.story.title,
       biasName: entry.bias.name,
       markdown,
       sources: entry.sources,
@@ -348,10 +350,10 @@ export async function GET(request: NextRequest) {
     })
   } catch (err) {
     console.error('[GET /api/investment/tip]', err)
-    // Always return something factual, assembled directly from the knowledge base.
     return NextResponse.json({
       date,
       topic: entry.topic,
+      storyTitle: entry.story.title,
       biasName: entry.bias.name,
       markdown: fallbackMarkdown(entry),
       sources: entry.sources,

@@ -177,7 +177,7 @@ function SectionCard({ icon: Icon, title, subtitle, children, accent = '#10b981'
   )
 }
 
-interface Tip { date: string; topic: string; biasName: string; markdown: string; sources: { label: string; url: string }[]; generated: boolean }
+interface Tip { date: string; topic: string; storyTitle: string; biasName: string; markdown: string; sources: { label: string; url: string }[]; generated: boolean }
 
 export default function InvestmentPage() {
   const today = localISODate(new Date())
@@ -209,7 +209,7 @@ export default function InvestmentPage() {
   const [tipLoading, setTipLoading] = useState(true)
 
   const loadTip = async (force = false) => {
-    const cacheKey = `cb:invest:tip:${today}`
+    const cacheKey = `cb:invest:tip:v2:${today}`
     if (!force) {
       try {
         const cached = localStorage.getItem(cacheKey)
@@ -315,15 +315,15 @@ export default function InvestmentPage() {
       </div>
 
       {/* Daily tip */}
-      <SectionCard icon={Sparkles} title="Daily Investment Tip" subtitle="Fresh each day · grounded in SEC / FINRA / CFA Institute facts" accent="#6366f1">
+      <SectionCard icon={Sparkles} title="Daily Investment Story" subtitle="An inspiring daily read · grounded in SEC, Federal Reserve, Nobel &amp; CFA Institute facts" accent="#6366f1">
         {tipLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
-            <Loader2 className="w-4 h-4 animate-spin" /> Composing today’s tip…
+            <Loader2 className="w-4 h-4 animate-spin" /> Writing today’s story…
           </div>
         ) : tip ? (
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>{tip.topic}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>📖 {tip.storyTitle}</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.15)', color: '#6ee7b7' }}>Bias: {tip.biasName}</span>
               <button onClick={() => loadTip(true)} className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
                 <RefreshCw className="w-3 h-3" /> New wording
