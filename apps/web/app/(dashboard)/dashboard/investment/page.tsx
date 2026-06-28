@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   TrendingUp, Sparkles, Loader2, RefreshCw, Info, Plus, Trash2,
   ShieldCheck, Bot, BookOpen, Target, Clock, ExternalLink,
-  Gauge, Globe, Layers, GitBranch,
+  Gauge, Globe, Layers, GitBranch, Lightbulb, Scale,
 } from 'lucide-react'
 import { cn, localISODate } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer'
@@ -52,6 +52,9 @@ const DECISION_CHECKS = [
   'My long-term thesis is intact',
   'I am NOT buying just because it is popular',
 ]
+
+interface Cand { ticker: string; why: string }
+const emptyCand = (): Cand => ({ ticker: '', why: '' })
 
 interface PortRow {
   ticker: string; name: string; invested: string; shares: string
@@ -208,12 +211,14 @@ export default function InvestmentPage() {
     marketTrend: '', rates: '', macroNotes: '', microNotes: '',
     crossHousing: '', crossCrypto: '', crossOil: '', crossBonds: '', crossImpact: '',
     finalAction: '', buyThesis: '', sellTrigger: '',
+    whyOver: '', bullCase: '', bearCase: '', catalyst: '', leanIdx: '',
   })
   const setD = (k: string, v: string) => setDaily((p) => ({ ...p, [k]: v }))
 
   const [score, setScore] = useStored<Record<string, number>>(`cb:invest:score:${today}`, {})
   const [checks, setChecks] = useStored<Record<string, boolean>>(`cb:invest:checks:${today}`, {})
   const checksDone = DECISION_CHECKS.filter((_, i) => checks[i]).length
+  const [candidates, setCandidates] = useStored<Cand[]>(`cb:invest:candidates:${today}`, [emptyCand(), emptyCand(), emptyCand()])
   const scoreTotal = SCORE_ROWS.reduce((sum, r) => sum + (score[r.key] || 0), 0)
   const scoreComplete = SCORE_ROWS.every((r) => (score[r.key] || 0) > 0)
   const band =
@@ -262,7 +267,11 @@ export default function InvestmentPage() {
   const analyzeDay = async () => {
     setAnalyzing(true); setAnalyzeErr(null); setAnalysis('')
     const lines = [
-      `Ticker/ETF: ${daily.ticker || '—'} (${daily.name || 'no name'})`,
+      `Shortlist I considered: ${candidates.filter((c) => c.ticker).map((c) => `${c.ticker}${c.why ? ' (' + c.why + ')' : ''}`).join('; ') || '—'}`,
+      `My pick: ${daily.ticker || '—'} (${daily.name || 'no name'}) — why over the others: ${daily.whyOver || '—'}`,
+      `Bull case (upside): ${daily.bullCase || '—'}`,
+      `Bear case (downside): ${daily.bearCase || '—'}`,
+      `Catalyst/trend: ${daily.catalyst || '—'}`,
       `Today's price: ${daily.price || '—'} · Planned: $5`,
       `Decision: ${daily.decision || '—'} · Confidence: ${daily.confidence || '—'}/5 · Risk I feel: ${daily.riskFeel || '—'}`,
       `What the business does / how it earns: ${daily.business || '—'}`,
@@ -379,11 +388,86 @@ export default function InvestmentPage() {
         )}
       </SectionCard>
 
-      {/* Today's $5 decision */}
-      <SectionCard icon={Target} title="Today’s $5 Decision" subtitle="Click any field to type — the grey hint is just an example and isn’t saved">
+      {/* Shortlist — scout a few ideas */}
+      <SectionCard icon={Lightbulb} title="Today’s Shortlist" subtitle="Scout a few ideas like a talent scout — no commitment yet. Tap ⭐ on the one you lean toward." accent="#fbbf24">
+        <div className="space-y-2">
+          {candidates.map((c, i) => {
+            const setC = (k: keyof Cand, v: string) => setCandidates((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
+            const leaning = daily.leanIdx === String(i)
+            return (
+              <div key={i} className="rounded-xl p-2.5" style={leaning
+                ? { background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.45)' }
+                : { background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    title="Lean toward this one"
+                    onClick={() => {
+                      const on = daily.leanIdx === String(i)
+                      setDaily((prev) => ({ ...prev, leanIdx: on ? '' : String(i), ...(on ? {} : { ticker: candidates[i].ticker }) }))
+                    }}
+                    className="shrink-0 text-lg leading-none transition-transform hover:scale-110"
+                    style={{ color: leaning ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}
+                  >
+                    {leaning ? '★' : '☆'}
+                  </button>
+                  <input value={c.ticker} onChange={(e) => setC('ticker', e.target.value)} placeholder="Ticker"
+                    className="cb-input w-24 px-2.5 py-1.5 rounded-lg text-sm focus:outline-none placeholder:text-muted-foreground/45" />
+                  <input value={c.why} onChange={(e) => setC('why', e.target.value)}
+                    placeholder="Why it caught my eye — e.g. main challenger to Nvidia in AI GPUs; MI300 could grab data-center share"
+                    className="cb-input flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-sm focus:outline-none placeholder:text-muted-foreground/45" />
+                  {candidates.length > 1 && (
+                    <button onClick={() => setCandidates((p) => p.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-rose-400 shrink-0" title="Remove idea">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+          <button onClick={() => setCandidates((p) => [...p, emptyCand()])}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add another idea
+          </button>
+        </div>
+      </SectionCard>
+
+      {/* Compare & Choose — pick one and weigh both sides */}
+      <SectionCard icon={Scale} title="Compare & Choose" subtitle="Pick one, then weigh both sides — every idea has an upside AND a risk." accent="#38bdf8">
         <div className="grid sm:grid-cols-2 gap-3">
-          <Field label="Ticker" hint="e.g. VOO" value={daily.ticker} onChange={(v) => setD('ticker', v)} />
-          <Field label="Company / fund name" hint="e.g. Vanguard S&P 500 ETF" value={daily.name} onChange={(v) => setD('name', v)} />
+          <Field label="My pick today" hint="auto-fills from your ⭐ — e.g. AMD" value={daily.ticker} onChange={(v) => setD('ticker', v)}
+            tip="The one idea you're choosing to research and possibly invest today's $5 in." />
+          <Field label="Company / fund name" hint="e.g. Advanced Micro Devices" value={daily.name} onChange={(v) => setD('name', v)} />
+        </div>
+        <div className="mt-3">
+          <Field textarea label="Why this one over the others?" value={daily.whyOver} onChange={(v) => setD('whyOver', v)}
+            tip="Choosing one idea means passing on the others — that's called opportunity cost. What makes this the best of your shortlist?"
+            hint="e.g. it's the direct Nvidia challenger — the biggest swing if MI300 wins." />
+        </div>
+        <div className="mt-3 grid sm:grid-cols-2 gap-3">
+          <Field textarea label="🐂 Bull case — what could go right" value={daily.bullCase} onChange={(v) => setD('bullCase', v)}
+            tip="The upside if your idea works out. Dream a little — but base it on the business, not hype."
+            hint="e.g. if MI300 captures even a slice of AI compute, the upside is massive." />
+          <Field textarea label="🐻 Bear case — what could go wrong" value={daily.bearCase} onChange={(v) => setD('bearCase', v)}
+            tip="The downside if it doesn't work, and how long recovery might take. Writing this isn't being negative — it's being smart."
+            hint="e.g. it's expensive; if it doesn't win share it could take a long time to recover." />
+        </div>
+        <div className="mt-3">
+          <Field textarea label="The trend / catalyst driving it" value={daily.catalyst} onChange={(v) => setD('catalyst', v)}
+            tip="A catalyst is the specific reason things could change — a new product, a race, a shift in demand."
+            hint="e.g. the MI300 vs Nvidia race; AI compute demand accelerating." />
+        </div>
+        <div className="mt-3">
+          <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">My conviction (1–5)</span>
+          <Chips options={['1', '2', '3', '4', '5']} value={daily.confidence} onChange={(v) => setD('confidence', v)} />
+          <p className="text-[11px] text-muted-foreground mt-1.5">After weighing both sides, how strongly do I believe in this pick? It's totally okay to be a 2 or 3 — honesty beats overconfidence.</p>
+        </div>
+      </SectionCard>
+
+      {/* Today's $5 logistics */}
+      <SectionCard icon={Target} title="Today’s $5 Decision" subtitle="The quick logistics — the grey hint is just an example and isn’t saved">
+        <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Today’s price" hint="e.g. $512.40" value={daily.price} onChange={(v) => setD('price', v)} />
           <Field label="Time spent researching" hint="e.g. 12 min" value={daily.timeSpent} onChange={(v) => setD('timeSpent', v)} />
         </div>
@@ -396,10 +480,6 @@ export default function InvestmentPage() {
             <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Risk I feel</span>
             <Chips options={RISK_LEVELS} value={daily.riskFeel} onChange={(v) => setD('riskFeel', v)} />
           </div>
-        </div>
-        <div className="mt-3">
-          <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Confidence (1–5)</span>
-          <Chips options={['1', '2', '3', '4', '5']} value={daily.confidence} onChange={(v) => setD('confidence', v)} />
         </div>
       </SectionCard>
 
