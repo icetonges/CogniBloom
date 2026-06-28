@@ -74,7 +74,7 @@ function OutputCard({ side, result, loading }: { side: string; result: SideResul
   )
 }
 
-export function ModelCompare() {
+export function ModelCompare({ system, placeholder: customPlaceholder }: { system?: string; placeholder?: string } = {}) {
   const [modelA, setModelA] = useState(DEFAULT_MODEL_ID)
   const [modelB, setModelB] = useState(
     () => MODELS.find((m) => m.id !== DEFAULT_MODEL_ID)?.id ?? MODELS[1].id
@@ -93,7 +93,7 @@ export function ModelCompare() {
       const r = await fetch('/api/tutor/compare', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         // Only send modelB when comparing — otherwise the API runs a single model.
-        body: JSON.stringify(compare ? { prompt, modelA, modelB } : { prompt, modelA }),
+        body: JSON.stringify(compare ? { prompt, modelA, modelB, system } : { prompt, modelA, system }),
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data?.error ?? 'Request failed')
@@ -149,9 +149,9 @@ export function ModelCompare() {
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run() }}
           rows={3}
-          placeholder={compare
+          placeholder={customPlaceholder ?? (compare
             ? 'Ask both models the same question… (Ctrl/Cmd+Enter to run)'
-            : 'Ask the model a question… (Ctrl/Cmd+Enter to run)'}
+            : 'Ask the model a question… (Ctrl/Cmd+Enter to run)')}
           className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
         <div className="flex items-center justify-between mt-2">
