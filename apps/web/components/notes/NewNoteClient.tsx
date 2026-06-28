@@ -151,6 +151,11 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
 
 <h2>14. Progress Summary</h2>
 <blockquote>A few sentences as if telling a teacher or parent. <em>e.g. "Today [Name] worked on AMC 8 geometry for 45 min. Struggled with shaded-area problems but improved after drawing diagrams. Tomorrow: review problems 7–10."</em></blockquote>
+<ul>
+  <li><strong>What I worked on (and for how long):</strong> </li>
+  <li><strong>What was tricky &amp; how I improved:</strong> </li>
+  <li><strong>Plan for tomorrow:</strong> </li>
+</ul>
 <p></p>
 `.trim()
 
