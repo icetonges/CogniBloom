@@ -34,6 +34,7 @@ export const maxDuration = 60
 interface Source { label: string; url: string }
 interface KbEntry {
   topic: string
+  basics: { title: string; facts: string }
   story: { title: string; facts: string }
   technical: { title: string; facts: string }
   bias: { name: string; facts: string; fix: string }
@@ -44,6 +45,11 @@ interface KbEntry {
 const KB: KbEntry[] = [
   {
     topic: 'Greedy when others are fearful',
+    basics: {
+      title: 'What is a stock?',
+      facts:
+        'A stock is a share of ownership in a real company. Buy one share and you literally become a part-owner of that business, sharing in its success — or its setbacks. Companies sell stock to raise money to grow, and investors buy it hoping the business becomes more valuable over time or pays out a slice of profits called a dividend.',
+    },
     story: {
       title: 'Warren Buffett buys while others panic (2008)',
       facts:
@@ -61,6 +67,7 @@ const KB: KbEntry[] = [
       fix: 'Before joining a stampede — in OR out — ask whether the business itself justifies it.',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Investing Basics Glossary (Investment 101)', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
       { label: 'CNBC — Buffett’s NYT Op-Ed “Buy American. I Am.”', url: 'https://www.cnbc.com/2008/10/16/warren-buffetts-ny-times-oped-buy-american-i-am.html' },
       { label: 'The New York Times — “Buy American. I Am.” (Buffett, 2008)', url: 'https://www.nytimes.com/2008/10/17/opinion/17buffett.html' },
       { label: 'CFA Institute — The Herding Mentality', url: 'https://blogs.cfainstitute.org/investor/2015/08/06/the-herding-mentality-behavioral-finance-and-investor-biases/' },
@@ -68,6 +75,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'When hype meets reality',
+    basics: {
+      title: 'Stocks vs. ETFs',
+      facts:
+        'A single stock is just one company, so its ups and downs hit you fully. An ETF (exchange-traded fund) bundles many companies into one investment that trades like a stock, giving a beginner instant diversification. Own a broad ETF and one company stumbling will not sink your whole plan.',
+    },
     story: {
       title: 'The Dot-Com Bubble bursts (2000)',
       facts:
@@ -85,6 +97,7 @@ const KB: KbEntry[] = [
       fix: 'Write one sentence on why the business is worth owning. If you can’t, it’s hype.',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Exchange-Traded Funds (Investment 101)', url: 'https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-2' },
       { label: 'Goldman Sachs — The 2000 Dot-Com Bubble', url: 'https://www.goldmansachs.com/our-firm/history/moments/2000-dot-com-bubble' },
       { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
       { label: 'CFA Institute — The Herding Mentality', url: 'https://blogs.cfainstitute.org/investor/2015/08/06/the-herding-mentality-behavioral-finance-and-investor-biases/' },
@@ -92,6 +105,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Why spreading risk matters',
+    basics: {
+      title: 'Risk, reward, and your emotions',
+      facts:
+        'Every investment trades risk for potential reward: bigger possible gains usually come with bigger swings and bigger possible losses. A smart young investor only invests money they will not need soon — and notices how risk makes them FEEL. Managing that emotion is just as important as the math.',
+    },
     story: {
       title: 'Lehman Brothers and the 2008 crisis',
       facts:
@@ -109,6 +127,7 @@ const KB: KbEntry[] = [
       fix: 'For every investment, force yourself to answer: “What could go wrong here?”',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Asset Allocation (Investment 101)', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
       { label: 'Federal Reserve — Bernanke: Lessons from the Failure of Lehman Brothers', url: 'https://www.federalreserve.gov/newsevents/testimony/bernanke20100420a.htm' },
       { label: 'SEC / Investor.gov — Diversification', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/diversification' },
       { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
@@ -116,6 +135,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Markets can run on emotion',
+    basics: {
+      title: 'What makes prices move?',
+      facts:
+        'A stock price changes with supply and demand — how many people want to buy versus sell. That is driven by company news, the wider economy, and crowd emotion. In the short run, feelings can move prices as much as facts, which is why prices sometimes swing for no obvious reason.',
+    },
     story: {
       title: 'Greenspan warns of “irrational exuberance” (1996)',
       facts:
@@ -133,6 +157,7 @@ const KB: KbEntry[] = [
       fix: 'Zoom out to a 1-year and 5-year view; recent moves don’t decide the future.',
     },
     sources: [
+      { label: 'SEC — Beginners’ Guide to Investing (Investment 101)', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
       { label: 'Federal Reserve — Greenspan Speech, Dec 5 1996', url: 'https://www.federalreserve.gov/boarddocs/speeches/1996/19961205.htm' },
       { label: 'SEC / Investor.gov — Asset Allocation', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
       { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
@@ -140,6 +165,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Learning from history',
+    basics: {
+      title: 'Your time horizon',
+      facts:
+        'Your time horizon is how long until you need the money. The longer it is, the more short-term ups and downs you can ride out, because you have years to recover. Money you will need soon belongs in safer places. Matching your risk to your time horizon is a core investing skill.',
+    },
     story: {
       title: 'Ben Bernanke: the Depression scholar who fought a crisis',
       facts:
@@ -157,6 +187,7 @@ const KB: KbEntry[] = [
       fix: 'Decide in advance what would truly change your view of a business — and ignore the noise in between.',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Asset Allocation (Investment 101)', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
       { label: 'NobelPrize.org — Ben Bernanke, 2022', url: 'https://www.nobelprize.org/prizes/economic-sciences/2022/bernanke/biographical/' },
       { label: 'Britannica Money — Ben Bernanke', url: 'https://www.britannica.com/money/Ben-Bernanke' },
       { label: 'Federal Reserve — Bernanke on the Lehman Failure', url: 'https://www.federalreserve.gov/newsevents/testimony/bernanke20100420a.htm' },
@@ -164,6 +195,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Scary drops are often temporary',
+    basics: {
+      title: 'Volatility and staying calm',
+      facts:
+        'Volatility means prices swing up and down, sometimes sharply. It is completely normal, not a sign something is broken. The real skill is emotional: not letting fear during drops or excitement during rallies make your decisions for you. Calm, consistent investors usually beat panicky ones.',
+    },
     story: {
       title: 'Black Monday (1987): the biggest one-day crash',
       facts:
@@ -181,6 +217,7 @@ const KB: KbEntry[] = [
       fix: 'If nothing about the actual businesses changed, a crash alone is not a reason to sell.',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Investing Basics Glossary (Investment 101)', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
       { label: 'Federal Reserve History — Stock Market Crash of 1987', url: 'https://www.federalreservehistory.org/essays/stock-market-crash-of-1987' },
       { label: 'Britannica — Black Monday (1987)', url: 'https://www.britannica.com/topic/Black-Monday-1987' },
       { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
@@ -188,6 +225,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Boring can be brilliant',
+    basics: {
+      title: 'Fees and the expense ratio',
+      facts:
+        'Funds charge fees, and the expense ratio is the yearly cost shown as a percentage of your money. It sounds tiny, but because fees compound over many years, the gap between a cheap and an expensive fund can be huge. Lower-cost funds keep more of your money working for you.',
+    },
     story: {
       title: 'Jack Bogle invents the index fund (1976)',
       facts:
@@ -205,6 +247,7 @@ const KB: KbEntry[] = [
       fix: 'It’s okay to be boring. A low-cost, diversified index can be your steady core.',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Understanding Fees (Investment 101)', url: 'https://www.investor.gov/introduction-investing/getting-started/understanding-fees' },
       { label: 'Britannica Money — John Bogle', url: 'https://www.britannica.com/money/John-Bogle' },
       { label: 'Vanguard — Indexing since 1976', url: 'https://corporate.vanguard.com/content/corporatesite/us/en/corp/articles/50-years-50-facts-indexing-since-1976.html' },
       { label: 'SEC / Investor.gov — Understanding Fees', url: 'https://www.investor.gov/introduction-investing/getting-started/understanding-fees' },
@@ -212,6 +255,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Invest in what you understand',
+    basics: {
+      title: 'Revenue vs. profit',
+      facts:
+        'Revenue is all the money a company brings in from sales. Profit, or net income, is what is left after it pays its costs. A healthy business usually grows its revenue AND earns a profit. Knowing the difference helps you tell an exciting story apart from a genuinely strong business.',
+    },
     story: {
       title: 'Peter Lynch: invest in what you know',
       facts:
@@ -229,6 +277,7 @@ const KB: KbEntry[] = [
       fix: 'Liking the product isn’t enough: check the numbers and write down one real risk.',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Investing Basics Glossary (Investment 101)', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
       { label: 'Investopedia — Peter Lynch', url: 'https://www.investopedia.com/terms/p/peterlynch.asp' },
       { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
       { label: 'SEC / Investor.gov — Asset Allocation', url: 'https://www.investor.gov/introduction-investing/getting-started/asset-allocation' },
@@ -236,6 +285,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Price is not the same as value',
+    basics: {
+      title: 'Price vs. value',
+      facts:
+        'Price is what you pay; value is what a business is actually worth. They are not always the same, because emotion can push price above or below value. Great investors try to buy when price is below value, and they never confuse a falling price with a bad business.',
+    },
     story: {
       title: 'Benjamin Graham and “Mr. Market”',
       facts:
@@ -253,6 +307,7 @@ const KB: KbEntry[] = [
       fix: 'Ask: “If I had cash today, would I still buy this?” — not “what did I pay?”',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Investing Basics Glossary (Investment 101)', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
       { label: 'Investopedia — Benjamin Graham', url: 'https://www.investopedia.com/terms/b/bengraham.asp' },
       { label: 'CFA Institute — The Behavioral Biases of Individuals', url: 'https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/the-behavioral-biases-of-individuals' },
       { label: 'SEC / Investor.gov — Investing Basics Glossary', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary' },
@@ -260,6 +315,11 @@ const KB: KbEntry[] = [
   },
   {
     topic: 'Start small, start early',
+    basics: {
+      title: 'Compounding and starting early',
+      facts:
+        'Compounding is when your earnings start earning their own earnings, snowballing over time. The earlier and more consistently you invest, the more powerful it becomes. Time is a young investor’s single biggest advantage — even small amounts, like a few dollars a day, can grow remarkably over many years.',
+    },
     story: {
       title: 'Warren Buffett bought his first stock at age 11',
       facts:
@@ -277,6 +337,7 @@ const KB: KbEntry[] = [
       fix: 'Think in years, not days. The steady, patient investor often wins.',
     },
     sources: [
+      { label: 'SEC / Investor.gov — Compound Interest (Investment 101)', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/compound-interest' },
       { label: 'Investopedia — Warren Buffett', url: 'https://www.investopedia.com/terms/w/warrenbuffett.asp' },
       { label: 'SEC / Investor.gov — Compound Interest', url: 'https://www.investor.gov/introduction-investing/investing-basics/glossary/compound-interest' },
       { label: 'SEC — Beginners’ Guide to Asset Allocation', url: 'https://www.sec.gov/about/reports-publications/investorpubsassetallocationhtm' },
@@ -308,6 +369,9 @@ function easternDateString(): string {
 
 function fallbackMarkdown(e: KbEntry): string {
   return [
+    `### 🎓 Investment 101 — ${e.basics.title}`,
+    e.basics.facts,
+    ``,
     `### 📖 The Story — ${e.story.title}`,
     e.story.facts,
     ``,
@@ -322,16 +386,21 @@ function fallbackMarkdown(e: KbEntry): string {
 // Did the model actually return all three sections at a sensible length?
 function isComplete(md: string): boolean {
   if (!md) return false
+  const has101 = /🎓|investment 101/i.test(md)
   const hasStory = /📖|the story/i.test(md)
   const hasTech = /📊|technical insight/i.test(md)
   const hasBias = /🧠|beating a bias/i.test(md)
   const words = md.trim().split(/\s+/).length
-  return hasStory && hasTech && hasBias && words >= 230
+  return has101 && hasStory && hasTech && hasBias && words >= 340
 }
 
 function buildMessages(entry: KbEntry, angle: string): ChatMessage[] {
   const grounding = [
     `THEME: ${entry.topic}`,
+    ``,
+    `INVESTMENT 101 BASICS (authoritative — teach this clearly and simply):`,
+    `- Title: ${entry.basics.title}`,
+    `- ${entry.basics.facts}`,
     ``,
     `TRUE STORY (authoritative facts — do not change names, numbers, dates, or quotes):`,
     `- Title: ${entry.story.title}`,
@@ -348,9 +417,10 @@ function buildMessages(entry: KbEntry, angle: string): ChatMessage[] {
   ].join('\n')
 
   const system =
-    'You are a best-selling author who makes money, investing, and financial psychology genuinely exciting for teenagers — vivid, warm, and inspiring, like the best young-adult nonfiction. ' +
-    'Write today’s daily read in Markdown with EXACTLY three sections, and write 100–200 words in EACH section (about 300–500 words total), using ONLY the facts provided to you. ' +
-    'Use these exact headings: "### 📖 The Story", "### 📊 Technical Insight", and "### 🧠 Beating a Bias". ' +
+    'You are both a best-selling teen finance author and a professional investment tutor. You make money, investing, and financial psychology genuinely exciting for teenagers — vivid, warm, and inspiring like the best young-adult nonfiction — while patiently building their financial IQ (knowledge) and EQ (emotional self-control). ' +
+    'Write today’s daily read in Markdown with EXACTLY four sections, using ONLY the facts provided to you. Write about 200 words for Investment 101 and 100–200 words for each of the other three (about 500–800 words total). ' +
+    'Use these exact headings in this order: "### 🎓 Investment 101", "### 📖 The Story", "### 📊 Technical Insight", and "### 🧠 Beating a Bias". ' +
+    'In Investment 101, teach the core concept clearly like a great tutor — define it simply, give a relatable teen example, and add one short note on the EMOTIONAL side (EQ) of handling it well. ' +
     'In The Story, bring the real person or event to life and pull out the lesson for a young $5-a-day investor. ' +
     'Rules you must follow strictly: do NOT invent or change any numbers, dates, names, or quotes — use only what is given; ' +
     'do NOT promise or imply any returns; do NOT recommend or name a specific stock, ticker, or fund to buy; ' +
@@ -360,7 +430,7 @@ function buildMessages(entry: KbEntry, angle: string): ChatMessage[] {
 
   return [
     { role: 'system', content: system },
-    { role: 'user', content: `Creative angle for THIS retelling (keep it fresh and different from other days): ${angle}\n\nWrite today’s three-section read (100–200 words per section) from these facts only:\n\n${grounding}` },
+    { role: 'user', content: `Creative angle for THIS retelling (keep it fresh and different from other days): ${angle}\n\nWrite today’s four-section read (about 200 words for Investment 101, 100–200 words for the others) from these facts only:\n\n${grounding}` },
   ]
 }
 

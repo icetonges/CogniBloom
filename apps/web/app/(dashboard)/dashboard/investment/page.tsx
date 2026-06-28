@@ -209,7 +209,7 @@ export default function InvestmentPage() {
   const [tipLoading, setTipLoading] = useState(true)
 
   const loadTip = async (force = false) => {
-    const cacheKey = `cb:invest:tip:v3:${today}`
+    const cacheKey = `cb:invest:tip:v4:${today}`
     if (!force) {
       try {
         const cached = localStorage.getItem(cacheKey)
@@ -330,7 +330,7 @@ export default function InvestmentPage() {
                 <RefreshCw className="w-3 h-3" /> New wording
               </button>
             </div>
-            <MarkdownRenderer content={tip.markdown} />
+            <MarkdownRenderer content={tip.markdown} disableMath />
             {tip.sources?.length > 0 && (
               <div className="mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Sources</span>
@@ -526,7 +526,7 @@ export default function InvestmentPage() {
             {analyzeErr && <p className="mt-2 text-xs text-rose-400">⚠ {analyzeErr}</p>}
             {analysis && (
               <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                <MarkdownRenderer content={analysis} />
+                <MarkdownRenderer content={analysis} disableMath />
               </div>
             )}
           </div>

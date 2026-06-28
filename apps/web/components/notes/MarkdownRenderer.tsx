@@ -10,9 +10,13 @@ import { cn } from '@/lib/utils'
 interface MarkdownRendererProps {
   content: string
   className?: string
+  /** When true, '$' is treated as a literal character (no KaTeX math parsing). */
+  disableMath?: boolean
 }
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className, disableMath }: MarkdownRendererProps) {
+  const remarkPlugins = disableMath ? [] : [remarkMath]
+  const rehypePlugins = disableMath ? [rehypeHighlight] : [rehypeKatex, rehypeHighlight]
   return (
     <div
       className={cn(
@@ -38,8 +42,8 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
       )}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex, rehypeHighlight]}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
         components={{
           // Open links in new tab
           a: ({ ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
