@@ -461,7 +461,7 @@ export default function InvestmentPage() {
         <div className="mt-3">
           <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">My conviction (1–5)</span>
           <Chips options={['1', '2', '3', '4', '5']} value={daily.confidence} onChange={(v) => setD('confidence', v)} />
-          <p className="text-[11px] text-muted-foreground mt-1.5">After weighing both sides, how strongly do I believe in this pick? It's totally okay to be a 2 or 3 — honesty beats overconfidence.</p>
+          <p className="text-[11px] text-muted-foreground mt-1.5">After weighing both sides, how strongly do I believe in this pick? It&apos;s totally okay to be a 2 or 3 — honesty beats overconfidence.</p>
         </div>
       </SectionCard>
 
