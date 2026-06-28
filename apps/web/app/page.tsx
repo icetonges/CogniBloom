@@ -72,40 +72,41 @@ const FALLBACK_POOL: Record<Lang, DailyQuoteData[]> = {
     { language: 'zh', original: '活到老，学到老。', english: 'Live and learn — learning has no end.', source: '中国谚语 · Chinese Proverb' },
   ],
   es: [
-    { language: 'es', original: 'Dime y lo olvido, enséñame y lo recuerdo, involúcrame y lo aprendo.', english: 'Tell me and I forget, teach me and I remember, involve me and I learn.', source: 'Benjamin Franklin' },
-    { language: 'es', original: 'El conocimiento es la única riqueza que crece al compartirse.', english: 'Knowledge is the only wealth that grows when shared.', source: 'Proverbio Español' },
-    { language: 'es', original: 'Quien tiene imaginación, con qué facilidad levanta palacios en el aire.', english: 'He who has imagination finds it easy to build palaces in the air.', source: 'Gustavo Adolfo Bécquer' },
-    { language: 'es', original: 'No hay camino para la sabiduría; la sabiduría es el camino.', english: 'There is no path to wisdom; wisdom is the path.', source: 'Proverbio' },
-    { language: 'es', original: 'Aprender es descubrir que algo es posible.', english: 'Learning is discovering that something is possible.', source: 'Fritz Perls' },
+    { language: 'es', original: 'El que lee mucho y anda mucho, ve mucho y sabe mucho.', english: 'He who reads much and walks much, sees much and knows much.', source: 'Miguel de Cervantes' },
+    { language: 'es', original: 'Saber leer es saber andar; saber escribir es saber ascender.', english: 'To know how to read is to know how to walk; to know how to write is to know how to rise.', source: 'José Martí' },
+    { language: 'es', original: 'Caminante, no hay camino, se hace camino al andar.', english: 'Traveler, there is no path; the path is made by walking.', source: 'Antonio Machado' },
+    { language: 'es', original: 'El saber no ocupa lugar.', english: 'Knowledge takes up no space.', source: 'Proverbio Español' },
+    { language: 'es', original: 'No hay mejor maestro que el tiempo.', english: 'There is no better teacher than time.', source: 'Proverbio Español' },
   ],
   fr: [
-    { language: 'fr', original: 'La connaissance s\'acquiert par l\'expérience, tout le reste n\'est que de l\'information.', english: 'Knowledge is acquired through experience; everything else is just information.', source: 'Albert Einstein' },
-    { language: 'fr', original: 'L\'éducation est l\'arme la plus puissante pour changer le monde.', english: 'Education is the most powerful weapon you can use to change the world.', source: 'Nelson Mandela' },
-    { language: 'fr', original: 'Dis-moi et j\'oublie, enseigne-moi et je me souviens, implique-moi et j\'apprends.', english: 'Tell me and I forget, teach me and I remember, involve me and I learn.', source: 'Benjamin Franklin' },
-    { language: 'fr', original: 'Le génie, c\'est 1% d\'inspiration et 99% de transpiration.', english: 'Genius is 1% inspiration and 99% perspiration.', source: 'Thomas Edison' },
-    { language: 'fr', original: 'Apprendre sans réfléchir est vain, réfléchir sans apprendre est dangereux.', english: 'Learning without reflecting is vain; reflecting without learning is dangerous.', source: 'Confucius' },
+    { language: 'fr', original: 'Celui qui ouvre une porte d\'école, ferme une prison.', english: 'He who opens a school door closes a prison.', source: 'Victor Hugo' },
+    { language: 'fr', original: 'Il vaut mieux une tête bien faite qu\'une tête bien pleine.', english: 'Better a well-made head than a well-filled one.', source: 'Michel de Montaigne' },
+    { language: 'fr', original: 'Je pense, donc je suis.', english: 'I think, therefore I am.', source: 'René Descartes' },
+    { language: 'fr', original: 'Rien dans la vie n\'est à craindre, tout est à comprendre.', english: 'Nothing in life is to be feared, it is only to be understood.', source: 'Marie Curie' },
+    { language: 'fr', original: 'C\'est en forgeant qu\'on devient forgeron.', english: 'It is by forging that one becomes a blacksmith — practice makes the master.', source: 'Proverbe Français' },
   ],
   de: [
-    { language: 'de', original: 'Wer aufhört zu lernen, ist alt. Wer immer lernt, bleibt jung.', english: 'He who stops learning is old. He who keeps learning stays young.', source: 'Henry Ford' },
-    { language: 'de', original: 'Bildung ist nicht das Befüllen von Fässern, sondern das Entzünden von Flammen.', english: 'Education is not filling buckets, but lighting fires.', source: 'W.B. Yeats' },
-    { language: 'de', original: 'Wissen ist Macht.', english: 'Knowledge is power.', source: 'Francis Bacon' },
-    { language: 'de', original: 'Der Kluge lernt aus allem und von jedem, der Normale aus seinen Erfahrungen.', english: 'The wise learn from everything and everyone; the ordinary only from their own experience.', source: 'Sokrates · Socrates' },
-    { language: 'de', original: 'Lernen ist wie Rudern gegen den Strom: Hört man damit auf, treibt man zurück.', english: 'Learning is like rowing against the current: if you stop, you drift back.', source: 'Laotse · Lao Tzu' },
+    { language: 'de', original: 'Ich habe keine besondere Begabung, sondern bin nur leidenschaftlich neugierig.', english: 'I have no special talent. I am only passionately curious.', source: 'Albert Einstein' },
+    { language: 'de', original: 'Es ist nicht genug zu wissen, man muss auch anwenden.', english: 'Knowing is not enough; we must also apply.', source: 'Johann Wolfgang von Goethe' },
+    { language: 'de', original: 'Man sieht nur, was man weiß.', english: 'One sees only what one already knows.', source: 'Johann Wolfgang von Goethe' },
+    { language: 'de', original: 'Damit das Mögliche entsteht, muss immer wieder das Unmögliche versucht werden.', english: 'For the possible to arise, the impossible must be attempted again and again.', source: 'Hermann Hesse' },
+    { language: 'de', original: 'Übung macht den Meister.', english: 'Practice makes the master.', source: 'Deutsches Sprichwort' },
   ],
 }
 
-function getDayOfYear(): number {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  const start = new Date(d.getFullYear(), 0, 0)
-  return Math.floor((d.getTime() - start.getTime()) / 86_400_000)
+// Stable pseudo-random seed from the date string — same all day, varies day to day.
+function hashStr(str: string): number {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 31) + str.charCodeAt(i)) | 0
+  return Math.abs(h)
 }
 
 async function getOrCreateDailyQuote(): Promise<DailyQuoteData> {
   const nyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-  const day = getDayOfYear()
-  const lang = LANG_CYCLE[day % LANG_CYCLE.length]!
+  const seed = hashStr(nyDate)
+  const lang = LANG_CYCLE[seed % LANG_CYCLE.length]!
   const fallbacks = FALLBACK_POOL[lang]!
-  const fallback = fallbacks[day % fallbacks.length]!
+  const fallback = fallbacks[Math.floor(seed / LANG_CYCLE.length) % fallbacks.length]!
 
   try {
     // Fast path: today's quote already in DB
@@ -121,7 +122,7 @@ Return ONLY valid JSON, no other text:
   "original": "${isEn ? 'the quote in English' : `the quote in ${LANG_LABELS[lang]}`}",${isEn ? '' : '\n  "english": "accurate English translation",'}
   "source": "Real Author Name · Brief attribution (e.g., Confucius, Albert Einstein, Latin Proverb)"
 }
-Rules: attributed to a real person or well-known proverb; 1–2 sentences; inspiring for a curious teenager; no invented attributions.`
+Rules: 1–2 sentences; inspiring for a curious teenager; no invented attributions. ${isEn ? 'Attributed to a real English-speaking author or a traditional English proverb.' : `CRITICAL: the quote must be IN ${LANG_LABELS[lang]} and authored by a real figure who actually wrote or spoke ${LANG_LABELS[lang]} (e.g., a real ${LANG_LABELS[lang]} author or a traditional ${LANG_LABELS[lang]} proverb). NEVER translate a non-${LANG_LABELS[lang]} author's words into ${LANG_LABELS[lang]} — for example, never attribute a ${LANG_LABELS[lang]} sentence to Lao Tzu, Confucius, Gandhi, or any figure who did not write in ${LANG_LABELS[lang]}.`}`
 
     const result = await Promise.race([
       chatWithFallback({ messages: [{ role: 'user', content: prompt }], temperature: 0.85, maxTokens: 180 })
@@ -274,7 +275,7 @@ export default async function LandingPage() {
   const title = getLevelTitle(level)
 
   return (
-    <main className="min-h-screen font-display overflow-x-hidden" style={{ background: '#060810', color: '#f1f5f9', overflowX: 'hidden' }}>
+    <main className="min-h-screen flex flex-col font-display overflow-x-hidden" style={{ background: '#060810', color: '#f1f5f9', overflowX: 'hidden' }}>
 
       {/* ── Background layers ── */}
       <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
@@ -306,8 +307,8 @@ export default async function LandingPage() {
       <div className="relative z-10 block sm:hidden px-4 pb-3 overflow-hidden"><NavQuote quote={dailyQuote} /></div>
 
       {/* ── Hero — compact ── */}
-      <section className="relative z-10 pb-4 sm:pb-6">
-        <div className="w-full px-4 sm:px-12 xl:px-20">
+      <section className="relative z-10 flex-1 flex flex-col justify-center pb-4 sm:pb-6">
+        <div className="w-full max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-8 lg:px-12">
           <div className="grid lg:grid-cols-2 gap-8 items-start">
 
             {/* ── Left: text + orb ── */}
