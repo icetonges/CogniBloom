@@ -13,7 +13,14 @@ function sanitizeSlugPart(str: string): string {
   return str.trim().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').slice(0, 40)
 }
 function escapeHtml(v: string): string {
-  return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+  // Protect literal price mentions ($5, $10...) from being misread as a KaTeX
+  // math delimiter by the published page's auto-render pass — mirrors the
+  // same guard in renderProseBody()'s inlineMd(). Must run before the '&'
+  // escape below (and be excluded from it) so '&#36;' isn't double-escaped.
+  return v
+    .replace(/\$(?=\d)/g, '&#36;')
+    .replace(/&(?!amp;|lt;|gt;|quot;|#39;|#36;)/g, '&amp;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 function sanitizeRichHtml(html: string): string {
   return html
@@ -22,8 +29,31 @@ function sanitizeRichHtml(html: string): string {
     .replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, '')
     .replace(/\s(?:href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\1/gi, '')
 }
-function htmlToText(html: string): string {
+// The RichEditor's math tool (lib/tiptap/math-extension.ts) stores formulas as
+// empty marker elements — <div data-math-block data-latex="..."></div> or
+// <span data-math-inline data-latex="..."></span> — with the actual LaTeX only
+// living in the data-latex attribute, not as visible text. Generic tag
+// stripping below would otherwise delete the whole tag (attribute and all),
+// silently erasing every formula the student entered before it ever reaches
+// the AI writer or the section parser. Convert these into inline "$latex$" /
+// display "$$latex$$" text FIRST so the formula survives as plain text.
+function extractMathFromHtml(html: string): string {
+  // The captured attribute value may already contain escaped entities
+  // (&amp; &quot; &#39;) from how the browser serialized it — leave those as-is
+  // and let the existing entity-unescape pass later in htmlToText/htmlToTextLines
+  // decode them uniformly. But browsers do NOT escape raw '<' / '>' inside
+  // attribute values, so re-encode those here — otherwise the generic
+  // "<[^>]+>" tag-stripper that runs right after this would mistake an
+  // inequality like "x < y" for markup and eat everything up to the next '>'.
+  const guardAngles = (v: string): string => v.replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return html
+    .replace(/<div[^>]*data-math-block[^>]*data-latex="([\s\S]*?)"[^>]*>\s*<\/div>/gi,
+      (_m, latex: string) => `\n$$${guardAngles(latex)}$$\n`)
+    .replace(/<span[^>]*data-math-inline[^>]*data-latex="([\s\S]*?)"[^>]*>\s*<\/span>/gi,
+      (_m, latex: string) => `$${guardAngles(latex)}$`)
+}
+function htmlToText(html: string): string {
+  return extractMathFromHtml(html)
     .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<\/li>/gi, '\n')
     .replace(/<\/h[1-6]>/gi, '\n').replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
@@ -31,7 +61,7 @@ function htmlToText(html: string): string {
     .replace(/\s+/g, ' ').trim()
 }
 function htmlToTextLines(html: string): string {
-  return html
+  return extractMathFromHtml(html)
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<\/li>/gi, '\n')
@@ -288,6 +318,8 @@ Your goals:
 - If the note asks a question, answer it and expand it into a learning opportunity.
 - Train the student to connect dots, reason logically, and reflect on growth.
 - Build confidence, curiosity, discipline, and a growth mindset.
+
+Math notation: the note's raw text may already contain formulas written as LaTeX (inline as $...$, display as $$...$$ — these came from the student's formula editor, so treat them as authoritative and precise, not typos). Whenever you write, restate, or introduce a formula, equation, or symbolic expression anywhere in your output (subject sections, big ideas, mistakes, key terms, quiz, everywhere), ALWAYS express it as real LaTeX wrapped in $...$ for inline math or $$...$$ for a standalone display equation — never as a plain-text approximation like "x^2 + y^2 = z^2" or spelled-out words only. This lets the published page typeset it correctly. Keep prose around the formula in plain English; only the formula itself needs LaTeX.
 
 Subject adaptation:
 - Math / competition math: explain the core concept, pattern, or strategy and the logic behind the solution, not just the answer. Flag common traps (rushing, missed conditions, weak number sense, unchecked cases). Encourage drawing diagrams, testing small numbers, finding patterns, organizing cases.
@@ -703,7 +735,12 @@ function buildPublishedPage(note: {
   <title>${safeTitle} — Daniel's Learning Diary</title>
   <meta property="og:title" content="${safeTitle}">
   <meta property="og:type" content="article">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.css">
   <style>
+    /* KaTeX formulas should inherit the article's text color, not force black */
+    .katex{color:inherit;font-size:1.05em;}
+    .katex-display{margin:18px 0;overflow-x:auto;overflow-y:hidden;padding:2px 0;}
+
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 
     /* ── Theme transition ───────────────────────── */
@@ -1127,6 +1164,8 @@ function buildPublishedPage(note: {
     </div>
   </div>
 
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/contrib/auto-render.min.js"></script>
 <script>
 (function(){
   // ── Social share ────────────────────────────────

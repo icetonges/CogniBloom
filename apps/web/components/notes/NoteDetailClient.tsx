@@ -113,6 +113,9 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
         ALLOWED_ATTR: [
           'href', 'src', 'alt', 'title', 'class', 'id',
           'target', 'rel', 'width', 'height', 'colspan', 'rowspan',
+          // Math formula nodes (RichEditor's KaTeX extension) — must survive
+          // sanitization so the formula can be re-rendered in view mode below.
+          'data-math-block', 'data-math-inline', 'data-latex',
         ],
         ALLOW_DATA_ATTR: false,
         FORCE_BODY: true,
@@ -120,6 +123,37 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
       setSafeHtml(clean)
     }).catch(() => setSafeHtml(note.content))
   }, [note?.content])
+
+  // Render KaTeX formulas into the read-only view. The math nodes are stored
+  // as empty <div data-math-block data-latex="..."> / <span data-math-inline
+  // data-latex="..."> markers (see lib/tiptap/math-extension.ts) — outside the
+  // live Tiptap editor nothing renders them, so do it manually after the
+  // sanitized HTML is injected.
+  const viewContentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (mode !== 'view') return
+    const container = viewContentRef.current
+    if (!container) return
+    let cancelled = false
+    import('katex').then(({ default: katex }) => {
+      if (cancelled) return
+      container.querySelectorAll<HTMLElement>('[data-math-block]').forEach((el) => {
+        const latex = el.getAttribute('data-latex') || ''
+        el.innerHTML = ''
+        try {
+          katex.render(latex || '\\text{}', el, { displayMode: true, throwOnError: false, errorColor: '#f87171' })
+        } catch { el.textContent = latex }
+      })
+      container.querySelectorAll<HTMLElement>('[data-math-inline]').forEach((el) => {
+        const latex = el.getAttribute('data-latex') || ''
+        el.innerHTML = ''
+        try {
+          katex.render(latex || '\\text{}', el, { displayMode: false, throwOnError: false, errorColor: '#f87171' })
+        } catch { el.textContent = latex }
+      })
+    }).catch(() => { /* KaTeX failed to load — leave nodes blank rather than crash */ })
+    return () => { cancelled = true }
+  }, [mode, safeHtml, note?.content])
 
   const handleSave = async () => {
     if (!note) return
@@ -461,6 +495,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
           <div className="px-8 py-6 flex-1">
             {mode === 'view' ? (
               <div
+                ref={viewContentRef}
                 className="prose prose-sm prose-invert max-w-none
                   prose-headings:font-bold prose-headings:tracking-tight
                   prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
