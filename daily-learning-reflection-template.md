@@ -52,15 +52,15 @@
 
 ---
 
-## 5. Problems or Questions I Got Wrong
+## 5. Questions I Got Wrong or Mistaken Made
 
-> Write the question, your answer, and the correct answer.
+> Don't just log the answer — use this as your chance to actually lock the knowledge in. For each one, slow down and walk through the whole problem process in detail, then note exactly which step broke down. Use this 4-step framework: **1) Recognize the key ask** (what is the question really asking me to find or do?), **2) Apply the knowledge point** (which rule, formula, or concept is supposed to apply here?), **3) Know the solve steps** (what is the correct step-by-step path from the question to the answer?), **4) Find the gap** (which exact step did I skip, misapply, or misunderstand, and why?).
 
-| Subject | Question / Problem | My answer | Correct answer |
-|---------|--------------------|-----------|----------------|
-|         |                    |           |                |
-|         |                    |           |                |
-|         |                    |           |                |
+| Subject | Question / Problem | My answer | Correct answer | Which step was the gap? |
+|---------|--------------------|-----------|----------------|--------------------------|
+|         |                    |           |                |                          |
+|         |                    |           |                |                          |
+|         |                    |           |                |                          |
 
 ---
 

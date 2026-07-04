@@ -131,6 +131,7 @@ const TEMPLATE_NOISE: RegExp[] = [
   /^date & check.in/i,
   /^progress summary/i,
   /^format:\s*(subject|q:)/i,
+  /^don.t just log the answer/i,
 ]
 
 function isNoiseLine(line: string): boolean {
@@ -158,7 +159,7 @@ function parseReflectionSections(html: string): DanielInputSections {
   const MATCHERS: [RegExp, keyof DanielInputSections][] = [
     [/(?:\d+\.\s+)?what i learned today/i,              'whatILearned'],
     [/(?:\d+\.\s+)?important knowledge points/i,         'knowledgePoints'],
-    [/(?:\d+\.\s+)?problems or questions i got wrong/i,  'problemsWrong'],
+    [/(?:\d+\.\s+)?(?:problems or questions i got wrong|questions i got wrong or mistaken made)/i, 'problemsWrong'],
     [/(?:\d+\.\s+)?why i got them wrong/i,               'whyWrong'],
     [/(?:\d+\.\s+)?concepts i still don.t fully understand/i, 'stillConfused'],
     [/(?:\d+\.\s+)?improvement notes/i,                  'improvementNotes'],
@@ -221,12 +222,12 @@ interface BigIdea {
 }
 
 interface Mistake {
-  whatHappened: string   // what was wrong / not understood
-  keyIdea: string        // the correct knowledge point / concept
-  whyItMatters: string   // why this concept matters
-  howItWorks: string     // the logic and reasoning, step by step
-  example: string        // a concrete worked example
-  howToRemember: string  // how to lock it in / avoid it next time
+  problemDetail: string   // dedicated restatement of the ORIGINAL problem: subject, the exact question/problem, the student's answer, and the correct answer
+  recognizeAsk: string    // Step 1 — Recognize the Key Ask: what the question is actually asking, in plain language
+  applyKnowledge: string  // Step 2 — Apply the Knowledge Point: the exact rule/formula/concept that governs this problem, and why it applies
+  solveSteps: string      // Step 3 — Know the Solve Steps: the correct step-by-step path from the question to the right answer
+  findGap: string         // Step 4 — Find the Gap: exactly which step the student skipped, misapplied, or misunderstood, and why
+  howToRemember: string   // how to lock it in and avoid the same slip next time
 }
 
 interface WriterOutput {
@@ -282,7 +283,7 @@ The note may be messy: typos, unfinished sentences, repeated ideas, copied text,
 Your goals:
 - Turn the note into a clear, engaging, publish-ready Learning Chronicle.
 - Explain the knowledge BEHIND the note, not just what happened: why it matters, how it works, where it connects.
-- Treat every wrong answer, error, or "I still don't understand this" as the MOST IMPORTANT part of the note and the single biggest opportunity to teach. Never gloss over it. Teach the underlying knowledge point in full: name the concept, explain what it is, why it matters, how it works (the logic and reasoning, step by step), and give a concrete worked example. Then show how to remember it and avoid the slip next time. Be encouraging and specific, never shaming.
+- Treat every wrong answer, error, or "I still don't understand this" as the MOST IMPORTANT part of the note and the single biggest opportunity to teach. Never gloss over it. For each one, first restate the ORIGINAL problem in full and in detail (subject, the exact question/problem, the student's answer, and the correct answer) so the reader can see exactly what was faced — do not paraphrase it away. Then walk through it using this 4-step framework, in order: (1) Recognize the Key Ask — what the question is actually asking, in plain language; (2) Apply the Knowledge Point — name the exact rule/formula/concept that governs this problem and explain why it applies; (3) Know the Solve Steps — lay out the correct step-by-step path from the question to the right answer; (4) Find the Gap — pinpoint exactly which step the student skipped, misapplied, or misunderstood, and why. Then show how to remember it and avoid the same slip next time. Be encouraging and specific, never shaming.
 - If the note shows confusion or a half-formed idea, rebuild the concept from the ground up with age-appropriate examples, analogies, and clear reasoning until it would actually click.
 - If the note asks a question, answer it and expand it into a learning opportunity.
 - Train the student to connect dots, reason logically, and reflect on growth.
@@ -388,7 +389,7 @@ OUTPUT — return ONLY this JSON object. No markdown fences, no preamble, no tra
   "subjectSections": [{ "emoji": "single emoji for the subject", "subjectTitle": "Subject — a vivid description of what happened", "body": "2-4 prose paragraphs separated by \\n\\n; no bullet points; explain WHY the idea works, gently correct any misunderstanding, treat open questions as cliffhangers; use <strong> for exactly one key insight and <em> for a term on first use" }],
   "bigIdeas": [{ "idea": "the concept name", "whatItMeans": "one clear sentence", "whyItMatters": "one sentence", "howItWorks": "one or two sentences", "example": "one concrete example", "analogy": "a think-of-it-like analogy" }],
   "learningTips": ["3-6 SPECIFIC tips tied to the actual topic; never generic advice like study harder or review more"],
-  "mistakes": [{ "whatHappened": "what was wrong or not understood (include this for EVERY error or confusion in the note)", "keyIdea": "the correct knowledge point / concept, named clearly", "whyItMatters": "why this concept matters", "howItWorks": "the logic and reasoning, step by step", "example": "a concrete worked example that makes it click", "howToRemember": "how to lock it in and avoid the slip next time" }],
+  "mistakes": [{ "problemDetail": "restate the ORIGINAL problem in full detail — subject, the exact question/problem, the student's answer, and the correct answer (include one of these for EVERY error or confusion in the note)", "recognizeAsk": "Step 1 - Recognize the Key Ask: what the question is actually asking, in plain language", "applyKnowledge": "Step 2 - Apply the Knowledge Point: name the exact rule/formula/concept that governs this problem and why it applies", "solveSteps": "Step 3 - Know the Solve Steps: the correct step-by-step path from the question to the right answer", "findGap": "Step 4 - Find the Gap: exactly which step the student skipped, misapplied, or misunderstood, and why", "howToRemember": "how to lock it in and avoid the slip next time" }],
   "connections": ["2-5 connect-the-dots links from today's learning to other subjects or real life"],
   "selfQuiz": [{ "question": "3-5 reasoning questions that train logic and explanation, not memorization", "answer": "a short model answer, hint, or thinking path" }],
   "tryThisNext": { "practice": "one small, doable practice action for tomorrow", "reflection": "one reflection question", "habit": "one habit to build", "challenge": "one optional stretch challenge" },
@@ -622,10 +623,15 @@ function buildPublishedPage(note: {
       <span style="font-size:14px;line-height:1.65;color:var(--text2);">${escapeHtml(t)}</span>
     </div>`).join('')
 
-  // ── Mistakes / Aha ──
+  // ── Mistakes — dedicated "Original Problem" block + 4-Step Fix framework ──
   const mistakesHtml = (writer.mistakes ?? []).map((m) => `
-    <div style="margin-bottom:14px;padding:13px 15px;border:1px solid rgba(245,158,11,0.28);border-radius:12px;background:rgba(245,158,11,0.06);">
-      ${biRow('What went wrong', m.whatHappened)}${biRow('The key idea', m.keyIdea)}${biRow('Why it matters', m.whyItMatters)}${biRow('How it works', m.howItWorks)}${biRow('Worked example', m.example)}${biRow('Remember it by', m.howToRemember)}
+    <div style="margin-bottom:16px;padding:14px 16px;border:1px solid rgba(245,158,11,0.28);border-radius:12px;background:rgba(245,158,11,0.06);">
+      ${m.problemDetail && m.problemDetail.trim() ? `<div style="margin-bottom:12px;padding:10px 12px;border-radius:9px;border:1px solid rgba(245,158,11,0.35);background:rgba(245,158,11,0.10);">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#fbbf24;margin-bottom:4px;">📋 The Original Problem</div>
+        <div style="font-size:13.5px;line-height:1.6;color:var(--text2);">${escapeHtml(m.problemDetail)}</div>
+      </div>` : ''}
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px;">🧭 The 4-Step Fix</div>
+      ${biRow('1 · Recognize the ask', m.recognizeAsk)}${biRow('2 · Apply the knowledge', m.applyKnowledge)}${biRow('3 · Know the steps', m.solveSteps)}${biRow('4 · Find the gap', m.findGap)}${biRow('Remember it by', m.howToRemember)}
     </div>`).join('')
 
   // ── Connect the Dots ──
@@ -1059,8 +1065,8 @@ function buildPublishedPage(note: {
       <!-- Topic-Based Learning Tips -->
       ${learningTipsHtml ? `<div class="terms-card"><div class="card-label">🎯 Topic-Based Learning Tips</div>${learningTipsHtml}</div>` : ''}
 
-      <!-- Mistakes, Confusions & Aha Moments -->
-      ${mistakesHtml ? `<div class="ai-box"><div class="card-label" style="margin-bottom:12px;">🔁 Mistakes, Confusions &amp; Aha Moments</div>${mistakesHtml}</div>` : ''}
+      <!-- Mistakes, Confusions & the 4-Step Fix -->
+      ${mistakesHtml ? `<div class="ai-box"><div class="card-label" style="margin-bottom:12px;">🔁 Where It Went Wrong — And the 4-Step Fix</div>${mistakesHtml}</div>` : ''}
 
       <!-- Connect the Dots -->
       ${connectionsHtml ? `<div class="terms-card"><div class="card-label">🔗 Connect the Dots</div>${connectionsHtml}</div>` : ''}

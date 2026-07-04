@@ -84,8 +84,8 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
   <li></li>
 </ul>
 
-<h2>5. Problems or Questions I Got Wrong</h2>
-<blockquote>Format: Subject — Question | My answer | Correct answer. <em>e.g. "Math — AMC 8 #7: shaded area? | My answer: 12 | Correct: 18"</em></blockquote>
+<h2>5. Questions I Got Wrong or Mistaken Made</h2>
+<blockquote>Don't just log the answer — use this as your chance to actually lock the knowledge in. For each one, slow down and walk through the whole problem process in detail, then note exactly which step broke down. Use this 4-step framework: <strong>1) Recognize the key ask</strong> — what is the question really asking me to find or do? <strong>2) Apply the knowledge point</strong> — which rule, formula, or concept is supposed to apply here? <strong>3) Know the solve steps</strong> — what is the correct step-by-step path from the question to the answer? <strong>4) Find the gap</strong> — which exact step did I skip, misapply, or misunderstand, and why? <em>e.g. "Math — AMC 8 #7: shaded area? | My answer: 12 | Correct: 18 | 1) Ask: find the shaded region's area. 2) Knowledge: shaded area = whole shape − unshaded parts. 3) Steps: find whole area → find each unshaded piece → subtract. 4) Gap: I found the whole area and one unshaded piece but forgot the inner circle, so I subtracted too little."</em></blockquote>
 <ul>
   <li></li>
   <li></li>
