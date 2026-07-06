@@ -43,13 +43,19 @@ const fmtHour = (h: number) => { const ampm = h < 12 ? 'AM' : 'PM'; const hr = h
 const ROUTINE_EMOJI: Record<string, string> = {
   'Duolingo': '🦉',
   'Workout — set 1': '💪', 'Workout — set 2': '💪', 'Workout — set 3': '💪', 'Workout': '💪',
-  'Study Session 1': '📚', 'Study Session 2': '📚',
+  'Study Session 1': '📚', 'Study Session 2': '📚', 'Study Session 3': '📚',
   '$5 daily investment': '💵',
   'Daily Reflection': '🧘', 'Reflection / mindfulness': '🧘',
   'Daily mind map + Close Out': '🧠', 'Daily mind map': '🧠',
+  'Music': '🎵',
+  'Catch up': '⏳',
 }
 const routineEmoji = (title: string) => ROUTINE_EMOJI[title] ?? '✨'
 const isRoutine = (e: Entry) => e.tags.includes('routine')
+// Reserved tag marking a habit as "nice to have" rather than a hard commitment —
+// rendered with a lighter, dashed style and an "optional" badge.
+const OPTIONAL_TAG = 'optional'
+const isOptional = (e: Entry) => e.tags.includes(OPTIONAL_TAG)
 
 // ── checklist encoding inside the free-text details field ──
 const CHECK_RE = /^- \[( |x|X)\] (.*)$/
@@ -75,6 +81,7 @@ const QUICK_TEMPLATES: Template[] = [
   { label: '💪 Workout',    title: 'Workout — set 1',            time: '07:30', notes: '5 min',   tags: ['fitness'],    routine: true  },
   { label: '🦉 Duolingo',  title: 'Duolingo',                   time: '07:40', notes: '5 min',   tags: ['language'],   routine: true  },
   { label: '📚 Study',     title: 'Study Session 1',             time: '07:45', notes: '40 min',  tags: ['study'],      routine: true  },
+  { label: '🎵 Music',     title: 'Music',                       time: '16:07', notes: '7 min',   tags: ['music'],      routine: true  },
   { label: '💵 $5 invest', title: '$5 daily investment',         time: '18:00', notes: '15 min',  tags: ['investment'], routine: true  },
   { label: '🧘 Reflect',   title: 'Daily Reflection',            time: '20:00', notes: '',        tags: ['mind'],       routine: true  },
   { label: '🧠 Mind map',  title: 'Daily mind map + Close Out',  time: '20:30', notes: '',        tags: ['mind'],       routine: true  },
@@ -566,6 +573,8 @@ function DayView({
   }
   const toggle = (e: Entry) => patchEntry(e.id, { status: e.status === 'done' ? 'pending' : 'done' })
   const commitTitle = (e: Entry, t: string) => (t.trim() ? patchEntry(e.id, { title: t.trim() }) : removeEntry(e.id))
+  const toggleOptional = (e: Entry) =>
+    patchEntry(e.id, { tags: isOptional(e) ? e.tags.filter((t) => t !== OPTIONAL_TAG) : [...e.tags, OPTIONAL_TAG] })
 
   // ── meta save (debounced) ──
   const setMetaField = (patch: Partial<DayMeta>) => {
@@ -670,8 +679,10 @@ function DayView({
         <button onClick={onRestoreRoutine} className="text-xs text-primary hover:underline inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Load defaults</button>
       </div>
       <Card className="p-3 space-y-2">
-        {habitList.map((e, i) => (
-          <div key={e.id} className="flex items-start gap-2 group rounded-lg hover:bg-muted/30 px-1 -mx-1 py-0.5">
+        {habitList.map((e, i) => {
+          const optional = isOptional(e)
+          return (
+          <div key={e.id} className={cn('flex items-start gap-2 group rounded-lg hover:bg-muted/30 px-1 -mx-1 py-0.5', optional && 'border border-dashed border-muted-foreground/30 opacity-75 hover:opacity-100')}>
             {/* reorder */}
             <div className="flex flex-col shrink-0 -my-0.5">
               <button onClick={() => reorderHabit(e, -1)} disabled={i === 0} title="Move up" className="text-muted-foreground/40 hover:text-primary disabled:opacity-20 leading-none"><ChevronUp className="w-3.5 h-3.5" /></button>
@@ -682,7 +693,10 @@ function DayView({
             </button>
             <span className="text-base shrink-0 mt-0.5">{routineEmoji(e.title)}</span>
             <div className="flex-1 min-w-0">
-              <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('w-full bg-transparent text-sm font-medium focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
+              <div className="flex items-center gap-1.5">
+                <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
+                {optional && <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">Optional</span>}
+              </div>
               <EditLine value={e.details ?? ''} onCommit={(t) => patchEntry(e.id, { details: t })} placeholder="duration / note — e.g. 15 min lesson" className="w-full bg-transparent text-[11px] text-muted-foreground focus:outline-none placeholder:text-muted-foreground/40" />
             </div>
             <input
@@ -692,9 +706,16 @@ function DayView({
               title="Time"
               className="text-[11px] text-muted-foreground bg-transparent border border-border/60 rounded px-1 py-0.5 shrink-0 mt-0.5 w-[5.5rem] focus:outline-none focus:ring-1 focus:ring-primary/40"
             />
+            <button
+              onClick={() => toggleOptional(e)}
+              title={optional ? 'Marked optional — click to make required' : 'Mark as optional'}
+              className={cn('shrink-0 mt-0.5 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border transition-colors',
+                optional ? 'border-primary/50 text-primary bg-primary/10' : 'border-muted-foreground/30 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-primary hover:border-primary/50')}
+            >?</button>
             <button onClick={() => removeEntry(e.id)} title="Remove" className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><X className="w-3.5 h-3.5" /></button>
           </div>
-        ))}
+          )
+        })}
         <div className="flex items-center gap-2 pt-2 border-t border-border/60">
           <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
           <AddLine onAdd={(t) => createEntry({ title: t, tags: ['routine'] })} placeholder="Add a habit…" className={rowInput} />

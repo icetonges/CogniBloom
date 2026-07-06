@@ -6,18 +6,23 @@ export const dynamic = 'force-dynamic'
 
 // Default daily routine — these items are placed on every day automatically.
 // Marked with the reserved tag 'routine' so the UI can render them distinctly
-// and so seeding stays idempotent.
+// and so seeding stays idempotent. Items flagged `optional: true` additionally
+// get the reserved 'optional' tag, which the UI renders in a lighter, dashed
+// style and excludes from being treated as a hard commitment.
 const DEFAULT_ROUTINE = [
-  { title: 'Workout — set 1',             time: '07:30', details: '5 min',                        tag: 'fitness'    },
-  { title: 'Duolingo',                    time: '07:40', details: '5 min',                        tag: 'language'   },
-  { title: 'Study Session 1',             time: '07:45', details: '40 min',                       tag: 'study'      },
-  { title: 'Workout — set 2',             time: '16:00', details: '5 min',                        tag: 'fitness'    },
-  { title: 'Study Session 2',             time: '17:00', details: '40 min',                       tag: 'study'      },
-  { title: 'Workout — set 3',             time: '17:45', details: '5 min',                        tag: 'fitness'    },
-  { title: '$5 daily investment',         time: '18:00', details: '15 min',                       tag: 'investment' },
-  { title: 'Daily Reflection',            time: '20:00', details: '3 wins · 1 lesson · 1 goal',  tag: 'mind'       },
-  { title: 'Daily mind map + Close Out',  time: '20:30', details: '1 topic — branch it out',     tag: 'mind'       },
-]
+  { title: 'Workout — set 1',             time: '07:30', details: '5 min',                       tag: 'fitness'    },
+  { title: 'Duolingo',                    time: '07:40', details: '5 min',                       tag: 'language'   },
+  { title: 'Study Session 1',             time: '07:45', details: '40 min',                      tag: 'study'      },
+  { title: 'Workout — set 2',             time: '16:00', details: '5 min',                       tag: 'fitness'    },
+  { title: 'Music',                       time: '16:07', details: '7 min',                       tag: 'music'      },
+  { title: 'Study Session 2',             time: '17:00', details: '40 min',                      tag: 'study'      },
+  { title: 'Workout — set 3',             time: '17:45', details: '5 min',                       tag: 'fitness'    },
+  { title: '$5 daily investment',         time: '18:00', details: '15 min',                      tag: 'investment' },
+  { title: 'Study Session 3',             time: '19:00', details: '30 min',                      tag: 'study',     optional: true },
+  { title: 'Daily Reflection',            time: '20:00', details: '3 wins · 1 lesson · 1 goal', tag: 'mind'       },
+  { title: 'Daily mind map + Close Out',  time: '20:30', details: '1 topic — branch it out',    tag: 'mind'       },
+  { title: 'Catch up',                    time: '21:00', details: 'Loose ends from today',      tag: 'catchup',   optional: true },
+] satisfies { title: string; time: string; details: string; tag: string; optional?: boolean }[]
 
 function parseDay(value: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
@@ -60,7 +65,7 @@ export async function POST(request: NextRequest) {
               title: r.title,
               startTime: r.time,
               details: r.details,
-              tags: ['routine', r.tag],
+              tags: r.optional ? ['routine', r.tag, 'optional'] : ['routine', r.tag],
               priority: 'normal',
               sortOrder: base + i,
             },
