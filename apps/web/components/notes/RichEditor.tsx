@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MathExtension, MathInlineExtension } from '@/lib/tiptap/math-extension'
+import { ReflectionAutoGrow } from '@/lib/tiptap/reflection-autogrow-extension'
 import { MathDialog } from '@/components/notes/MathDialog'
 import { SymbolPicker } from '@/components/notes/SymbolPicker'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
@@ -114,6 +115,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
         Highlight.configure({ multicolor: false }),
         MathExtension,
         MathInlineExtension,
+        ReflectionAutoGrow,
       ],
       content: content || '',
       editable: !disabled,
