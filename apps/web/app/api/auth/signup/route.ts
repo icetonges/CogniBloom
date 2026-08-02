@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
+import { SHARED_ACCOUNT_EMAILS } from '@/lib/user'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 })
   }
   const { name, email, password } = parsed.data
+
+  if (SHARED_ACCOUNT_EMAILS.includes(email)) {
+    // Password-based signup can't prove ownership of a typed email the way a
+    // completed Google OAuth round-trip can, so this shared household
+    // address gets a clear redirect instead of a new, disconnected account.
+    return NextResponse.json(
+      { error: 'This email uses shared sign-in — please use "Sign in with Google" instead of creating a password.' },
+      { status: 409 }
+    )
+  }
 
   const existing = await db.user.findUnique({ where: { email } })
   if (existing) {

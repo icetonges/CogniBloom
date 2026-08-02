@@ -5,6 +5,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { authConfig } from './auth.config'
+import { DANIEL_USER_ID, SHARED_ACCOUNT_EMAILS } from '@/lib/user'
 
 // Full Auth.js (NextAuth v5) configuration -- Node.js runtime only (used by
 // `app/api/auth/[...nextauth]/route.ts`). See `auth.config.ts` for the
@@ -54,6 +55,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Google verifies email ownership itself -- reflect that in our own
       // boolean field without changing its type (schema stays additive-only).
       if (account?.provider === 'google' && user.id) {
+        const email = user.email?.toLowerCase()
+        if (email && SHARED_ACCOUNT_EMAILS.includes(email) && user.id !== DANIEL_USER_ID) {
+          // First-ever Google sign-in for a household email: the adapter has
+          // already auto-created a brand-new (empty) User row for it. Re-point
+          // this OAuth link to the existing shared account instead, so both
+          // household emails read/write the same notes, planner, etc., then
+          // discard the throwaway row. Order matters -- Account.userId must
+          // move off the throwaway id *before* that row is deleted, since
+          // Account has `onDelete: Cascade` back to User.
+          const throwawayId = user.id
+          await db.account.update({
+            where: {
+              provider_providerAccountId: {
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+              },
+            },
+            data: { userId: DANIEL_USER_ID },
+          })
+          await db.user.delete({ where: { id: throwawayId } }).catch(() => {
+            // Non-fatal: worst case a harmless orphaned row lingers.
+          })
+          user.id = DANIEL_USER_ID
+        }
         await db.user
           .update({ where: { id: user.id }, data: { emailVerified: true } })
           .catch(() => {
@@ -66,8 +91,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // `user` is only populated on the initial sign-in call; persist the
       // fields we need onto the token for every subsequent request.
       if (user) {
-        token['id'] = user.id
-        token['role'] = (user as { role?: string }).role ?? 'STUDENT'
+        const email = user.email?.toLowerCase()
+        if (email && SHARED_ACCOUNT_EMAILS.includes(email)) {
+          // Don't rely on the `signIn` callback's `user.id` mutation surviving
+          // into this callback -- re-derive independently so the very first
+          // login (before that mutation could take effect) still gets the
+          // shared account's real id and role, not the throwaway row's.
+          token['id'] = DANIEL_USER_ID
+          const shared = await db.user.findUnique({
+            where: { id: DANIEL_USER_ID },
+            select: { role: true },
+          })
+          token['role'] = shared?.role ?? 'STUDENT'
+        } else {
+          token['id'] = user.id
+          token['role'] = (user as { role?: string }).role ?? 'STUDENT'
+        }
       } else if (token['id'] && !token['role']) {
         // Backfill role for tokens issued before this field existed.
         const dbUser = await db.user.findUnique({
