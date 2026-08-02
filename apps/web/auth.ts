@@ -52,33 +52,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
-      // Google verifies email ownership itself -- reflect that in our own
-      // boolean field without changing its type (schema stays additive-only).
+      // NOTE: for a brand-new sign-in, Auth.js calls this callback *before*
+      // the adapter has created the User/Account rows -- `user.id` here is
+      // just the raw OAuth subject id, not a database id. Don't attempt any
+      // write here that assumes a matching row exists; that's what the
+      // `.catch()` below is for, and why the shared-account linking logic
+      // lives in the `jwt` callback instead (it runs after those rows exist).
       if (account?.provider === 'google' && user.id) {
-        const email = user.email?.toLowerCase()
-        if (email && SHARED_ACCOUNT_EMAILS.includes(email) && user.id !== DANIEL_USER_ID) {
-          // First-ever Google sign-in for a household email: the adapter has
-          // already auto-created a brand-new (empty) User row for it. Re-point
-          // this OAuth link to the existing shared account instead, so both
-          // household emails read/write the same notes, planner, etc., then
-          // discard the throwaway row. Order matters -- Account.userId must
-          // move off the throwaway id *before* that row is deleted, since
-          // Account has `onDelete: Cascade` back to User.
-          const throwawayId = user.id
-          await db.account.update({
-            where: {
-              provider_providerAccountId: {
-                provider: account.provider,
-                providerAccountId: account.providerAccountId,
-              },
-            },
-            data: { userId: DANIEL_USER_ID },
-          })
-          await db.user.delete({ where: { id: throwawayId } }).catch(() => {
-            // Non-fatal: worst case a harmless orphaned row lingers.
-          })
-          user.id = DANIEL_USER_ID
-        }
         await db.user
           .update({ where: { id: user.id }, data: { emailVerified: true } })
           .catch(() => {
@@ -87,22 +67,58 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return true
     },
-    async jwt({ token, user }) {
-      // `user` is only populated on the initial sign-in call; persist the
-      // fields we need onto the token for every subsequent request.
+    async jwt({ token, user, account }) {
+      // `user`/`account` are only populated on the initial sign-in call;
+      // persist the fields we need onto the token for every subsequent
+      // request (the `else` branch below).
       if (user) {
         const email = user.email?.toLowerCase()
-        if (email && SHARED_ACCOUNT_EMAILS.includes(email)) {
-          // Don't rely on the `signIn` callback's `user.id` mutation surviving
-          // into this callback -- re-derive independently so the very first
-          // login (before that mutation could take effect) still gets the
-          // shared account's real id and role, not the throwaway row's.
+        const isShared = !!email && SHARED_ACCOUNT_EMAILS.includes(email)
+
+        if (isShared && account?.provider === 'google' && user.id !== DANIEL_USER_ID) {
+          // First-ever Google sign-in for a household email: by this point
+          // (unlike in `signIn`) the adapter has already created a real
+          // User + Account row for it -- re-point the Account to the shared
+          // account instead, then discard the throwaway User row. Order
+          // matters: Account.userId must move off the throwaway id *before*
+          // that row is deleted, since Account has `onDelete: Cascade`.
+          // Every step is defensive -- worst case on failure is the user
+          // stays logged in as the throwaway (empty) account rather than
+          // sign-in breaking outright.
+          const throwawayId = user.id
+          const repointed = await db.account
+            .update({
+              where: {
+                provider_providerAccountId: {
+                  provider: account.provider,
+                  providerAccountId: account.providerAccountId,
+                },
+              },
+              data: { userId: DANIEL_USER_ID },
+            })
+            .then(() => true)
+            .catch(() => false)
+          if (repointed) {
+            await db.user.delete({ where: { id: throwawayId } }).catch(() => {})
+            await db.user
+              .update({ where: { id: DANIEL_USER_ID }, data: { emailVerified: true } })
+              .catch(() => {})
+          }
+        }
+
+        // Only claim the shared identity if a live DB read just confirmed it
+        // exists -- if the repoint above failed for some reason, fall back
+        // to whatever row this sign-in actually resolved to rather than
+        // stamping the token with an id that doesn't match reality.
+        const shared = isShared
+          ? await db.user
+              .findUnique({ where: { id: DANIEL_USER_ID }, select: { role: true } })
+              .catch(() => null)
+          : null
+
+        if (shared) {
           token['id'] = DANIEL_USER_ID
-          const shared = await db.user.findUnique({
-            where: { id: DANIEL_USER_ID },
-            select: { role: true },
-          })
-          token['role'] = shared?.role ?? 'STUDENT'
+          token['role'] = shared.role
         } else {
           token['id'] = user.id
           token['role'] = (user as { role?: string }).role ?? 'STUDENT'
