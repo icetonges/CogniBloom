@@ -26,8 +26,13 @@ model User {
   interests             String[]    @default([])
 
   // Auth — clerkId removed (single-user app, no OAuth)
-  emailVerified        Boolean     @default(false)
+  // Nullable because @auth/prisma-adapter's createUser() always sends
+  // `emailVerified: null` for brand-new OAuth sign-ins -- a non-nullable
+  // column rejects that write outright (PrismaClientValidationError).
+  emailVerified        Boolean?    @default(false)
   passwordHash          String?     // bcrypt hash; null for Google-only accounts
+  image                 String?     // OAuth provider avatar (e.g. Google profile photo) --
+                                     // @auth/prisma-adapter's createUser() always sends this key
 
   // Relationships
   parentId             String?
