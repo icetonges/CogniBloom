@@ -3,10 +3,11 @@
 import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSession, signOut } from 'next-auth/react'
 import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
-  CalendarDays, BookMarked, FileText, GraduationCap, ScrollText, TrendingUp,
+  CalendarDays, BookMarked, FileText, GraduationCap, ScrollText, TrendingUp, LogOut,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,9 @@ function Sidebar({
   onClose, flashcardsDue, reviewDue, userStats,
 }: { onClose?: () => void; flashcardsDue: number; reviewDue: number; userStats: UserStats | null }) {
   const pathname = usePathname()
+  const { data: session } = useSession()
+  const displayName = session?.user?.name || 'Daniel'
+  const initial = displayName.trim().charAt(0).toUpperCase() || 'D'
 
   return (
     <div className="flex flex-col h-full">
@@ -176,7 +180,7 @@ function Sidebar({
           <ThemeToggle />
         </div>
 
-        {/* Daniel widget */}
+        {/* User widget */}
         <div className="rounded-xl p-3 bg-primary/[0.06] dark:bg-primary/[0.08] border border-primary/[0.12]">
           <div className="flex items-center gap-3">
             {/* Avatar + level badge */}
@@ -188,7 +192,7 @@ function Sidebar({
                   boxShadow: '0 0 14px rgba(99,102,241,0.45)',
                 }}
               >
-                D
+                {initial}
               </div>
               {userStats && (
                 <div className="absolute -bottom-1 -right-1 w-[18px] h-[18px] rounded-full bg-amber-500 flex items-center justify-center text-[9px] font-black text-white border-2 border-card dark:border-[#080d1a]">
@@ -199,7 +203,7 @@ function Sidebar({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold truncate">Daniel</span>
+                <span className="text-sm font-bold truncate">{displayName}</span>
                 {userStats && userStats.streak > 0 && (
                   <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-500">
                     <Flame className="w-2.5 h-2.5" />
@@ -223,6 +227,17 @@ function Sidebar({
                 <div className="mt-1.5 h-1 rounded-full bg-muted/40" />
               )}
             </div>
+
+            {/* Log out — signs out of the NextAuth session and clears the
+                cookie; without this there was no way to switch which
+                household Google account is signed in. */}
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              title="Log out"
+              className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
