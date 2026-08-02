@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +20,9 @@ function parseAnchor(value: string, scope: string): Date | null {
 // GET /api/planner?scope=month&date=2026-06       → all day+month entries in that month
 export async function GET(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const { searchParams } = new URL(request.url)
     const scope = searchParams.get('scope') ?? 'day'
     const date = searchParams.get('date') ?? ''
@@ -61,7 +63,9 @@ export async function GET(request: NextRequest) {
 //   body: { scope, date ("YYYY-MM-DD" or "YYYY-MM"), title, details?, tags?, priority?, startTime?, color? }
 export async function POST(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const body = (await request.json()) as {
       scope?: string
       date?: string
@@ -112,7 +116,9 @@ export async function POST(request: NextRequest) {
 //   body: { id, ...partial }
 export async function PATCH(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const body = (await request.json()) as {
       id?: string
       title?: string
@@ -153,7 +159,9 @@ export async function PATCH(request: NextRequest) {
 // DELETE /api/planner?id=xxx
 export async function DELETE(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })

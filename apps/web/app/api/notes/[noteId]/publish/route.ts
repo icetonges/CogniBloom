@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { chatWithFallback } from '@/lib/ai/fallback'
 
@@ -1308,7 +1308,9 @@ function buildPublishedPage(note: {
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const note = await db.note.findFirst({ where: { id: noteId, userId } })
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
 
@@ -1348,8 +1350,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const note = await db.note.findFirst({
-      where: { id: noteId, userId: DANIEL_USER_ID },
+      where: { id: noteId, userId: session.user.id },
       select: { id: true },
     })
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
@@ -1368,8 +1372,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const note = await db.note.findFirst({
-      where: { id: noteId, userId: DANIEL_USER_ID },
+      where: { id: noteId, userId: session.user.id },
       select: { publishedSlug: true, publishedAt: true },
     })
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { embedNote } from '@/lib/notes'
+import { auth as getSession } from '@/auth'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-function verifyAdmin(request: NextRequest): boolean {
+async function verifyAdmin(request: NextRequest): Promise<boolean> {
   const secret = process.env['ADMIN_SECRET_KEY']
-  if (!secret) return false
-  return request.headers.get('authorization') === `Bearer ${secret}`
+  if (secret && request.headers.get('authorization') === `Bearer ${secret}`) return true
+
+  const session = await getSession()
+  return (session?.user as { role?: string } | undefined)?.role === 'ADMIN'
 }
 
 // ─── POST /api/admin/notes/embed ──────────────────────────────────────────────
@@ -17,7 +20,7 @@ function verifyAdmin(request: NextRequest): boolean {
 // Process up to `limit` notes per call (default 50) to stay within timeouts.
 
 export async function POST(request: NextRequest) {
-  if (!verifyAdmin(request)) {
+  if (!(await verifyAdmin(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
 // Returns counts of notes with and without embeddings — useful for monitoring.
 
 export async function GET(request: NextRequest) {
-  if (!verifyAdmin(request)) {
+  if (!(await verifyAdmin(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

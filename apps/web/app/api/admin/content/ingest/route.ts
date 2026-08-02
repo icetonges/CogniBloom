@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { auth as getSession } from '@/auth'
 import {
   fetchWikipediaSummary,
   fetchArxivPapers,
@@ -11,11 +12,12 @@ import {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-function verifyAdmin(request: NextRequest): boolean {
+async function verifyAdmin(request: NextRequest): Promise<boolean> {
   const secret = process.env['ADMIN_SECRET_KEY']
-  if (!secret) return false
-  const auth = request.headers.get('authorization')
-  return auth === `Bearer ${secret}`
+  if (secret && request.headers.get('authorization') === `Bearer ${secret}`) return true
+
+  const session = await getSession()
+  return (session?.user as { role?: string } | undefined)?.role === 'ADMIN'
 }
 
 // ─── Request schema ───────────────────────────────────────────────────────────
@@ -96,7 +98,7 @@ async function ingestArxiv(categories: string[], limit: number): Promise<IngestR
 // ─── POST /api/admin/content/ingest ──────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  if (!verifyAdmin(request)) {
+  if (!(await verifyAdmin(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

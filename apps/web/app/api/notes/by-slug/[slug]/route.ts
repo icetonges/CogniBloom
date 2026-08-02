@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 
 type RouteParams = { params: Promise<{ slug: string }> }
@@ -31,7 +31,9 @@ const NOTE_SELECT = {
 export async function GET(_req: NextRequest, { params }: RouteParams) {
   try {
     const { slug } = await params
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
 
     const note = await db.note.findFirst({
       where: { slug, userId },

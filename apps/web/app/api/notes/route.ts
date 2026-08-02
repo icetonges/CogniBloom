@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 import { embedNote, generateUniqueNoteSlug } from '@/lib/notes'
@@ -43,7 +43,9 @@ const NOTE_SELECT = {
 // GET /api/notes
 export async function GET(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const { searchParams } = new URL(request.url)
 
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
@@ -120,7 +122,9 @@ export async function GET(request: NextRequest) {
 // POST /api/notes
 export async function POST(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const body = await request.json()
     const validated = createNoteSchema.parse(body)
 

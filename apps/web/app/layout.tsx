@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
+import { AuthSessionProvider } from '@/components/providers/AuthSessionProvider'
 import './globals.css'
 
 const jakarta = Plus_Jakarta_Sans({
@@ -58,9 +59,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta charSet="utf-8" />
       </head>
       <body className="min-h-screen bg-background antialiased font-sans">
-        <ThemeProvider>
-          <div className="flex flex-col min-h-screen">{children}</div>
-        </ThemeProvider>
+        <AuthSessionProvider>
+          <ThemeProvider>
+            <div className="flex flex-col min-h-screen">{children}</div>
+          </ThemeProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   )

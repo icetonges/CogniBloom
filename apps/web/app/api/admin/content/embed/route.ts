@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateEmbedding, embeddingToSql } from '@/lib/ai/embeddings'
 import { chunkTextWithWindows } from '@/lib/content'
+import { auth as getSession } from '@/auth'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-function verifyAdmin(request: NextRequest): boolean {
+async function verifyAdmin(request: NextRequest): Promise<boolean> {
   const secret = process.env['ADMIN_SECRET_KEY']
-  if (!secret) return false
-  const auth = request.headers.get('authorization')
-  return auth === `Bearer ${secret}`
+  if (secret && request.headers.get('authorization') === `Bearer ${secret}`) return true
+
+  const session = await getSession()
+  return (session?.user as { role?: string } | undefined)?.role === 'ADMIN'
 }
 
 // ─── Ensure schema is up to date ──────────────────────────────────────────────
@@ -59,7 +61,7 @@ async function ensureSchema() {
 // ─── POST /api/admin/content/embed ───────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  if (!verifyAdmin(request)) {
+  if (!(await verifyAdmin(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -160,7 +162,7 @@ export async function POST(request: NextRequest) {
 // ─── GET /api/admin/content/embed ────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  if (!verifyAdmin(request)) {
+  if (!(await verifyAdmin(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

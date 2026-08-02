@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { streamWithFallback } from '@/lib/ai/fallback'
 
@@ -28,7 +28,9 @@ function htmlToText(html: string): string {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
 
     const note = await db.note.findFirst({
       where: { id: noteId, userId },

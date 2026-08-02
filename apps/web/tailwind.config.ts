@@ -10,8 +10,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-jakarta)', 'var(--font-sans)', ...defaultTheme.fontFamily.sans],
-        display: ['var(--font-sora)', 'var(--font-jakarta)', ...defaultTheme.fontFamily.sans],
+        sans: ['Georgia', 'var(--font-jakarta)', 'var(--font-sans)', ...defaultTheme.fontFamily.serif],
+        display: ['Georgia', 'var(--font-sora)', 'var(--font-jakarta)', ...defaultTheme.fontFamily.serif],
+        serif: ['Georgia', ...defaultTheme.fontFamily.serif],
       },
       colors: {
         border: 'hsl(var(--border))',

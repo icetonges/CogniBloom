@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -34,7 +34,9 @@ function parseDay(value: string): Date | null {
 // and return all of that day's entries. Body: { date: "YYYY-MM-DD" }
 export async function POST(request: NextRequest) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const body = (await request.json()) as { date?: string; force?: boolean }
     const anchor = parseDay(body.date ?? '')
     if (!anchor) return NextResponse.json({ error: 'date (YYYY-MM-DD) required' }, { status: 400 })

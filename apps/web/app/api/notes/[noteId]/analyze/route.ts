@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { chatWithFallback } from '@/lib/ai/fallback'
 import { z } from 'zod'
@@ -129,7 +129,9 @@ function healTruncatedJSON(s: string): string {
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
     const { noteId } = await params
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
 
     const note = await db.note.findFirst({ where: { id: noteId, userId } })
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })

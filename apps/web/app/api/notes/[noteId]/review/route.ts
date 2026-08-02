@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DANIEL_USER_ID } from '@/lib/user'
+import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { chatWithFallback } from '@/lib/ai/fallback'
 
@@ -11,7 +11,9 @@ export async function POST(
   { params }: { params: Promise<{ noteId: string }> }
 ) {
   try {
-    const userId = DANIEL_USER_ID
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = session.user.id
     const { noteId } = await params
 
     const note = await db.note.findFirst({ where: { id: noteId, userId } })
@@ -84,7 +86,9 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ noteId: string }> }
 ) {
-  const userId = DANIEL_USER_ID
+  const session = await auth()
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = session.user.id
   const { noteId } = await params
 
   const note = await db.note.findFirst({ where: { id: noteId, userId } })

@@ -30,7 +30,7 @@
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: rgba(255, 255, 255, 0.25);
+  color: rgba(226, 232, 240, 0.6);
   pointer-events: none;
   height: 0;
 }
@@ -71,20 +71,20 @@
 .tiptap blockquote {
   border-left: 3px solid #6366f1;
   padding-left: 16px;
-  color: hsl(215 18% 70%);
+  color: hsl(210 25% 88%);
   font-style: italic;
   margin: 10px 0;
 }
 
-/* Tiptap body text — readable but not glaring white */
+/* Tiptap body text — bright, high-contrast against the dark background */
 .tiptap p,
 .tiptap li {
-  color: hsl(213 25% 86%);
+  color: hsl(210 30% 94%);
 }
 
-.tiptap h1 { font-size: 1.6rem; font-weight: 800; margin: 16px 0 8px; color: #e2e8f0; }
-.tiptap h2 { font-size: 1.3rem; font-weight: 700; margin: 14px 0 6px; color: #c4b5fd; }
-.tiptap h3 { font-size: 1.1rem; font-weight: 700; margin: 12px 0 4px; color: #a5b4fc; }
+.tiptap h1 { font-size: 1.6rem; font-weight: 800; margin: 16px 0 8px; color: #f8fafc; }
+.tiptap h2 { font-size: 1.3rem; font-weight: 700; margin: 14px 0 6px; color: #d8d2ff; }
+.tiptap h3 { font-size: 1.1rem; font-weight: 700; margin: 12px 0 4px; color: #c7d2fe; }
 
 .tiptap ul, .tiptap ol { padding-left: 20px; margin: 8px 0; }
 .tiptap li { margin: 3px 0; }
@@ -141,7 +141,7 @@
     --popover-foreground: 213 31% 91%;
 
     --muted: 224 20% 18%;
-    --muted-foreground: 215 18% 68%;
+    --muted-foreground: 210 22% 88%;
 
     --accent: 217 91% 60%;
     --accent-foreground: 224 27% 10%;
@@ -173,6 +173,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: Georgia, var(--font-jakarta), 'Times New Roman', serif;
     font-feature-settings: 'rlig' 1, 'calt' 1;
     line-height: 1.65;
   }
@@ -180,15 +181,20 @@
   h1, h2, h3, h4, h5, h6 {
     line-height: 1.25;
     font-weight: 700;
-    font-family: var(--font-sora), var(--font-jakarta), sans-serif;
+    font-family: Georgia, var(--font-sora), var(--font-jakarta), serif;
     letter-spacing: -0.015em;
   }
 
-  /* Boost small text sizes for readability (especially for teen users) */
+  /* Boost small text sizes for readability (especially for teen users).
+     Floor is 13px — no rendered text (labels, tags, placeholders, timestamps)
+     should ever go smaller than that, regardless of the Tailwind class used. */
   .text-xs  { font-size: 0.83rem !important; line-height: 1.45; }
   .text-sm  { font-size: 0.94rem !important; line-height: 1.55; }
-  .text-\[10px\] { font-size: 0.72rem !important; }
-  .text-\[9px\]  { font-size: 0.67rem !important; }
+  .text-\[8px\]  { font-size: 13px !important; }
+  .text-\[9px\]  { font-size: 13px !important; }
+  .text-\[10px\] { font-size: 13px !important; }
+  .text-\[11px\] { font-size: 13px !important; }
+  .text-\[12px\] { font-size: 13px !important; }
 }
 
 /* ── Landing page animations ─────────────────────────────────────────────── */
@@ -331,7 +337,7 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 .cb-title-input::placeholder {
-  color: rgba(148, 163, 184, 0.5);
+  color: rgba(226, 232, 240, 0.65);
 }
 .cb-title-input:focus {
   border-color: rgba(99, 102, 241, 0.78);
