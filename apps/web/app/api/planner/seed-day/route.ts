@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
-import { getSchoolDay, fmt12, LUNCH_ROOM } from '@/lib/school'
+import { fmt12, LUNCH_ROOM, type SchoolDay } from '@/lib/school'
+import { schoolDayFor } from '@/lib/school-db'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,11 +46,11 @@ interface SeedItem {
 
 /**
  * The school band for a date: one entry per timed period, plus lunch.
- * Returns [] on weekends, holidays and breaks, so no classes are ever invented
- * on a day Frost is closed.
+ * Returns [] whenever the resolved day is closed — weekend, FCPS holiday,
+ * teacher workday, or a manual snow-day override — so classes are never
+ * invented on a day Frost is shut.
  */
-function schoolItems(dateKey: string): SeedItem[] {
-  const day = getSchoolDay(dateKey)
+function schoolItems(day: SchoolDay): SeedItem[] {
   if (!day.isSchoolDay) return []
 
   const items: SeedItem[] = []
@@ -99,6 +100,10 @@ export async function POST(request: NextRequest) {
     const anchor = parseDay(dateKey)
     if (!anchor) return NextResponse.json({ error: 'date (YYYY-MM-DD) required' }, { status: 400 })
 
+    // Resolve the day through override → FCPS calendar → rotation before
+    // deciding anything, so a closure is honoured at seed time.
+    const day = await schoolDayFor(dateKey)
+
     const existing = await db.plannerEntry.findMany({
       where: { userId, scope: 'day', date: anchor },
       select: { id: true, title: true, tags: true, startTime: true, details: true },
@@ -121,10 +126,16 @@ export async function POST(request: NextRequest) {
     // routine it is reconciled every time: rows missing by title are added, and
     // rows whose time or room drifted from the schedule are corrected. A day
     // Frost is closed produces nothing at all.
-    const school = schoolItems(dateKey)
-    const schoolByTitle = new Map(
-      existing.filter((e) => e.tags.includes(SCHOOL_TAG)).map((e) => [e.title, e])
-    )
+    const school = schoolItems(day)
+    const existingSchool = existing.filter((e) => e.tags.includes(SCHOOL_TAG))
+    const schoolByTitle = new Map(existingSchool.map((e) => [e.title, e]))
+
+    // A day that is closed (or was reclassified as closed) must not keep class
+    // rows from an earlier seed. Personal items — routine, habits, anything
+    // typed by hand — are never touched.
+    const staleSchool = existingSchool
+      .filter((e) => !school.some((s) => s.title === e.title))
+      .map((e) => e.id)
     const schoolToCreate = school.filter((s) => !schoolByTitle.has(s.title))
     const schoolToFix = school
       .map((s) => {
@@ -137,6 +148,10 @@ export async function POST(request: NextRequest) {
 
     const ops = []
     let order = existing.length
+
+    if (staleSchool.length > 0) {
+      ops.push(db.plannerEntry.deleteMany({ where: { id: { in: staleSchool }, userId } }))
+    }
 
     for (const s of schoolToCreate) {
       ops.push(
@@ -176,17 +191,21 @@ export async function POST(request: NextRequest) {
     const tagSet = new Set<string>()
     all.forEach((e) => e.tags.forEach((t) => { if (t !== 'routine' && t !== LOCKED_TAG) tagSet.add(t) }))
 
-    const day = getSchoolDay(dateKey)
     return NextResponse.json({
       success: true,
       data: entries,
       tags: Array.from(tagSet).sort(),
+      removedSchoolRows: staleSchool.length,
       school: {
         type: day.type,
         label: day.label,
+        isSchoolDay: day.isSchoolDay,
         quarter: day.quarter,
         earlyRelease: day.earlyRelease,
-        breakLabel: day.breakLabel,
+        closureReason: day.closureReason,
+        closureSource: day.closureSource,
+        observance: day.observance,
+        totalWalkMetres: day.totalWalkMetres,
       },
     })
   } catch (err) {

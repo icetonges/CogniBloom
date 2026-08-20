@@ -23,7 +23,7 @@ import {
 import {
   type BellBlock,
   type ScheduleKind,
-  blocksFor,
+  blocksForKind,
   scheduleKindFor,
   splitLunchBlock,
   passingMinutes,
@@ -33,12 +33,15 @@ import {
 import { type Course, COURSES, LUNCH_SLOT, coursesOn, meetsOn, EVERYDAY_KIT } from './courses'
 import { type Route, routeBetween, findRoom } from './rooms'
 import { resourcesFor } from './resources'
+import { type CalendarOverride, type ResolvedDay, resolveDay, dayLabelOf } from './resolve'
 
 export * from './calendar'
 export * from './bell'
 export * from './courses'
 export * from './rooms'
 export * from './resources'
+export * from './year-calendar'
+export * from './resolve'
 
 export interface PeriodSlot {
   period: number
@@ -65,13 +68,21 @@ export interface SchoolDay {
   date: DateKey
   type: DayType
   isSchoolDay: boolean
-  /** 'Blue Day' / 'Gray Day' / 'No school'. */
+  /** 'Blue Day' / 'Gray Day' / the closure reason. */
   label: string
+  /** The full three-layer resolution behind this day. */
+  resolved: ResolvedDay
   /** e.g. "Thursday, August 20". */
   dateLabel: string
   scheduleKind: ScheduleKind
   quarter: number | null
   breakLabel: string | null
+  /** Why there is no school, when there isn't — e.g. "Thanksgiving Break". */
+  closureReason: string | null
+  /** Which layer closed the day: a manual override, FCPS, or the rotation. */
+  closureSource: 'manual' | 'fcps' | 'rotation' | null
+  /** Religious or cultural observance on this date. Never closes the day. */
+  observance: string | null
   earlyRelease: boolean
   periods: PeriodSlot[]
   /** Period 9 / any untimed designator courses meeting today. */
@@ -99,13 +110,27 @@ function dateLabelOf(key: DateKey): string {
   return `${WEEKDAY[d.getDay()]}, ${MONTH[d.getMonth()]} ${d.getDate()}`
 }
 
+export interface DayOptions {
+  /** The SchoolCalendarDay row for this date, when one exists. */
+  override?: CalendarOverride | null
+  /** Model an unplanned 2-hour delay (snow, etc.). */
+  delayed?: boolean
+}
+
 /**
- * Build the complete plan for one calendar day.
- * `delayed` models an unplanned 2-hour delay (snow day, etc.).
+ * Build the complete plan for one calendar day, after resolving the manual
+ * override / FCPS year calendar / Blue-Gray rotation precedence chain. A day
+ * the year calendar closes comes back with no periods, no route and no pack
+ * list — the closure is expressed once, here, and every caller inherits it.
+ *
+ * Accepts a bare boolean as the second argument for backwards compatibility.
  */
-export function getSchoolDay(date: DateKey, delayed = false): SchoolDay {
-  const type = dayTypeOf(date)
-  const school = type === 'blue' || type === 'gray'
+export function getSchoolDay(date: DateKey, opts: DayOptions | boolean = {}): SchoolDay {
+  const o: DayOptions = typeof opts === 'boolean' ? { delayed: opts } : opts
+  const delayed = o.delayed ?? false
+  const r = resolveDay(date, o.override ?? null)
+  const type = r.type
+  const school = r.isSchoolDay
   const q = quarterOf(date)
   const brk = breakFor(date)
 
@@ -113,16 +138,16 @@ export function getSchoolDay(date: DateKey, delayed = false): SchoolDay {
     date,
     type,
     isSchoolDay: school,
-    label:
-      type === 'blue' ? 'Blue Day' :
-      type === 'gray' ? 'Gray Day' :
-      type === 'weekend' ? 'Weekend' :
-      type === 'summer' ? 'Out of term' : 'No school',
+    label: dayLabelOf(r),
+    resolved: r,
     dateLabel: dateLabelOf(date),
-    scheduleKind: scheduleKindFor(date, delayed),
+    scheduleKind: r.forcedScheduleKind ?? scheduleKindFor(date, delayed),
     quarter: q?.n ?? null,
-    breakLabel: brk?.label ?? null,
-    earlyRelease: isEarlyRelease(date),
+    breakLabel: brk?.label ?? r.closureReason,
+    closureReason: r.closureReason,
+    closureSource: r.closureSource,
+    observance: r.observance,
+    earlyRelease: r.earlyRelease || isEarlyRelease(date),
     periods: [],
     untimed: [],
     firstBell: null,
@@ -139,7 +164,9 @@ export function getSchoolDay(date: DateKey, delayed = false): SchoolDay {
 
   const dayType = type as 'blue' | 'gray'
   const enrolled = coursesOn(date)
-  const blocks: BellBlock[] = blocksFor(date, delayed)
+  // Built from the *resolved* rotation and schedule kind, so an override that
+  // reopens or shortens a day changes the bells too.
+  const blocks: BellBlock[] = blocksForKind(dayType, base.scheduleKind)
 
   const periods: PeriodSlot[] = []
   let prevBlock: BellBlock | null = null
@@ -301,13 +328,23 @@ export function describeDayForAI(date: DateKey, ladderLevels: Record<string, num
   ].filter(Boolean).join('\n')
 }
 
-/** Rolling window of upcoming school days — for the week strip and year view. */
-export function upcomingDays(from: DateKey, count = 5): SchoolDay[] {
+/**
+ * Rolling window of upcoming school days — for the week strip and year view.
+ * `lookup` supplies the stored override for a date, so a snow day is skipped
+ * here exactly as it is everywhere else.
+ */
+export function upcomingDays(
+  from: DateKey,
+  count = 5,
+  lookup?: (date: DateKey) => CalendarOverride | null
+): SchoolDay[] {
   const out: SchoolDay[] = []
+  const at = (d: DateKey) => getSchoolDay(d, { override: lookup?.(d) ?? null })
   let cursor: DateKey | null = from
-  if (cursor && dayTypeOf(cursor) !== 'blue' && dayTypeOf(cursor) !== 'gray') cursor = nextSchoolDay(cursor)
-  while (cursor && out.length < count) {
-    out.push(getSchoolDay(cursor))
+  let guard = 0
+  while (cursor && out.length < count && guard++ < 400) {
+    const day = at(cursor)
+    if (day.isSchoolDay) out.push(day)
     cursor = nextSchoolDay(cursor)
   }
   return out

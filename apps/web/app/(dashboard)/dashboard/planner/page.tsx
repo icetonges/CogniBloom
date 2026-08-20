@@ -17,6 +17,23 @@ import { HandwritingPad, type HandwritingResult } from '@/components/notes/Handw
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer'
 import { getSchoolDay, dayTypeOf, fmt12, type SchoolDay } from '@/lib/school'
 
+/**
+ * The calendar-resolved summary the server returns alongside a seeded day.
+ * It already has the manual-override → FCPS → rotation precedence applied, so
+ * the planner trusts it over anything computed locally.
+ */
+interface SchoolInfo {
+  type: 'blue' | 'gray' | 'holiday' | 'weekend' | 'summer'
+  label: string
+  isSchoolDay: boolean
+  quarter: number | null
+  earlyRelease: boolean
+  closureReason: string | null
+  closureSource: 'manual' | 'fcps' | 'rotation' | null
+  observance: string | null
+  totalWalkMetres: number
+}
+
 interface Entry {
   id: string
   scope: 'day' | 'month'
@@ -207,6 +224,10 @@ export default function PlannerPage() {
   const [cursor, setCursor] = useState(new Date())
   const [entries, setEntries] = useState<Entry[]>([])
   const [knownTags, setKnownTags] = useState<string[]>([])
+  /** Resolved school-calendar summary for the open day, straight from the server. */
+  const [school, setSchool] = useState<SchoolInfo | null>(null)
+  /** Day types for the open month, resolved server-side (closures included). */
+  const [monthDayTypes, setMonthDayTypes] = useState<Record<string, SchoolInfo> | null>(null)
   const [loading, setLoading] = useState(true)
   const [editor, setEditor] = useState<EditorState | null>(null)
 
@@ -223,12 +244,35 @@ export default function PlannerPage() {
       : fetch(`/api/planner?scope=${view}&date=${dateParam}`)
     return req
       .then((r) => r.json())
-      .then((res) => { if (res.success) { setEntries(res.data); setKnownTags(res.tags ?? []) } })
+      .then((res) => {
+        if (!res.success) return
+        setEntries(res.data)
+        setKnownTags(res.tags ?? [])
+        // seed-day answers with the resolved day; month view has no such payload.
+        if (view === 'day') setSchool(res.school ?? null)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [view, dateParam])
 
   useEffect(() => { load() }, [load])
+
+  // Keep the month grid in step with the calendar: closures, snow days and
+  // early-release markers all come from the same resolved source as the day.
+  useEffect(() => {
+    let cancelled = false
+    const key = monthKey(cursor)
+    fetch(`/api/school/day?month=${key}`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (cancelled || !res.success) return
+        const m: Record<string, SchoolInfo> = {}
+        for (const d of res.days) m[d.key] = d
+        setMonthDayTypes(m)
+      })
+      .catch(() => { if (!cancelled) setMonthDayTypes(null) })
+    return () => { cancelled = true }
+  }, [cursor])
 
   const shift = (dir: number) => {
     const d = new Date(cursor)
@@ -309,6 +353,7 @@ export default function PlannerPage() {
         <DayView
           entries={entries}
           cursor={cursor}
+          serverSchool={school}
           onOpenEntry={(e) => setEditor({ entry: e, scope: e.scope, date: cursor })}
           onRestoreRoutine={restoreRoutine}
           onRefresh={load}
@@ -317,6 +362,7 @@ export default function PlannerPage() {
         <MonthView
           cursor={cursor}
           entries={entries}
+          dayTypes={monthDayTypes}
           onPickDay={(d) => { setCursor(d); setView('day') }}
           onAddGoal={() => setEditor({ entry: null, scope: 'month', date: cursor })}
           onOpen={(e) => setEditor({ entry: e, scope: e.scope, date: cursor })}
@@ -534,17 +580,30 @@ function fireConfetti(): void {
 }
 
 function DayView({
-  entries, cursor, onOpenEntry, onRestoreRoutine, onRefresh,
+  entries, cursor, serverSchool, onOpenEntry, onRestoreRoutine, onRefresh,
 }: {
   entries: Entry[]
   cursor: Date
+  serverSchool: SchoolInfo | null
   onOpenEntry: (e: Entry) => void
   onRestoreRoutine: () => void
   onRefresh: () => void
 }) {
-  // The class schedule is static config, so it is derived here rather than
-  // fetched — the seeded planner rows and this view read the same source.
-  const school: SchoolDay = useMemo(() => getSchoolDay(dayKey(cursor)), [cursor])
+  // The rotation is derivable locally, which lets the day render instantly.
+  // `serverSchool` then wins once it arrives, because only the server has seen
+  // the year calendar and any manual closure stored against this date.
+  const local: SchoolDay = useMemo(() => getSchoolDay(dayKey(cursor)), [cursor])
+  const school: SchoolInfo = serverSchool ?? {
+    type: local.type,
+    label: local.label,
+    isSchoolDay: local.isSchoolDay,
+    quarter: local.quarter,
+    earlyRelease: local.earlyRelease,
+    closureReason: local.closureReason,
+    closureSource: local.closureSource,
+    observance: local.observance,
+    totalWalkMetres: local.totalWalkMetres,
+  }
   const dateKey = dayKey(cursor)
   const [items, setItems] = useState<Entry[]>(entries)
   useEffect(() => { setItems(entries) }, [entries])
@@ -742,6 +801,28 @@ function DayView({
     </section>
   )
 
+  const closureBanner = !school.isSchoolDay && school.type !== 'weekend' && school.type !== 'summer' ? (
+    <section key="closed">
+      <Card className="p-4 border-amber-500/30 bg-amber-500/[0.06]">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl leading-none">🚫</span>
+          <div className="min-w-0">
+            <div className="font-bold text-sm">No school — {school.closureReason ?? school.label}</div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {school.closureSource === 'manual'
+                ? 'Added as a closure on this calendar.'
+                : 'From the FCPS 2026-27 school year calendar.'}
+              {' '}Classes have been cleared from today; your routine and notes are untouched.
+            </p>
+            {school.observance && (
+              <p className="text-[11px] text-muted-foreground mt-1">Observance: {school.observance}</p>
+            )}
+          </div>
+        </div>
+      </Card>
+    </section>
+  ) : null
+
   const schoolBand = school && school.isSchoolDay ? (
     <section key="school">
       <div className="flex items-center justify-between mb-2">
@@ -868,7 +949,8 @@ function DayView({
             <div className="text-[11px] text-muted-foreground">
               {cursor.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               {school.quarter ? ` · Q${school.quarter}` : ''}
-              {school.breakLabel ? ` · ${school.breakLabel}` : ''}
+              {school.earlyRelease ? ' · early release' : ''}
+              {school.observance ? ` · ${school.observance}` : ''}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -907,6 +989,7 @@ function DayView({
       <div className="grid lg:grid-cols-2 gap-5 items-start">
         {/* LEFT */}
         <div className="space-y-5">
+          {closureBanner}
           {schoolBand}
           {focus}
           {schedule}
@@ -925,10 +1008,12 @@ function DayView({
 
 // ============ MONTH VIEW ============
 function MonthView({
-  cursor, entries, onPickDay, onAddGoal, onOpen, onToggle,
+  cursor, entries, dayTypes, onPickDay, onAddGoal, onOpen, onToggle,
 }: {
   cursor: Date
   entries: Entry[]
+  /** Server-resolved day types for this month; null until the fetch lands. */
+  dayTypes: Record<string, SchoolInfo> | null
   onPickDay: (d: Date) => void
   onAddGoal: () => void
   onOpen: (e: Entry) => void
@@ -972,13 +1057,19 @@ function MonthView({
             const k = dayKey(d)
             const count = countByDay[k] ?? 0
             const isToday = k === todayKey
-            const type = dayTypeOf(k)
+            // Server-resolved when available — it knows about closures the
+            // local rotation table cannot see.
+            const resolved = dayTypes?.[k]
+            const type = resolved?.type ?? dayTypeOf(k)
+            const closed = resolved ? !resolved.isSchoolDay && type === 'holiday' : type === 'holiday'
+            const title = resolved?.closureReason ?? resolved?.observance ?? null
             return (
               <button
                 key={i}
                 onClick={() => onPickDay(d)}
                 title={
-                  type === 'blue' ? 'Blue day — periods 1, 3, 4, 5, 7'
+                  title ? `${title}${closed ? ' — no school' : ''}`
+                  : type === 'blue' ? 'Blue day — periods 1, 3, 4, 5, 7'
                   : type === 'gray' ? 'Gray day — periods 1, 2, 4, 6, 8'
                   : type === 'holiday' ? 'No school'
                   : 'Add a plan on this day'
@@ -988,9 +1079,17 @@ function MonthView({
                   isToday ? 'bg-primary/10 ring-1 ring-primary/40 font-bold' : 'text-foreground',
                   type === 'blue' && !isToday && 'bg-sky-500/[0.08]',
                   type === 'gray' && !isToday && 'bg-slate-400/[0.08]',
-                  type === 'holiday' && 'text-muted-foreground/50'
+                  closed && 'text-muted-foreground/50 line-through decoration-1'
                 )}
               >
+                {closed && (
+                  <span className="absolute inset-0 rounded-lg bg-amber-500/[0.07] ring-1 ring-inset ring-amber-500/25" />
+                )}
+                {resolved?.earlyRelease && !closed && (
+                  <span className="absolute bottom-1 left-1 text-[8px] font-black leading-none text-amber-500" title="Early release">
+                    ER
+                  </span>
+                )}
                 {(type === 'blue' || type === 'gray') && (
                   <span className={cn(
                     'absolute top-1 right-1 text-[8px] font-black leading-none',
@@ -1014,6 +1113,7 @@ function MonthView({
         <div className="flex items-center justify-center gap-3 mt-2 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-sky-500/25" /> Blue · P1 3 4 5 7</span>
           <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-slate-400/25" /> Gray · P1 2 4 6 8</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500/25 ring-1 ring-inset ring-amber-500/40" /> No school</span>
           <span>Tap any day to plan it.</span>
         </div>
       </Card>

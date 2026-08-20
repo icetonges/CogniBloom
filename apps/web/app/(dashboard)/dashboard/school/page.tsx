@@ -8,7 +8,7 @@
  * versus passing-period check. Right: the interactive floor plan.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ChevronLeft, ChevronRight, Footprints, Search, MapPin, Clock,
@@ -18,7 +18,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { FloorPlan } from '@/components/school/FloorPlan'
 import {
-  getSchoolDay, upcomingDays, routeBetween, searchRooms, findRoom, coursesInRoom,
+  getSchoolDay, routeBetween, searchRooms, findRoom, coursesInRoom,
   fmt12, toKey, fromKey, LUNCH_ROOM,
   type SchoolDay, type Route, type Floor, type PeriodSlot,
 } from '@/lib/school'
@@ -45,8 +45,30 @@ export default function SchoolNavigationPage() {
   /** An ad-hoc "route me from here to there" lookup, outside the day's legs. */
   const [custom, setCustom] = useState<{ from: string; to: string } | null>(null)
 
-  const day: SchoolDay = useMemo(() => getSchoolDay(date), [date])
-  const week = useMemo(() => upcomingDays(date, 6), [date])
+  // The rotation renders instantly from local config; the server answer then
+  // replaces it, because only the server has seen the year calendar and any
+  // stored closure for this date.
+  const localDay: SchoolDay = useMemo(() => getSchoolDay(date), [date])
+  const [serverDay, setServerDay] = useState<SchoolDay | null>(null)
+  const [week, setWeek] = useState<SchoolDay[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchDay = useCallback((d: string) => {
+    setLoading(true)
+    return fetch(`/api/school/day?date=${d}&week=1`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (!res.success) return
+        setServerDay(res.day)
+        setWeek(res.week ?? [])
+      })
+      .catch(() => { setServerDay(null); setWeek([]) })
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { void fetchDay(date) }, [date, fetchDay])
+
+  const day: SchoolDay = serverDay?.date === date ? serverDay : localDay
 
   const legs: Leg[] = useMemo(() => buildLegs(day), [day])
   const dayLeg = legs.find((l) => l.key === activeLeg) ?? legs[0] ?? null
@@ -116,11 +138,17 @@ export default function SchoolNavigationPage() {
         )}
         {day.earlyRelease && (
           <span className="text-[11px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-500 font-semibold">
-            2-hour early release
+            Early release
           </span>
         )}
+        {day.observance && (
+          <span className="text-[11px] px-2 py-1 rounded-full bg-fuchsia-500/15 text-fuchsia-400 font-semibold">
+            {day.observance}
+          </span>
+        )}
+        {loading && <span className="text-[11px] text-muted-foreground">syncing…</span>}
         <button
-          onClick={() => { setDate(toKey(new Date())); setActiveLeg(null) }}
+          onClick={() => { setDate(toKey(new Date())); setActiveLeg(null); setCustom(null) }}
           className="ml-auto text-xs font-semibold text-primary hover:underline"
         >
           Today
@@ -135,7 +163,7 @@ export default function SchoolNavigationPage() {
         {week.map((d) => (
           <button
             key={d.date}
-            onClick={() => { setDate(d.date); setActiveLeg(null) }}
+            onClick={() => { setDate(d.date); setActiveLeg(null); setCustom(null) }}
             className={cn(
               'shrink-0 px-3 py-2 rounded-xl border text-left transition-colors min-w-[104px]',
               d.date === date ? 'border-primary bg-primary/10' : 'border-border/60 hover:bg-muted/50'
@@ -145,7 +173,10 @@ export default function SchoolNavigationPage() {
               {d.dateLabel.split(',')[0]}
             </div>
             <div className="text-sm font-bold">{d.dateLabel.split(', ')[1]}</div>
-            <div className={cn('text-[10px] font-bold mt-0.5', d.type === 'blue' ? 'text-sky-400' : 'text-slate-400')}>
+            <div className={cn(
+              'text-[10px] font-bold mt-0.5 truncate',
+              d.type === 'blue' ? 'text-sky-400' : d.type === 'gray' ? 'text-slate-400' : 'text-amber-500'
+            )}>
               {d.label}
             </div>
           </button>
@@ -154,9 +185,19 @@ export default function SchoolNavigationPage() {
 
       {!day.isSchoolDay ? (
         <Card className="p-8 text-center">
-          <div className="text-4xl mb-2">🌤️</div>
-          <div className="font-bold text-lg">{day.label}</div>
-          {day.breakLabel && <div className="text-sm text-muted-foreground mt-1">{day.breakLabel}</div>}
+          <div className="text-4xl mb-2">{day.type === 'weekend' ? '🌤️' : '🚫'}</div>
+          <div className="font-bold text-lg">{day.closureReason ?? day.label}</div>
+          {day.closureSource && day.type !== 'weekend' && (
+            <div className="text-xs text-muted-foreground mt-1">
+              {day.closureSource === 'manual'
+                ? 'Closure added on this calendar'
+                : 'FCPS 2026-27 school year calendar'}
+            </div>
+          )}
+          {day.observance && (
+            <div className="text-sm text-muted-foreground mt-2">Observance: {day.observance}</div>
+          )}
+          <p className="text-xs text-muted-foreground mt-3">No classes, so there is nothing to route today.</p>
           {day.next && (
             <button onClick={() => setDate(day.next!)} className="mt-4 text-sm text-primary hover:underline">
               Jump to the next school day →

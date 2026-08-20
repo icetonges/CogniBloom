@@ -90,12 +90,24 @@ export function scheduleKindFor(key: DateKey, delayed = false): ScheduleKind {
 /**
  * The ordered timed blocks for a given date. Returns [] on non-school days.
  * `delayed` lets a caller model an unplanned 2-hour delay (snow, etc.).
+ *
+ * Prefer `blocksForKind` when the caller has already resolved the day through
+ * the override → FCPS → rotation chain, since this reads the raw rotation and
+ * would miss, say, a make-up day scheduled onto a published holiday.
  */
 export function blocksFor(key: DateKey, delayed = false): BellBlock[] {
   const type = dayTypeOf(key)
   if (type !== 'blue' && type !== 'gray') return []
-  const blue = type === 'blue'
-  const kind = scheduleKindFor(key, delayed)
+  return blocksForKind(type, scheduleKindFor(key, delayed))
+}
+
+/**
+ * The blocks for an already-resolved rotation half and schedule kind. This is
+ * the form the day builder uses, so any override that changes what a date *is*
+ * automatically changes which bells ring on it.
+ */
+export function blocksForKind(dayType: 'blue' | 'gray', kind: ScheduleKind): BellBlock[] {
+  const blue = dayType === 'blue'
 
   if (kind === 'two-hour-delay') {
     const order = blue ? DELAY_BLUE : DELAY_GRAY

@@ -3,7 +3,6 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { chatWithFallback } from '@/lib/ai/fallback'
 import {
-  getSchoolDay,
   buildPrep,
   describeDayForAI,
   nextSchoolDay,
@@ -13,6 +12,7 @@ import {
   DISTRICT_SOURCES,
   type CoursePrep,
 } from '@/lib/school'
+import { schoolDayFor } from '@/lib/school-db'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     const date = raw && DAY_RE.test(raw) ? raw : (nextSchoolDay(today) ?? today)
     const wantAi = searchParams.get('ai') === '1'
 
-    const day = getSchoolDay(date)
+    const day = await schoolDayFor(date)
     if (!day.isSchoolDay) {
       return NextResponse.json({
         success: true,
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
         subjects: [],
         districtSources: DISTRICT_SOURCES,
         briefing: '',
-        message: `${day.dateLabel} — ${day.label}${day.breakLabel ? ` (${day.breakLabel})` : ''}. No classes to prepare for.`,
+        message: `${day.dateLabel} — ${day.label}${day.closureReason && day.closureReason !== day.label ? ` (${day.closureReason})` : ''}. No classes to prepare for.`,
       })
     }
 

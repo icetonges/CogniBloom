@@ -854,3 +854,41 @@ model AiUsageLog {
   @@index([userId])
   @@index([provider])
 }
+
+// ============ SCHOOL YEAR CALENDAR ============
+
+/// One row per notable date in the school year. Ordinary Blue/Gray days are
+/// not stored — the rotation lives in `lib/school/calendar.ts` and only
+/// exceptions need a row here.
+///
+/// Precedence when resolving a date (see lib/school/resolve.ts):
+///   manual override (source='manual')  >  FCPS calendar  >  Blue/Gray rotation
+model SchoolCalendarDay {
+  id                    String      @id @default(cuid())
+  /// Eastern calendar date. Stored as DATE so there is no timezone drift.
+  date                  DateTime    @unique @db.Date
+
+  /// "blue" | "gray" — set only to force a rotation half (e.g. a make-up day).
+  rotation              String?
+  /// Students do not attend. Empties the planner, Navigate and Prep for the day.
+  noSchool              Boolean     @default(false)
+  earlyRelease          Boolean     @default(false)
+  /// "regular" | "two-hour-delay" | "early-release"
+  scheduleKind          String?
+
+  /// FCPS letter code: F, QE, YE, O, OE, TW, SD, SP, H, NT
+  code                  String?
+  category              String      @default("instructional")
+  label                 String?
+  note                  String?     @db.Text
+
+  /// "fcps" for ingested rows, "manual" for closures added by hand.
+  /// Re-running the ingest never overwrites a manual row.
+  source                String      @default("fcps")
+
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([noSchool])
+  @@index([source])
+}
