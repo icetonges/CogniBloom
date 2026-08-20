@@ -10,10 +10,12 @@ import {
   Plus, X, Check, Trash2, Tag as TagIcon, Clock, Target, Flag,
   AlignLeft, Pen, Repeat, ListChecks, Sparkles,
   Droplets, Moon, Utensils, Brain, TrendingUp, Flame, ChevronUp, ChevronDown,
+  GraduationCap, MapPin, Lock, Footprints,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer'
+import { getSchoolDay, dayTypeOf, fmt12, type SchoolDay } from '@/lib/school'
 
 interface Entry {
   id: string
@@ -56,6 +58,16 @@ const isRoutine = (e: Entry) => e.tags.includes('routine')
 // rendered with a lighter, dashed style and an "optional" badge.
 const OPTIONAL_TAG = 'optional'
 const isOptional = (e: Entry) => e.tags.includes(OPTIONAL_TAG)
+
+// Rows generated from the Frost class schedule. They live in their own locked
+// band: checkable, but not editable or deletable, because the schedule is the
+// school's to change and not Daniel's. `seed-day` reconciles them each load.
+const SCHOOL_TAG = 'school'
+const LADDER_TAG = '__ladder__'
+const isSchool = (e: Entry) => e.tags.includes(SCHOOL_TAG)
+const isLunch = (e: Entry) => e.tags.includes('lunch')
+/** Reserved rows that must never render as ordinary planner items. */
+const isReserved = (e: Entry) => e.tags.includes(META_TAG) || e.tags.includes(LADDER_TAG)
 
 // ── checklist encoding inside the free-text details field ──
 const CHECK_RE = /^- \[( |x|X)\] (.*)$/
@@ -530,6 +542,9 @@ function DayView({
   onRestoreRoutine: () => void
   onRefresh: () => void
 }) {
+  // The class schedule is static config, so it is derived here rather than
+  // fetched — the seeded planner rows and this view read the same source.
+  const school: SchoolDay = useMemo(() => getSchoolDay(dayKey(cursor)), [cursor])
   const dateKey = dayKey(cursor)
   const [items, setItems] = useState<Entry[]>(entries)
   useEffect(() => { setItems(entries) }, [entries])
@@ -598,10 +613,13 @@ function DayView({
   }
 
   // ── groups ──
-  const routine = items.filter(isRoutine)
-  const real = items.filter((e) => !isRoutine(e) && !e.tags.includes(META_TAG))
-  const timed = real.filter((e) => e.startTime)
-  const tasks = [...routine, ...real]
+  const schoolItems = items.filter(isSchool).sort((a, b) =>
+    (a.startTime ?? '') < (b.startTime ?? '') ? -1 : (a.startTime ?? '') > (b.startTime ?? '') ? 1 : 0
+  )
+  const routine = items.filter((e) => isRoutine(e) && !isSchool(e))
+  const real = items.filter((e) => !isRoutine(e) && !isSchool(e) && !isReserved(e))
+  const timed = real.filter((e) => e.startTime)  // school rows live in their own band
+  const tasks = [...routine, ...real, ...schoolItems]
   // Sort habits chronologically by startTime; fall back to sortOrder for untimed items.
   const habitList = [...routine].sort((a, b) => {
     if (a.startTime && b.startTime) return a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0
@@ -724,6 +742,64 @@ function DayView({
     </section>
   )
 
+  const schoolBand = school && school.isSchoolDay ? (
+    <section key="school">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className={cn(sectionTitle, 'mb-0')}>
+          <GraduationCap className="w-3.5 h-3.5" /> At school
+          <span className={cn(
+            'ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold normal-case tracking-normal',
+            school.type === 'blue' ? 'bg-sky-500/15 text-sky-400' : 'bg-slate-400/15 text-slate-400'
+          )}>
+            {school.label}
+          </span>
+          {school.earlyRelease && (
+            <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold normal-case tracking-normal bg-amber-500/15 text-amber-500">
+              Early release
+            </span>
+          )}
+        </h3>
+        <a href="/dashboard/school" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+          <MapPin className="w-3 h-3" /> Route
+        </a>
+      </div>
+      <Card className="p-3 space-y-1">
+        {schoolItems.map((e) => {
+          const lunch = isLunch(e)
+          return (
+            <div key={e.id} className="flex items-start gap-2 rounded-lg px-1 -mx-1 py-0.5 hover:bg-muted/30">
+              <button
+                onClick={() => toggle(e)}
+                className={cn(
+                  'mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0',
+                  e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary'
+                )}
+              >
+                {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
+              </button>
+              <span className="w-14 shrink-0 text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                {e.startTime ? fmt12(e.startTime) : ''}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className={cn('text-sm font-medium truncate', e.status === 'done' && 'line-through text-muted-foreground')}>
+                  {lunch ? '🍽 ' : ''}{e.title}
+                </div>
+                {e.details && <div className="text-[11px] text-muted-foreground truncate">{e.details}</div>}
+              </div>
+              <Lock className="w-3 h-3 text-muted-foreground/30 shrink-0 mt-1" aria-label="From the school schedule" />
+            </div>
+          )
+        })}
+        <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-border/60 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Footprints className="w-3 h-3" /> ~{school.totalWalkMetres} m of hallway
+          </span>
+          <a href="/dashboard/prep" className="text-primary hover:underline">Prep these classes →</a>
+        </div>
+      </Card>
+    </section>
+  ) : null
+
   const wellness = (
     <section key="well">
       <h3 className={sectionTitle}><Droplets className="w-3.5 h-3.5" /> Wellness</h3>
@@ -778,8 +854,22 @@ function DayView({
       <Card className="p-3">
         <div className="flex items-center justify-between gap-3">
           <div className="leading-tight">
-            <div className="text-base font-bold">{cursor.toLocaleDateString('en-US', { weekday: 'long' })}</div>
-            <div className="text-[11px] text-muted-foreground">{cursor.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+            <div className="text-base font-bold flex items-center gap-2">
+              {cursor.toLocaleDateString('en-US', { weekday: 'long' })}
+              <span className={cn(
+                'text-[10px] px-1.5 py-0.5 rounded-full font-bold',
+                school.type === 'blue' ? 'bg-sky-500/15 text-sky-400'
+                  : school.type === 'gray' ? 'bg-slate-400/15 text-slate-400'
+                  : 'bg-muted text-muted-foreground'
+              )}>
+                {school.label}
+              </span>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {cursor.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              {school.quarter ? ` · Q${school.quarter}` : ''}
+              {school.breakLabel ? ` · ${school.breakLabel}` : ''}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {/* Save button — always visible, confirms sync with server */}
@@ -817,6 +907,7 @@ function DayView({
       <div className="grid lg:grid-cols-2 gap-5 items-start">
         {/* LEFT */}
         <div className="space-y-5">
+          {schoolBand}
           {focus}
           {schedule}
           {wellness}
@@ -848,7 +939,11 @@ function MonthView({
 
   const countByDay = useMemo(() => {
     const m: Record<string, number> = {}
-    dayEntries.forEach((e) => { if (e.tags.includes(META_TAG) || e.tags.includes('routine')) return; const k = e.date.slice(0, 10); m[k] = (m[k] ?? 0) + 1 })
+    dayEntries.forEach((e) => {
+      if (e.tags.includes(META_TAG) || e.tags.includes('routine') || e.tags.includes(SCHOOL_TAG) || e.tags.includes(LADDER_TAG)) return
+      const k = e.date.slice(0, 10)
+      m[k] = (m[k] ?? 0) + 1
+    })
     return m
   }, [dayEntries])
 
@@ -877,16 +972,33 @@ function MonthView({
             const k = dayKey(d)
             const count = countByDay[k] ?? 0
             const isToday = k === todayKey
+            const type = dayTypeOf(k)
             return (
               <button
                 key={i}
                 onClick={() => onPickDay(d)}
-                title="Add a plan on this day"
+                title={
+                  type === 'blue' ? 'Blue day — periods 1, 3, 4, 5, 7'
+                  : type === 'gray' ? 'Gray day — periods 1, 2, 4, 6, 8'
+                  : type === 'holiday' ? 'No school'
+                  : 'Add a plan on this day'
+                }
                 className={cn(
-                  'aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 text-sm transition-colors hover:bg-primary/10',
-                  isToday ? 'bg-primary/10 ring-1 ring-primary/40 font-bold' : 'text-foreground'
+                  'relative aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 text-sm transition-colors hover:bg-primary/10',
+                  isToday ? 'bg-primary/10 ring-1 ring-primary/40 font-bold' : 'text-foreground',
+                  type === 'blue' && !isToday && 'bg-sky-500/[0.08]',
+                  type === 'gray' && !isToday && 'bg-slate-400/[0.08]',
+                  type === 'holiday' && 'text-muted-foreground/50'
                 )}
               >
+                {(type === 'blue' || type === 'gray') && (
+                  <span className={cn(
+                    'absolute top-1 right-1 text-[8px] font-black leading-none',
+                    type === 'blue' ? 'text-sky-400' : 'text-slate-400'
+                  )}>
+                    {type === 'blue' ? 'B' : 'G'}
+                  </span>
+                )}
                 <span>{day}</span>
                 {count > 0 && (
                   <span className="flex gap-0.5">
@@ -899,7 +1011,11 @@ function MonthView({
             )
           })}
         </div>
-        <p className="text-[11px] text-muted-foreground text-center mt-2">Tap any day to plan it.</p>
+        <div className="flex items-center justify-center gap-3 mt-2 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-sky-500/25" /> Blue · P1 3 4 5 7</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-slate-400/25" /> Gray · P1 2 4 6 8</span>
+          <span>Tap any day to plan it.</span>
+        </div>
       </Card>
 
       <div>
