@@ -11,7 +11,6 @@
 import {
   type DateKey,
   type DayType,
-  dayTypeOf,
   quarterOf,
   isEarlyRelease,
   nextSchoolDay,

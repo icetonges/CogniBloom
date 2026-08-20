@@ -70,7 +70,8 @@ export default function PrepPage() {
   const [open, setOpen] = useState<string | null>(null)
 
   const load = useCallback(async (d?: string, ai = false) => {
-    ai ? setAiLoading(true) : setLoading(true)
+    if (ai) setAiLoading(true)
+    else setLoading(true)
     try {
       const qs = new URLSearchParams()
       if (d) qs.set('date', d)
@@ -92,7 +93,8 @@ export default function PrepPage() {
   const togglePack = (item: string) =>
     setPacked((prev) => {
       const next = new Set(prev)
-      next.has(item) ? next.delete(item) : next.add(item)
+      if (next.has(item)) next.delete(item)
+      else next.add(item)
       return next
     })
 
