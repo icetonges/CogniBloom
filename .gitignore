@@ -47,3 +47,8 @@ prisma/generated/
 
 .vercel
 .env*.local
+
+# Files staged for manual deletion (Claude cannot delete on this device)
+_to_delete/
+**/_to_delete/
+*.tgz

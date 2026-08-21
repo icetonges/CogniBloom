@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   BookOpen, Search, AlertTriangle, HelpCircle, Download, Loader2,
-  Check, ExternalLink, Filter, X, GraduationCap,
+  Check, ExternalLink, Filter, X, GraduationCap, BookOpenCheck,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import {
   BOOKS, CORRECTED_BOOKS, AMBIGUOUS_BOOKS, HANDOUT_RESOURCES,
   LAYERS, LAYER_ORDER, allThemes, citation,
+  FULL_TEXTS, TOTAL_FULL_TEXT_WORDS, hasFullText,
   type Book, type Layer, type Band,
 } from '@/lib/english'
 
@@ -123,6 +124,9 @@ export default function EnglishLibraryPage() {
         </div>
         <Link href="/dashboard/prep" className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
           <GraduationCap className="w-3.5 h-3.5" /> Course Prep
+        </Link>
+        <Link href="/dashboard/english/read" className="text-xs font-semibold text-orange-400 hover:underline inline-flex items-center gap-1">
+          <BookOpenCheck className="w-3.5 h-3.5" /> Read full texts
         </Link>
         <button
           onClick={() => setShowAudit((v) => !v)}
@@ -249,6 +253,30 @@ export default function EnglishLibraryPage() {
         })}
       </div>
 
+      {/* ── the reading room ── */}
+      <Link href="/dashboard/english/read" className="block">
+        <Card className="p-4 border-orange-500/30 bg-orange-500/[0.06] hover:border-orange-400/60 transition-colors">
+          <div className="flex flex-wrap items-center gap-4">
+            <BookOpenCheck className="w-5 h-5 text-orange-400 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-bold">
+                {FULL_TEXTS.length} books you can read here, cover to cover
+              </h2>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed max-w-3xl">
+                {TOTAL_FULL_TEXT_WORDS.toLocaleString()} words of real text — every chapter, nothing
+                summarised. Change the type size, search the whole book, highlight a sentence to
+                save it or hand it to the tutor, who can read the page you are on.
+                {' '}<span className="text-orange-300">
+                  {FULL_TEXTS.filter((t) => t.onList).map((t) => t.title).join(' and ')} are on your list;
+                  the rest pair with one that is.
+                </span>
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-orange-300 shrink-0">Open the reading room →</span>
+          </div>
+        </Card>
+      </Link>
+
       {/* ── filters ── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
@@ -323,6 +351,11 @@ function BookCard({ book, progress }: { book: Book; progress?: Progress }) {
             <div className="text-[11px] text-muted-foreground mt-0.5">
               {book.authors.join(', ')} · {book.year}
             </div>
+            {hasFullText(book.slug) && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-orange-300">
+                <BookOpenCheck className="w-2.5 h-2.5" /> full text here
+              </span>
+            )}
           </div>
           <span className="text-[9px] tabular-nums text-muted-foreground/60 shrink-0">#{book.n}</span>
         </div>

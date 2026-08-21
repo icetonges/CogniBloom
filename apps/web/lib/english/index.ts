@@ -7,3 +7,4 @@
  */
 export * from './books'
 export * from './curriculum'
+export * from './texts'

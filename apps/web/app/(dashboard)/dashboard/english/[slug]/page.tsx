@@ -13,6 +13,7 @@ import { useParams } from 'next/navigation'
 import {
   ArrowLeft, Send, Loader2, HelpCircle, BookOpen,
   AlertTriangle, Folder, Sparkles, Target,
+  BookOpenCheck, Library, ExternalLink, Clock,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,9 @@ import { cn } from '@/lib/utils'
 import {
   bookBySlug, citation, LAYERS, LAYER_ORDER,
   skillById, skillsForForm, type Layer,
+  fullTextBySlug, companionsFor,
 } from '@/lib/english'
+import ChapterWorkshop from '@/components/english/chapter-workshop'
 
 interface Turn { role: 'user' | 'assistant'; content: string }
 interface FocusSkill { id: string; name: string; strand: string; level: number }
@@ -105,6 +108,8 @@ export default function BookWorkspacePage() {
 
   const L = LAYERS[layer]
   const skills = skillsForForm(book.form).map(skillById).filter(Boolean)
+  const fullText = fullTextBySlug(book.slug)
+  const companions = companionsFor(book.slug)
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-[1500px] mx-auto">
@@ -134,6 +139,84 @@ export default function BookWorkspacePage() {
         <Card className="p-3 text-[11px] border-rose-500/30 bg-rose-500/[0.06] flex items-start gap-2">
           <HelpCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-rose-400" />
           <span><strong>Check with Ms. Champagne.</strong> {book.ambiguity}</span>
+        </Card>
+      )}
+
+      {/* ── the text itself ── */}
+      {fullText ? (
+        <Card className="p-4 border-orange-500/30 bg-orange-500/[0.06]">
+          <div className="flex flex-wrap items-start gap-4">
+            <BookOpenCheck className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-bold">The whole book is here.</h2>
+              <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed max-w-2xl">
+                {fullText.words.toLocaleString()} words, {fullText.units} {fullText.unitNoun}s,
+                about {Math.round(fullText.minutes / 60)} hours of reading — the complete text,
+                not a summary. Highlight any sentence to save it or ask the tutor about it.
+                <span className="block mt-1 text-muted-foreground/70">{fullText.edition}. Source: {fullText.sourceName}.</span>
+              </p>
+            </div>
+            <Link href={`/dashboard/english/read/${book.slug}`}>
+              <Button size="sm" className="shrink-0">
+                <BookOpen className="w-3.5 h-3.5 mr-1.5" /> Start reading
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
+          <ChapterWorkshop book={book} layer={layer} onDiscuss={(t) => void send(t)} />
+          <Card className="p-3 space-y-3">
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Library className="w-3.5 h-3.5" /> Get the book
+            </h2>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              This one is still in copyright, so the text can’t live in the app. Borrow it —
+              all three of these are free with your school or county card.
+            </p>
+            <div className="space-y-1.5">
+              <Borrow
+                label="Fairfax County Public Library"
+                sub="Print and ebook — search the catalogue"
+                href={`https://fcpl.bibliocommons.com/v2/search?searchType=smart&query=${encodeURIComponent(book.title + ' ' + book.authors[0])}`}
+              />
+              <Borrow
+                label="Sora"
+                sub="FCPS ebooks and audiobooks — sign in with your student account"
+                href="https://soraapp.com/welcome"
+              />
+              <Borrow
+                label="Open Library"
+                sub="Borrow a scanned copy for an hour at a time"
+                href={`https://openlibrary.org/search?q=${encodeURIComponent(book.title + ' ' + book.authors[0])}`}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground/70 leading-snug border-t border-border/60 pt-2">
+              Frost’s library has it too — ask at the desk for {citation(book).split('.')[0]}.
+            </p>
+          </Card>
+        </div>
+      )}
+
+      {/* ── public-domain companions ── */}
+      {companions.length > 0 && (
+        <Card className="p-3">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+            Read alongside — full text, free, right here
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {companions.map((c) => (
+              <Link key={c.slug} href={`/dashboard/english/read/${c.slug}`}
+                className="rounded-lg border border-border/60 p-2.5 hover:border-primary/50 transition-colors">
+                <p className="text-xs font-semibold leading-snug">{c.title}</p>
+                <p className="text-[10px] text-muted-foreground">{c.authors.join(', ')} · {c.year}</p>
+                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed line-clamp-3">{c.hook}</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-1.5 inline-flex items-center gap-1">
+                  <Clock className="w-2.5 h-2.5" /> ~{Math.round(c.minutes / 60)} h · {c.units} {c.unitNoun}s
+                </p>
+              </Link>
+            ))}
+          </div>
         </Card>
       )}
 
@@ -349,5 +432,21 @@ export default function BookWorkspacePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function Borrow({ label, sub, href }: { label: string; sub: string; href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block rounded-lg border border-border/60 px-2.5 py-2 hover:border-primary/50 transition-colors"
+    >
+      <span className="text-[11px] font-semibold inline-flex items-center gap-1">
+        {label} <ExternalLink className="w-2.5 h-2.5 text-muted-foreground" />
+      </span>
+      <span className="block text-[10px] text-muted-foreground leading-snug">{sub}</span>
+    </a>
   )
 }
