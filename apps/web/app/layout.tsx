@@ -1,22 +1,18 @@
 import type { Metadata } from 'next'
-import { Plus_Jakarta_Sans, Sora } from 'next/font/google'
+import { Source_Serif_4 } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { AuthSessionProvider } from '@/components/providers/AuthSessionProvider'
 import './globals.css'
 
-const jakarta = Plus_Jakarta_Sans({
+// Fallback for Anthropic Serif, which is proprietary and cannot be bundled
+// (see the @font-face block in globals.css). Source Serif 4 is a variable
+// open serif with a close feel and excellent screen legibility, so the app
+// looks right whether or not the licensed files are installed.
+const serif = Source_Serif_4({
   subsets: ['latin'],
-  variable: '--font-jakarta',
+  variable: '--font-serif',
   display: 'swap',
-  weight: ['400', '500', '600', '700', '800'],
-})
-
-// Display font — punchy geometric headings for a modern, teen-friendly feel
-const sora = Sora({
-  subsets: ['latin'],
-  variable: '--font-sora',
-  display: 'swap',
-  weight: ['500', '600', '700', '800'],
+  style: ['normal', 'italic'],
 })
 
 export const metadata: Metadata = {
@@ -48,13 +44,13 @@ export const viewport = {
   colorScheme: 'dark light',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#f5f6fa' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f1623' },
+    { media: '(prefers-color-scheme: dark)', color: '#121212' },
   ],
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${jakarta.variable} ${sora.variable}`}>
+    <html lang="en" suppressHydrationWarning className={serif.variable}>
       <head>
         <meta charSet="utf-8" />
       </head>

@@ -2,6 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Anthropic Serif ──────────────────────────────────────────────────────
+   Anthropic Serif is a proprietary typeface — it is not on Google Fonts and
+   cannot be bundled here. These rules are a drop-in slot: put the licensed
+   .woff2 files in `apps/web/public/fonts/` with the names below and the whole
+   app switches to them with no further code change.
+
+   Until those files exist the browser silently falls through to Source Serif 4
+   (loaded in app/layout.tsx), which is a close, highly readable open match.
+   ──────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: url('/fonts/AnthropicSerif-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: url('/fonts/AnthropicSerif-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: url('/fonts/AnthropicSerif-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: url('/fonts/AnthropicSerif-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: url('/fonts/AnthropicSerif-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── Global: disable browser scroll-anchoring so AI-generated content
       never causes the page or any panel to jump ──────────────────────── */
 * {
@@ -129,35 +174,39 @@
     --secondary-foreground: 0 0% 100%;
   }
 
-  /* Dark mode — default */
+  /* Dark mode — default.
+     Neutral black rather than the old blue-grey: containers (`--card`,
+     `--popover`) sit at near-pure black and the page sits a step above them,
+     so every panel reads as a distinct black box. `--border` is deliberately
+     light enough to keep those boxes defined against the page. */
   .dark {
-    --background: 224 27% 10%;
-    --foreground: 213 31% 91%;
+    --background: 0 0% 7%;          /* #121212 — the page behind the cards  */
+    --foreground: 0 0% 95%;
 
-    --card: 224 27% 13%;
-    --card-foreground: 213 31% 91%;
+    --card: 0 0% 2%;                /* #050505 — the container boxes        */
+    --card-foreground: 0 0% 95%;
 
-    --popover: 224 27% 13%;
-    --popover-foreground: 213 31% 91%;
+    --popover: 0 0% 2%;
+    --popover-foreground: 0 0% 95%;
 
-    --muted: 224 20% 18%;
-    --muted-foreground: 210 22% 88%;
+    --muted: 0 0% 13%;              /* inputs, subtle fills                 */
+    --muted-foreground: 0 0% 72%;
 
     --accent: 217 91% 60%;
-    --accent-foreground: 224 27% 10%;
+    --accent-foreground: 0 0% 4%;
 
-    --destructive: 0 63% 45%;
-    --destructive-foreground: 213 31% 91%;
+    --destructive: 0 63% 48%;
+    --destructive-foreground: 0 0% 95%;
 
-    --border: 224 20% 22%;
-    --input: 224 20% 22%;
+    --border: 0 0% 20%;             /* keeps black cards legible on black   */
+    --input: 0 0% 20%;
     --ring: 217 91% 60%;
 
     --primary: 239 84% 67%;
-    --primary-foreground: 224 27% 10%;
+    --primary-foreground: 0 0% 4%;
 
     --secondary: 260 85% 70%;
-    --secondary-foreground: 224 27% 10%;
+    --secondary-foreground: 0 0% 4%;
   }
 }
 
@@ -173,7 +222,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: Georgia, var(--font-jakarta), 'Times New Roman', serif;
+    font-family: 'Anthropic Serif', var(--font-serif), Georgia, 'Times New Roman', serif;
     font-feature-settings: 'rlig' 1, 'calt' 1;
     line-height: 1.65;
   }
@@ -181,7 +230,7 @@
   h1, h2, h3, h4, h5, h6 {
     line-height: 1.25;
     font-weight: 700;
-    font-family: Georgia, var(--font-sora), var(--font-jakarta), serif;
+    font-family: 'Anthropic Serif', var(--font-serif), Georgia, 'Times New Roman', serif;
     letter-spacing: -0.015em;
   }
 

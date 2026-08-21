@@ -10,9 +10,12 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Georgia', 'var(--font-jakarta)', 'var(--font-sans)', ...defaultTheme.fontFamily.serif],
-        display: ['Georgia', 'var(--font-sora)', 'var(--font-jakarta)', ...defaultTheme.fontFamily.serif],
-        serif: ['Georgia', ...defaultTheme.fontFamily.serif],
+        // One serif stack for the whole app. 'Anthropic Serif' is used when the
+        // licensed files are present in public/fonts/ (see globals.css);
+        // otherwise this falls through to Source Serif 4 from next/font.
+        sans: ['Anthropic Serif', 'var(--font-serif)', 'Georgia', ...defaultTheme.fontFamily.serif],
+        display: ['Anthropic Serif', 'var(--font-serif)', 'Georgia', ...defaultTheme.fontFamily.serif],
+        serif: ['Anthropic Serif', 'var(--font-serif)', 'Georgia', ...defaultTheme.fontFamily.serif],
       },
       colors: {
         border: 'hsl(var(--border))',
