@@ -140,6 +140,7 @@ export const COURSE_RESOURCES: readonly CourseResources[] = [
     sources: [
       { label: 'VDOE English SOL — Grade 7', url: 'https://www.doe.virginia.gov/teaching-learning-assessment/k-12-standards-instruction/english', kind: 'standard', note: 'Reading, writing, research and communication standards for 7th grade.' },
       { label: 'FCPS Library Databases', url: 'https://www.fcps.edu/services/technology/grade-level-digital-resources', kind: 'platform', note: 'Where research papers should start. Cite these, not a search engine.' },
+      { label: 'Your reading list & tutor', url: '/dashboard/english', kind: 'official', note: 'All 43 texts Ms. Champagne may assign, with the Socratic reading coach and your per-book study folders.' },
       { label: 'Purdue OWL', url: 'https://owl.purdue.edu/owl/purdue_owl.html', kind: 'official', note: 'The citation and grammar reference that will still be right in college.' },
       { label: 'CommonLit', url: 'https://www.commonlit.org/', kind: 'practice', note: 'Free leveled passages with text-dependent questions — the exact skill the SOL tests.' },
       { label: 'Membean / vocabulary in context', url: 'https://membean.com/', kind: 'practice', note: 'Roots-based vocabulary. Beats memorising word lists for retention.' },

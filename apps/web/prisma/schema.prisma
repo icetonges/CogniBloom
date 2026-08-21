@@ -61,6 +61,10 @@ model User {
 
   @@index([email])
   @@index([parentId])
+  // English 7 module
+  bookProgress          BookProgress[]
+  readingSessions       ReadingSession[]
+  skillMastery          SkillMastery[]
 }
 
 enum UserRole {
@@ -891,4 +895,121 @@ model SchoolCalendarDay {
 
   @@index([noSchool])
   @@index([source])
+}
+
+// ============ ENGLISH 7 MODULE ============
+
+/// The FCPS English 7 reading list. Source of truth is lib/english/books.ts —
+/// this table is populated by POST /api/english/books {action:'ingest'} so that
+/// progress and sessions have something to join against.
+///
+/// `handoutSays` / `correction` preserve the audit trail: the printed handout
+/// contains 23 citation errors and they are recorded, not silently fixed.
+model EnglishBook {
+  id                    String            @id @default(cuid())
+  slug                  String            @unique
+  /// Position on the printed handout, 1-43.
+  n                     Int
+  title                 String
+  subtitle              String?
+  authors               String[]          @default([])
+  year                  Int
+  /// novel | novel-in-verse | graphic-novel | memoir | verse-memoir |
+  /// biography | autobiography | nonfiction | play | diary
+  form                  String
+  /// accessible | core | stretch
+  band                  String
+  themes                String[]          @default([])
+  series                String?
+
+  handoutSays           String?
+  correction            String?           @db.Text
+  ambiguity             String?           @db.Text
+  pairsWith             String[]          @default([])
+
+  source                String            @default("fcps-handout-2026-27")
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  progress              BookProgress[]
+  sessions              ReadingSession[]
+
+  @@index([form])
+  @@index([band])
+}
+
+/// One row per (student, book). `layer` records WHICH of the four learning
+/// layers the book is being read in — the same title can be revisited later in
+/// a higher layer with harder demands.
+model BookProgress {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId                String
+  book                  EnglishBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  /// catch_up | required | recommended | level_up
+  layer                 String      @default("required")
+  /// not_started | reading | finished | abandoned
+  status                String      @default("not_started")
+  /// Free text — "ch. 12" or "p. 140". Books paginate differently per edition.
+  currentPart           String?
+  percent               Int         @default(0)
+
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  rating                Int?
+  takeaway              String?     @db.Text
+
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@unique([userId, bookId])
+  @@index([userId, status])
+  @@index([layer])
+}
+
+/// A single sitting with a book — what was read and what the tutor worked on.
+model ReadingSession {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId                String
+  book                  EnglishBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  minutes               Int         @default(0)
+  fromPart              String?
+  toPart                String?
+  summary               String?     @db.Text
+  /// Skill ids from lib/english/curriculum.ts worked during this session.
+  skillsWorked          String[]    @default([])
+  layer                 String      @default("required")
+
+  createdAt             DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([bookId])
+}
+
+/// Per-skill mastery, 0-4. This is what decides whether a skill belongs in the
+/// catch-up layer or the level-up layer for this particular student, rather
+/// than a fixed grade-level assumption.
+model SkillMastery {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Skill id from lib/english/curriculum.ts, e.g. "theme", "thesis".
+  skillId               String
+  strand                String
+  /// 0 not seen · 1 struggling · 2 emerging · 3 secure · 4 teaching others
+  level                 Int         @default(0)
+  evidence              String?     @db.Text
+  lastSeen              DateTime?
+
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@unique([userId, skillId])
+  @@index([userId, level])
 }

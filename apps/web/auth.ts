@@ -37,6 +37,11 @@ const OWNED_CONTENT = [
   'userPreferences',
   'feedEngagement',
   'subscription',
+  // English 7 module — added 2026-08-21. Anything cascading from User MUST be
+  // listed here or an account merge will destroy it.
+  'bookProgress',
+  'readingSession',
+  'skillMastery',
 ] as const
 
 type OwnedModel = (typeof OWNED_CONTENT)[number]
