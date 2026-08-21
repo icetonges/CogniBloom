@@ -14,15 +14,18 @@
     "test": "pnpm -r run test",
     "test:e2e": "pnpm -r run test:e2e",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "db:migrate": "pnpm -C apps/web exec prisma migrate dev",
+    "db:migrate": "pnpm -C apps/web exec prisma migrate deploy",
+    "db:status": "pnpm -C apps/web exec prisma migrate status",
+    "db:migrate:new": "pnpm -C apps/web exec prisma migrate dev --create-only",
     "db:seed": "pnpm -C apps/web exec prisma db seed",
     "db:studio": "pnpm -C apps/web exec prisma studio"
   },
   "devDependencies": {
-    "prettier": "^3.2.5",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",
+    "pg": "^8.23.0",
+    "prettier": "^3.2.5",
     "typescript": "^5.3.3"
   }
 }

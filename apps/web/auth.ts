@@ -15,6 +15,75 @@ import { DANIEL_USER_ID, SHARED_ACCOUNT_EMAILS } from '@/lib/user'
 // read `role`/`userId` off the token without a DB round-trip on every
 // request. The Prisma adapter is still wired in because it's required for
 // Google account linking (writes to the `Account` table on first sign-in).
+/**
+ * Every table that hangs off User and holds real user work. Deliberately
+ * excludes Account and Session (auth plumbing, safe to drop with the row) and
+ * the append-only log tables.
+ *
+ * Keep this list in step with the schema: any new model carrying `userId`
+ * belongs here, or a future account merge will silently drop its rows.
+ */
+const OWNED_CONTENT = [
+  'note',
+  'plannerEntry',
+  'flashcard',
+  'tutorSession',
+  'quiz',
+  'upload',
+  'noteRecallState',
+  'dailyReport',
+  'learningProfile',
+  'userBadge',
+  'userPreferences',
+  'feedEngagement',
+  'subscription',
+] as const
+
+type OwnedModel = (typeof OWNED_CONTENT)[number]
+// The delegates all share the shape we need; narrow to just those two methods.
+type ContentDelegate = {
+  count: (args: { where: { userId: string } }) => Promise<number>
+  updateMany: (args: { where: { userId: string }; data: { userId: string } }) => Promise<unknown>
+}
+const delegate = (m: OwnedModel): ContentDelegate =>
+  (db as unknown as Record<OwnedModel, ContentDelegate>)[m]
+
+/**
+ * Move everything `fromId` owns onto `toId`. Used when a duplicate account is
+ * merged into the shared household account, so no work is stranded — and, more
+ * importantly, so nothing is left to be destroyed by a cascading delete.
+ *
+ * Best-effort per table: one failure must not abort the rest, and must not
+ * block sign-in.
+ */
+async function adoptContent(fromId: string, toId: string): Promise<void> {
+  if (fromId === toId) return
+  for (const model of OWNED_CONTENT) {
+    try {
+      await delegate(model).updateMany({ where: { userId: fromId }, data: { userId: toId } })
+    } catch (err) {
+      // Unique constraints (e.g. a 1:1 profile row already on the target) are
+      // expected here — leave that row behind rather than failing the merge.
+      console.error(`[auth] could not adopt ${model} from ${fromId}:`, err)
+    }
+  }
+}
+
+/** How many rows of real user work `userId` still owns. */
+async function countOwnedContent(userId: string): Promise<number> {
+  let total = 0
+  for (const model of OWNED_CONTENT) {
+    try {
+      total += await delegate(model).count({ where: { userId } })
+    } catch {
+      // If we cannot count it, assume it is occupied. Refusing to delete is
+      // always the safe failure here.
+      total += 1
+    }
+  }
+  return total
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(db),
@@ -99,7 +168,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             .then(() => true)
             .catch(() => false)
           if (repointed) {
-            await db.user.delete({ where: { id: throwawayId } }).catch(() => {})
+            // DANGER ZONE. Every content table hangs off User with
+            // `onDelete: Cascade`, so deleting a throwaway row that owns any
+            // work destroys that work irrecoverably. The throwaway is normally
+            // empty (created seconds ago) -- but if an earlier repoint failed,
+            // the user stayed signed in as the throwaway and may have written
+            // real notes against it since. So: adopt first, delete only if
+            // provably empty, and never cascade.
+            //
+            // `user.id` is optional in the Auth.js types, so this only runs
+            // once we actually have an id to act on.
+            if (throwawayId) {
+              await adoptContent(throwawayId, DANIEL_USER_ID)
+
+              const leftover = await countOwnedContent(throwawayId)
+              if (leftover === 0) {
+                await db.user.delete({ where: { id: throwawayId } }).catch(() => {})
+              } else {
+                // An orphaned User row is harmless. Deleted schoolwork is not.
+                console.error(
+                  `[auth] throwaway user ${throwawayId} still owns ${leftover} row(s) after adoption -- keeping the row instead of cascading a delete.`
+                )
+              }
+            }
+
             await db.user
               .update({ where: { id: DANIEL_USER_ID }, data: { emailVerified: true } })
               .catch(() => {})
