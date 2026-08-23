@@ -146,10 +146,14 @@ export function FloorPlan({
         </div>
       )}
 
+      {/* The plan fills its column and grows with it. The floor is 1240×1000,
+          so on a full-width page this draws about twice as large as before;
+          preserveAspectRatio letterboxes rather than distorting when the
+          max-height caps it on a short window. */}
       <svg
         ref={svgRef}
         viewBox={vb}
-        className="w-full h-auto touch-none select-none cursor-grab active:cursor-grabbing"
+        className="w-full h-auto min-h-[520px] max-h-[calc(100vh-7rem)] touch-none select-none cursor-grab active:cursor-grabbing"
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -159,7 +163,7 @@ export function FloorPlan({
         aria-label={`Frost Middle School floor ${floor} plan`}
       >
         <defs>
-          <marker id="fp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+          <marker id="fp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
             <path d="M0,0 L10,5 L0,10 z" className="fill-primary" />
           </marker>
         </defs>
@@ -190,7 +194,7 @@ export function FloorPlan({
                   isSel && 'stroke-primary'
                 )}
                 style={isStop || isSel ? { fill: accent ?? 'var(--primary, #6366f1)', fillOpacity: isSel ? 0.5 : 0.32 } : undefined}
-                strokeWidth={isSel ? 2.5 : isStop ? 1.6 : 0.8}
+                strokeWidth={isSel ? 3 : isStop ? 2 : 1}
               />
               <text
                 x={r.x + r.w / 2} y={r.y + r.h / 2 + 4}
@@ -199,15 +203,15 @@ export function FloorPlan({
                   'pointer-events-none',
                   isStop || isSel ? 'fill-foreground font-bold' : 'fill-muted-foreground'
                 )}
-                fontSize={r.w > 100 ? 15 : 12}
+                fontSize={r.w > 100 ? 18 : 14.5}
               >
                 {r.label}
               </text>
               {nums?.map((n, i) => (
                 <g key={n} className="pointer-events-none">
-                  <circle cx={r.x + 11 + i * 20} cy={r.y + 11} r={9} className="fill-primary" />
-                  <text x={r.x + 11 + i * 20} y={r.y + 15} textAnchor="middle"
-                    className="fill-primary-foreground font-bold" fontSize={11}>{n}</text>
+                  <circle cx={r.x + 12 + i * 23} cy={r.y + 12} r={11} className="fill-primary" />
+                  <text x={r.x + 12 + i * 23} y={r.y + 16.5} textAnchor="middle"
+                    className="fill-primary-foreground font-bold" fontSize={13}>{n}</text>
                 </g>
               ))}
             </g>
@@ -235,10 +239,10 @@ export function FloorPlan({
               d={s.d}
               className="stroke-primary"
               fill="none"
-              strokeWidth={4}
+              strokeWidth={5.5}
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeDasharray="10 7"
+              strokeDasharray="12 8"
               markerEnd={i === routeSegments.length - 1 ? 'url(#fp-arrow)' : undefined}
               opacity={0.95}
             >
@@ -249,7 +253,7 @@ export function FloorPlan({
         {/* endpoints of the visible leg */}
         {route && [route.from, route.to].map((r, i) =>
           r.floor === floor ? (
-            <circle key={i} {...circleAt(r)} r={7}
+            <circle key={i} {...circleAt(r)} r={9}
               className={i === 0 ? 'fill-background stroke-primary' : 'fill-primary stroke-background'}
               strokeWidth={3} />
           ) : null

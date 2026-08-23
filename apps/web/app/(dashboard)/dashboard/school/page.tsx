@@ -113,7 +113,7 @@ export default function SchoolNavigationPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-[1600px] mx-auto">
+    <div className="p-2 md:p-4 space-y-4 w-full mx-auto">
       {/* ── header ── */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">
@@ -205,7 +205,9 @@ export default function SchoolNavigationPage() {
           )}
         </Card>
       ) : (
-        <div className="grid lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-4 items-start">
+        <div className="grid lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)] gap-4 items-start">
+          {/* The itinerary column is deliberately narrow — the floor plan is
+              what has to be readable, not the list beside it. */}
           {/* ── itinerary ── */}
           <div className="space-y-3">
             <Card className="p-3">

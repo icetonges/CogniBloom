@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useCallback, useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
@@ -8,6 +8,7 @@ import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
   CalendarDays, BookMarked, FileText, GraduationCap, ScrollText, TrendingUp, LogOut, Map, CalendarRange, Library,
+  PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -39,9 +40,21 @@ const navItems = [
 
 interface UserStats { level: number; pct: number; streak: number }
 
+/**
+ * Routes that want the whole window rather than the 1152px reading container.
+ * The floor plan is the case that forced this: squeezed into the container with
+ * the sidebar beside it, room numbers rendered at about 10px.
+ */
+const WIDE_ROUTES = ['/dashboard/school']
+
 function Sidebar({
-  onClose, flashcardsDue, reviewDue, userStats,
-}: { onClose?: () => void; flashcardsDue: number; reviewDue: number; userStats: UserStats | null }) {
+  onClose, onCollapse, flashcardsDue, reviewDue, userStats,
+}: {
+  onClose?: () => void
+  /** Desktop: hide the whole sidebar. */
+  onCollapse?: () => void
+  flashcardsDue: number; reviewDue: number; userStats: UserStats | null
+}) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const displayName = session?.user?.name || 'Daniel'
@@ -69,6 +82,16 @@ function Sidebar({
           <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden">
             <X className="w-5 h-5" />
           </Button>
+        )}
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            title="Hide the sidebar"
+            aria-label="Hide the sidebar"
+            className="hidden md:flex w-8 h-8 rounded-lg items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
         )}
       </div>
 
@@ -250,10 +273,40 @@ function Sidebar({
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Desktop only. Remembered between visits — if he hid it to read the floor
+  // plan, it should still be hidden tomorrow morning.
+  const [collapsed, setCollapsed] = useState(false)
   const [flashcardsDue, setFlashcardsDue] = useState(0)
   const [reviewDue, setReviewDue] = useState(0)
   const [userStats, setUserStats] = useState<UserStats | null>(null)
+
+  // Restore the collapsed preference before first paint of the sidebar.
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem('cb:sidebar:collapsed') === '1')
+    } catch { /* private mode — just leave it open */ }
+  }, [])
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((v) => {
+      try { window.localStorage.setItem('cb:sidebar:collapsed', v ? '0' : '1') } catch { /* ignore */ }
+      return !v
+    })
+  }, [])
+
+  // Ctrl/⌘+B hides and shows it, the way every editor does.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        toggleCollapsed()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toggleCollapsed])
 
   // Flashcard + note-review due counts — refreshed every 2 min
   useEffect(() => {
@@ -297,16 +350,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         className={cn(
           'fixed inset-y-0 left-0 z-50 w-64 border-r transition-transform duration-200 md:static md:translate-x-0',
           'bg-card dark:bg-[#080d1a] border-border dark:border-white/[0.04]',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          // Collapsed on desktop: width goes to zero and the border with it,
+          // so the page gets the whole window.
+          collapsed && 'md:w-0 md:overflow-hidden md:border-r-0'
         )}
       >
         <Sidebar
           onClose={() => setSidebarOpen(false)}
+          onCollapse={toggleCollapsed}
           flashcardsDue={flashcardsDue}
           reviewDue={reviewDue}
           userStats={userStats}
         />
       </aside>
+
+      {/* Bring it back — only visible on desktop once it is hidden. */}
+      {collapsed && (
+        <button
+          onClick={toggleCollapsed}
+          title="Show the sidebar (Ctrl+B)"
+          aria-label="Show the sidebar"
+          className="hidden md:flex fixed left-0 top-3 z-50 h-10 w-9 items-center justify-center rounded-r-xl border border-l-0 border-border dark:border-white/[0.06] bg-card dark:bg-[#080d1a] text-muted-foreground shadow-lg hover:text-primary hover:bg-primary/10 transition-colors"
+        >
+          <PanelLeftOpen className="w-4 h-4" />
+        </button>
+      )}
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -333,7 +402,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto dark:bg-[#060c18]">
-          <div className="container max-w-6xl mx-auto py-6 px-4 md:px-8">
+          <div
+            className={cn(
+              'mx-auto py-6',
+              WIDE_ROUTES.some((r) => pathname.startsWith(r))
+                ? 'w-full max-w-none px-3 md:px-5'
+                : 'container max-w-6xl px-4 md:px-8',
+              // Hidden sidebar means the toggle button sits where the page
+              // content starts — give it room.
+              collapsed && 'md:pl-14'
+            )}
+          >
             {children}
           </div>
         </main>
