@@ -987,17 +987,20 @@ function DayView({
       <AICoach />
 
       <div className="grid lg:grid-cols-2 gap-5 items-start">
-        {/* LEFT */}
+        {/* LEFT — the day's intention and what it actually looks like.
+            Highlight & notes sits directly under Today's focus: both are free
+            text about the day, and writing the highlight belongs next to the
+            intention it answers, not across the page from it. */}
         <div className="space-y-5">
           {closureBanner}
           {schoolBand}
           {focus}
+          {highlight}
           {schedule}
           {wellness}
         </div>
-        {/* RIGHT */}
+        {/* RIGHT — the things that get ticked. */}
         <div className="space-y-5">
-          {highlight}
           {habits}
           {meals}
         </div>
