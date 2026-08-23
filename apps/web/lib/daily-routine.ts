@@ -17,6 +17,22 @@
 
 import { PRACTICES, minus, plus, type Practice } from '@/lib/soccer'
 
+/**
+ * Bump this whenever the profiles change shape.
+ *
+ * Seeded rows carry the version as a tag. A day that was seeded under an older
+ * version is reconciled automatically the next time the planner opens it —
+ * otherwise a deploy that fixes the schedule silently does nothing to any day
+ * that had already been seeded, which is exactly what happened when the 07:30
+ * workout was corrected.
+ *
+ * Reconciling only ever adds rows, re-times rows, or removes generated rows
+ * that are still pending. A row already ticked done is a record of work that
+ * actually happened and is never deleted.
+ */
+export const ROUTINE_VERSION = 2
+export const ROUTINE_VERSION_TAG = `routine-v${ROUTINE_VERSION}`
+
 export interface RoutineItem {
   title: string
   /** "HH:mm" */

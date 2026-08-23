@@ -3,7 +3,9 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { fmt12, LUNCH_ROOM, type SchoolDay } from '@/lib/school'
 import { schoolDayFor } from '@/lib/school-db'
-import { profileFor, routineFor } from '@/lib/daily-routine'
+import {
+  profileFor, routineFor, ROUTINE_VERSION_TAG, type RoutineItem,
+} from '@/lib/daily-routine'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +15,15 @@ export const dynamic = 'force-dynamic'
 // period. lib/daily-routine builds the right shape for the date. Items are
 // still tagged 'routine' so seeding stays idempotent, and 'optional' items
 // still render dashed.
+
+/** Every generated routine row carries the version that produced it. */
+function routineTags(r: RoutineItem): string[] {
+  return [
+    'routine', ROUTINE_VERSION_TAG, r.tag,
+    ...(r.extra ?? []),
+    ...(r.optional ? ['optional'] : []),
+  ]
+}
 
 /** Reserved tag marking an entry as generated from the Frost class schedule. */
 const SCHOOL_TAG = 'school'
@@ -94,41 +105,54 @@ export async function POST(request: NextRequest) {
 
     const existing = await db.plannerEntry.findMany({
       where: { userId, scope: 'day', date: anchor },
-      select: { id: true, title: true, tags: true, startTime: true, details: true },
+      select: { id: true, title: true, tags: true, startTime: true, details: true, status: true },
     })
 
     const existingTitles = new Set(existing.map((e) => e.title))
     const force = body.force === true
 
     // ── routine ──
-    // Auto mode: seed only when this day has never been seeded, so later
-    // deletions on an already-seeded day are respected.
-    // Reload mode (force): make the day match the profile exactly — add what is
-    // missing, re-time what has drifted, and drop generated rows the profile no
-    // longer contains. Only rows tagged 'routine' are ever touched, so anything
-    // typed by hand survives. This is what "load defaults" means after the
-    // routine itself changes shape.
+    // Three modes, in order of how they are triggered:
+    //
+    //   never seeded  → write the whole profile
+    //   seeded, old version → reconcile automatically. This is what makes a
+    //     deploy that changes the schedule actually reach days that already
+    //     exist; without it, correcting the 07:30 workout fixed nothing.
+    //   force (the planner's "restore routine" button) → reconcile as well
+    //
+    // Reconciling adds missing rows, re-times drifted ones, and removes
+    // generated rows the profile no longer has — but ONLY rows still marked
+    // pending. A ticked row is a record that the work happened, and records are
+    // never deleted here. Anything typed by hand is untouched in every mode.
     const profile = profileFor(anchor, day.isSchoolDay)
     const routine = routineFor(profile)
     const routineTitles = new Set(routine.map((r) => r.title))
     const existingRoutine = existing.filter((e) => e.tags.includes('routine'))
     const routineSeeded = existingRoutine.length > 0
-    const routineToCreate = force
+    const outOfDate = routineSeeded && !existingRoutine.some((e) => e.tags.includes(ROUTINE_VERSION_TAG))
+    const reconcile = force || outOfDate
+
+    const routineToCreate = reconcile
       ? routine.filter((r) => !existingTitles.has(r.title))
       : routineSeeded ? [] : routine
 
-    const staleRoutine = force
-      ? existingRoutine.filter((e) => !routineTitles.has(e.title)).map((e) => e.id)
+    const staleRoutine = reconcile
+      ? existingRoutine
+          .filter((e) => !routineTitles.has(e.title) && e.status !== 'done')
+          .map((e) => e.id)
       : []
-    const routineToFix = force
+
+    const routineToFix = reconcile
       ? routine
           .map((r) => {
             const row = existingRoutine.find((e) => e.title === r.title)
             if (!row) return null
-            if (row.startTime === r.time && (row.details ?? '') === r.details) return null
-            return { id: row.id, time: r.time, details: r.details }
+            const tags = routineTags(r)
+            const sameTags = tags.length === row.tags.length && tags.every((t) => row.tags.includes(t))
+            if (row.startTime === r.time && (row.details ?? '') === r.details && sameTags) return null
+            return { id: row.id, time: r.time, details: r.details, tags }
           })
-          .filter((x): x is { id: string; time: string; details: string } => x !== null)
+          .filter((x): x is { id: string; time: string; details: string; tags: string[] } => x !== null)
       : []
 
     // ── school band ──
@@ -166,7 +190,10 @@ export async function POST(request: NextRequest) {
       ops.push(db.plannerEntry.deleteMany({ where: { id: { in: staleRoutine }, userId } }))
     }
     for (const f of routineToFix) {
-      ops.push(db.plannerEntry.update({ where: { id: f.id }, data: { startTime: f.time, details: f.details } }))
+      ops.push(db.plannerEntry.update({
+        where: { id: f.id },
+        data: { startTime: f.time, details: f.details, tags: f.tags },
+      }))
     }
 
     for (const s of schoolToCreate) {
@@ -189,11 +216,7 @@ export async function POST(request: NextRequest) {
           data: {
             userId, scope: 'day', date: anchor,
             title: r.title, startTime: r.time, details: r.details,
-            tags: [
-              'routine', r.tag,
-              ...(r.extra ?? []),
-              ...(r.optional ? ['optional'] : []),
-            ],
+            tags: routineTags(r),
             priority: 'normal', sortOrder: order++,
           },
         })
@@ -209,7 +232,10 @@ export async function POST(request: NextRequest) {
 
     const all = await db.plannerEntry.findMany({ where: { userId }, select: { tags: true } })
     const tagSet = new Set<string>()
-    all.forEach((e) => e.tags.forEach((t) => { if (t !== 'routine' && t !== LOCKED_TAG) tagSet.add(t) }))
+    all.forEach((e) => e.tags.forEach((t) => {
+      // 'routine-vN' is seeder bookkeeping, not a tag anyone would filter by.
+      if (t !== 'routine' && t !== LOCKED_TAG && !t.startsWith('routine-v')) tagSet.add(t)
+    }))
 
     return NextResponse.json({
       success: true,
@@ -218,6 +244,7 @@ export async function POST(request: NextRequest) {
       removedSchoolRows: staleSchool.length,
       removedRoutineRows: staleRoutine.length,
       retimedRoutineRows: routineToFix.length,
+      routineUpgraded: outOfDate,
       profile,
       school: {
         type: day.type,

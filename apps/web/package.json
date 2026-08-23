@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
@@ -14,7 +14,8 @@
     "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:status": "prisma migrate status"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

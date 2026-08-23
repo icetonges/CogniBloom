@@ -8,7 +8,7 @@ import {
   Sparkles, BookOpen, MessageSquare, BarChart3, Settings,
   Menu, X, Brain, Rss, Trophy, Upload, Layers, GitBranch, Medal, Flame, Plus, Home,
   CalendarDays, BookMarked, FileText, GraduationCap, ScrollText, TrendingUp, LogOut, Map, CalendarRange, Library,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, ListChecks,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,8 @@ const navItems = [
   { href: '/dashboard/school',          icon: Map,           label: '🗺️ Navigate',          color: 'text-teal-300'   },
   { href: '/dashboard/prep',            icon: BookMarked,    label: '🎒 Course Prep',       color: 'text-lime-300'   },
   { href: '/dashboard/english',         icon: Library,       label: '📖 English 7',         color: 'text-orange-300' },
+  { href: '/dashboard/soccer',          icon: Trophy,        label: '⚽ Soccer',            color: 'text-emerald-300' },
+  { href: '/dashboard/habits',          icon: ListChecks,    label: '✅ Habits',            color: 'text-amber-300'  },
   { href: '/dashboard/study-coach',     icon: GraduationCap, label: '🌟 Study Coach',       color: 'text-lime-400'   },
   { href: '/dashboard/notes/archive',   icon: ScrollText,    label: '📖 Learning Chronicle', color: 'text-amber-400'  },
   { href: '/dashboard/notes',            icon: BookOpen,      label: 'Notes',               color: 'text-emerald-400'},

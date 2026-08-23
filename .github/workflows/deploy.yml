@@ -41,6 +41,14 @@ jobs:
       - name: Type check
         run: pnpm -C apps/web run type-check
 
+      - name: Run DB migration
+        # Forward-only and additive: `migrate deploy` applies pending migration
+        # files and never resets, drops or re-creates anything. It runs BEFORE
+        # the deploy so the schema is never behind the code that queries it,
+        # and it is NOT continue-on-error: if the migration fails we must not
+        # ship code that expects it.
+        run: pnpm -C apps/web exec prisma migrate deploy
+
       - name: Deploy to Vercel
         id: deploy
         env:
@@ -56,11 +64,6 @@ jobs:
           DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
           echo "DEPLOY_URL=${DEPLOY_URL}" >> "$GITHUB_ENV"
           echo "Deployed to: ${DEPLOY_URL}"
-
-      - name: Run DB migration
-        # Apply pending Prisma migrations to production DB
-        continue-on-error: true
-        run: pnpm -C apps/web exec prisma migrate deploy
 
       - name: Seed database
         # Create the 'daniel' user if it doesn't exist yet (idempotent)

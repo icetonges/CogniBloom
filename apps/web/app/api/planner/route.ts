@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
     // Collect the user's distinct tags for autocomplete chips.
     const all = await db.plannerEntry.findMany({ where: { userId }, select: { tags: true } })
     const tagSet = new Set<string>()
-    all.forEach((e) => e.tags.forEach((t) => tagSet.add(t)))
+    // 'routine-vN' records which version of the daily profile generated a row.
+    // It is bookkeeping for the seeder, not something to filter the planner by.
+    all.forEach((e) => e.tags.forEach((t) => { if (!t.startsWith('routine-v')) tagSet.add(t) }))
 
     return NextResponse.json({ success: true, data: entries, tags: Array.from(tagSet).sort() })
   } catch (err) {

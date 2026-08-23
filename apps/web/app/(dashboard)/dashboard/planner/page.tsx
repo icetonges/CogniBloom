@@ -1175,7 +1175,9 @@ function EntryRow({ entry, onOpen, onToggle }: { entry: Entry; onOpen: (e: Entry
         })()}
         {entry.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
-            {entry.tags.map((t) => (
+            {/* routine-vN is bookkeeping — it tells the seeder which version of
+                the daily profile produced this row, and means nothing to a reader. */}
+            {entry.tags.filter((t) => !t.startsWith('routine-v')).map((t) => (
               <span key={t} className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full', tagColor(t))}>{t}</span>
             ))}
           </div>
