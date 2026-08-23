@@ -3,28 +3,16 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { fmt12, LUNCH_ROOM, type SchoolDay } from '@/lib/school'
 import { schoolDayFor } from '@/lib/school-db'
+import { profileFor, routineFor } from '@/lib/daily-routine'
 
 export const dynamic = 'force-dynamic'
 
-// Default daily routine — these items are placed on every day automatically.
-// Marked with the reserved tag 'routine' so the UI can render them distinctly
-// and so seeding stays idempotent. Items flagged `optional: true` additionally
-// get the reserved 'optional' tag, which the UI renders in a lighter, dashed
-// style and excludes from being treated as a hard commitment.
-const DEFAULT_ROUTINE = [
-  { title: 'Workout — set 1',             time: '07:30', details: '5 min',                       tag: 'fitness'    },
-  { title: 'Duolingo',                    time: '07:40', details: '5 min',                       tag: 'language'   },
-  { title: 'Study Session 1',             time: '07:45', details: '40 min',                      tag: 'study'      },
-  { title: 'Workout — set 2',             time: '16:00', details: '5 min',                       tag: 'fitness'    },
-  { title: 'Music',                       time: '16:07', details: '7 min',                       tag: 'music'      },
-  { title: 'Study Session 2',             time: '17:00', details: '40 min',                      tag: 'study'      },
-  { title: 'Workout — set 3',             time: '17:45', details: '5 min',                       tag: 'fitness'    },
-  { title: '$5 daily investment',         time: '18:00', details: '15 min',                      tag: 'investment' },
-  { title: 'Study Session 3',             time: '19:00', details: '30 min',                      tag: 'study',     optional: true },
-  { title: 'Daily Reflection',            time: '20:00', details: '3 wins · 1 lesson · 1 goal', tag: 'mind'       },
-  { title: 'Daily mind map + Close Out',  time: '20:30', details: '1 topic — branch it out',    tag: 'mind'       },
-  { title: 'Catch up',                    time: '21:00', details: 'Loose ends from today',      tag: 'catchup',   optional: true },
-] satisfies { title: string; time: string; details: string; tag: string; optional?: boolean }[]
+// The daily routine is no longer one fixed list: a Monday with practice at
+// Woodson, a Tuesday at GMU and a Wednesday at home are genuinely different
+// days, and the old defaults put the morning workout at 07:30 — inside first
+// period. lib/daily-routine builds the right shape for the date. Items are
+// still tagged 'routine' so seeding stays idempotent, and 'optional' items
+// still render dashed.
 
 /** Reserved tag marking an entry as generated from the Frost class schedule. */
 const SCHOOL_TAG = 'school'
@@ -115,11 +103,33 @@ export async function POST(request: NextRequest) {
     // ── routine ──
     // Auto mode: seed only when this day has never been seeded, so later
     // deletions on an already-seeded day are respected.
-    // Restore mode (force): add back any routine item missing by title.
-    const routineSeeded = existing.some((e) => e.tags.includes('routine'))
+    // Reload mode (force): make the day match the profile exactly — add what is
+    // missing, re-time what has drifted, and drop generated rows the profile no
+    // longer contains. Only rows tagged 'routine' are ever touched, so anything
+    // typed by hand survives. This is what "load defaults" means after the
+    // routine itself changes shape.
+    const profile = profileFor(anchor, day.isSchoolDay)
+    const routine = routineFor(profile)
+    const routineTitles = new Set(routine.map((r) => r.title))
+    const existingRoutine = existing.filter((e) => e.tags.includes('routine'))
+    const routineSeeded = existingRoutine.length > 0
     const routineToCreate = force
-      ? DEFAULT_ROUTINE.filter((r) => !existingTitles.has(r.title))
-      : routineSeeded ? [] : DEFAULT_ROUTINE
+      ? routine.filter((r) => !existingTitles.has(r.title))
+      : routineSeeded ? [] : routine
+
+    const staleRoutine = force
+      ? existingRoutine.filter((e) => !routineTitles.has(e.title)).map((e) => e.id)
+      : []
+    const routineToFix = force
+      ? routine
+          .map((r) => {
+            const row = existingRoutine.find((e) => e.title === r.title)
+            if (!row) return null
+            if (row.startTime === r.time && (row.details ?? '') === r.details) return null
+            return { id: row.id, time: r.time, details: r.details }
+          })
+          .filter((x): x is { id: string; time: string; details: string } => x !== null)
+      : []
 
     // ── school band ──
     // The class schedule is authoritative rather than personal, so unlike the
@@ -152,6 +162,12 @@ export async function POST(request: NextRequest) {
     if (staleSchool.length > 0) {
       ops.push(db.plannerEntry.deleteMany({ where: { id: { in: staleSchool }, userId } }))
     }
+    if (staleRoutine.length > 0) {
+      ops.push(db.plannerEntry.deleteMany({ where: { id: { in: staleRoutine }, userId } }))
+    }
+    for (const f of routineToFix) {
+      ops.push(db.plannerEntry.update({ where: { id: f.id }, data: { startTime: f.time, details: f.details } }))
+    }
 
     for (const s of schoolToCreate) {
       ops.push(
@@ -173,7 +189,11 @@ export async function POST(request: NextRequest) {
           data: {
             userId, scope: 'day', date: anchor,
             title: r.title, startTime: r.time, details: r.details,
-            tags: r.optional ? ['routine', r.tag, 'optional'] : ['routine', r.tag],
+            tags: [
+              'routine', r.tag,
+              ...(r.extra ?? []),
+              ...(r.optional ? ['optional'] : []),
+            ],
             priority: 'normal', sortOrder: order++,
           },
         })
@@ -196,6 +216,9 @@ export async function POST(request: NextRequest) {
       data: entries,
       tags: Array.from(tagSet).sort(),
       removedSchoolRows: staleSchool.length,
+      removedRoutineRows: staleRoutine.length,
+      retimedRoutineRows: routineToFix.length,
+      profile,
       school: {
         type: day.type,
         label: day.label,
