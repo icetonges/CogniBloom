@@ -10,7 +10,7 @@ import {
   Plus, X, Check, Trash2, Tag as TagIcon, Clock, Target, Flag,
   AlignLeft, Pen, Repeat, ListChecks, Sparkles,
   Droplets, Moon, Utensils, Brain, TrendingUp, Flame, ChevronUp, ChevronDown,
-  GraduationCap, MapPin, Lock, Footprints,
+  GraduationCap, MapPin, Lock, Footprints, Trophy, AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
@@ -83,6 +83,32 @@ const SCHOOL_TAG = 'school'
 const LADDER_TAG = '__ladder__'
 const isSchool = (e: Entry) => e.tags.includes(SCHOOL_TAG)
 const isLunch = (e: Entry) => e.tags.includes('lunch')
+
+// Fixed outside commitments: the PlayMetrics-synced soccer band and the fixed
+// weekly slots declared in lib/activities (an online class, a lesson).
+// Authoritative like the school band — seed-day reconciles them from the
+// calendar on every load — so they're checkable but not editable or
+// deletable, and they get their own band instead of sitting in the hour rail,
+// where a 5 PM practice was easy to scroll straight past.
+const SOCCER_TAG = 'soccer'
+const ACTIVITY_TAG = 'activity'
+const LOCKED_TAG = 'locked'
+// Set by lib/soccer-calendar-db on rows built from the static weekly guess
+// rather than the real feed. Requiring LOCKED_TAG (and excluding routine
+// rows) matters: '1000 touches' and 'Juggling test' are habits topically
+// tagged 'soccer', and they belong in the habit tracker, not here.
+const UNSYNCED_TAG = 'unsynced'
+const isCommitment = (e: Entry) =>
+  e.tags.includes(LOCKED_TAG) && !isRoutine(e) &&
+  (e.tags.includes(SOCCER_TAG) || e.tags.includes(ACTIVITY_TAG))
+const isUnsynced = (e: Entry) => e.tags.includes(UNSYNCED_TAG)
+const commitmentEmoji = (e: Entry) => {
+  if (e.tags.includes(ACTIVITY_TAG)) return '💻'
+  if (e.tags.includes('prep')) return '🎒'
+  if (e.tags.includes('transport')) return '🚗'
+  if (e.tags.includes('rest')) return '🍽'
+  return e.tags.includes('game') ? '🏆' : '⚽'
+}
 /** Reserved rows that must never render as ordinary planner items. */
 const isReserved = (e: Entry) => e.tags.includes(META_TAG) || e.tags.includes(LADDER_TAG)
 
@@ -676,9 +702,15 @@ function DayView({
     (a.startTime ?? '') < (b.startTime ?? '') ? -1 : (a.startTime ?? '') > (b.startTime ?? '') ? 1 : 0
   )
   const routine = items.filter((e) => isRoutine(e) && !isSchool(e))
-  const real = items.filter((e) => !isRoutine(e) && !isSchool(e) && !isReserved(e))
-  const timed = real.filter((e) => e.startTime)  // school rows live in their own band
-  const tasks = [...routine, ...real, ...schoolItems]
+  // Soccer + fixed activities move out of `real` into their own band below,
+  // exactly as school rows do — otherwise the same practice renders twice,
+  // once in the hour rail and once in the Commitments card.
+  const commitmentItems = items.filter(isCommitment).sort((a, b) =>
+    (a.startTime ?? '') < (b.startTime ?? '') ? -1 : (a.startTime ?? '') > (b.startTime ?? '') ? 1 : 0
+  )
+  const real = items.filter((e) => !isRoutine(e) && !isSchool(e) && !isReserved(e) && !isCommitment(e))
+  const timed = real.filter((e) => e.startTime)  // school + commitment rows live in their own bands
+  const tasks = [...routine, ...real, ...schoolItems, ...commitmentItems]
   // Sort habits chronologically by startTime; fall back to sortOrder for untimed items.
   const habitList = [...routine].sort((a, b) => {
     if (a.startTime && b.startTime) return a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0
@@ -800,6 +832,66 @@ function DayView({
       </Card>
     </section>
   )
+
+  // Today's fixed outside commitments. Rendered like the school band —
+  // checkable, locked, time on the left — because none of these times are
+  // Daniel's to move. Rows still flagged UNSYNCED_TAG are shown dimmed under
+  // a warning rather than hidden: knowing the app is guessing is more useful
+  // than a blank card.
+  const commitments = commitmentItems.length > 0 ? (
+    <section key="commit">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className={cn(sectionTitle, 'mb-0')}><Trophy className="w-3.5 h-3.5" /> Commitments</h3>
+        <a href="/dashboard/soccer" className="text-xs text-primary hover:underline">Soccer →</a>
+      </div>
+      <Card className="p-3 space-y-1">
+        {commitmentItems.some(isUnsynced) && (
+          <div className="flex items-start gap-2 rounded-md border border-dashed border-amber-500/40 bg-amber-500/[0.06] px-2 py-1.5 mb-1">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-amber-500">Unconfirmed.</span>{' '}
+              The PlayMetrics calendar has never synced, so this is the old default weekly
+              pattern rather than the real schedule — a cancelled session would still show here.{' '}
+              <a href="/dashboard/soccer" className="text-primary hover:underline">Sync now →</a>
+            </p>
+          </div>
+        )}
+        {commitmentItems.map((e) => {
+          const provisional = isUnsynced(e)
+          return (
+            <div
+              key={e.id}
+              className={cn(
+                'flex items-start gap-2 rounded-lg px-1 -mx-1 py-0.5 hover:bg-muted/30',
+                provisional && 'opacity-70'
+              )}
+            >
+              <button
+                onClick={() => toggle(e)}
+                className={cn(
+                  'mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0',
+                  e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary'
+                )}
+              >
+                {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
+              </button>
+              <span className="w-14 shrink-0 text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                {e.startTime ? fmt12(e.startTime) : ''}
+              </span>
+              <span className="text-base shrink-0 leading-none mt-0.5">{commitmentEmoji(e)}</span>
+              <div className="flex-1 min-w-0">
+                <div className={cn('text-sm font-medium truncate', e.status === 'done' && 'line-through text-muted-foreground')}>
+                  {e.title.replace(/^⚽\s*/, '')}
+                </div>
+                {e.details && <div className="text-[11px] text-muted-foreground truncate">{e.details}</div>}
+              </div>
+              <Lock className="w-3 h-3 text-muted-foreground/30 shrink-0 mt-1" aria-label="From a synced calendar" />
+            </div>
+          )
+        })}
+      </Card>
+    </section>
+  ) : null
 
   const closureBanner = !school.isSchoolDay && school.type !== 'weekend' && school.type !== 'summer' ? (
     <section key="closed">
@@ -1001,6 +1093,7 @@ function DayView({
         </div>
         {/* RIGHT — the things that get ticked. */}
         <div className="space-y-5">
+          {commitments}
           {habits}
           {meals}
         </div>

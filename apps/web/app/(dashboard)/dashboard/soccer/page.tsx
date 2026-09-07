@@ -52,8 +52,15 @@ interface ScheduleEntry {
   uniform: string | null
   summary: string
   tbd: boolean
+  cancelled: boolean
 }
-interface Schedule { practices: ScheduleEntry[]; games: ScheduleEntry[]; lastSyncedAt: string | null }
+interface Schedule {
+  practices: ScheduleEntry[]
+  games: ScheduleEntry[]
+  lastSyncedAt: string | null
+  /** False until the PlayMetrics feed has been pulled at least once. */
+  synced: boolean
+}
 
 const DAY_NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -95,8 +102,12 @@ export default function SoccerPage() {
   const [streak, setStreak] = useState(0)
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
-  const [schedule, setSchedule] = useState<Schedule>({ practices: [], games: [], lastSyncedAt: null })
+  const [schedule, setSchedule] = useState<Schedule>({ practices: [], games: [], lastSyncedAt: null, synced: false })
   const [syncing, setSyncing] = useState(false)
+  // The sync used to fail silently here. It failed for weeks — SOCCER_ICS_URL
+  // was never set in Vercel, every run 502'd, and the page just kept showing
+  // an empty schedule as though that were the answer. Show the reason.
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -117,7 +128,7 @@ export default function SoccerPage() {
       const r = await fetch('/api/soccer/schedule')
       const j = await r.json()
       if (!j.success) return
-      setSchedule({ practices: j.practices ?? [], games: j.games ?? [], lastSyncedAt: j.lastSyncedAt ?? null })
+      setSchedule({ practices: j.practices ?? [], games: j.games ?? [], lastSyncedAt: j.lastSyncedAt ?? null, synced: j.synced === true })
     } catch { /* the page still reads fine without the synced schedule */ }
   }, [])
 
@@ -125,10 +136,15 @@ export default function SoccerPage() {
 
   const syncNow = useCallback(async () => {
     setSyncing(true)
+    setSyncError(null)
     try {
-      await fetch('/api/soccer/sync', { method: 'POST' })
+      const r = await fetch('/api/soccer/sync', { method: 'POST' })
+      const j = await r.json().catch(() => null)
+      if (!r.ok || j?.ok === false) setSyncError(j?.error ?? `Sync failed (HTTP ${r.status})`)
       await loadSchedule()
-    } catch { /* keep showing whatever we already had */ } finally { setSyncing(false) }
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : 'Sync failed')
+    } finally { setSyncing(false) }
   }, [loadSchedule])
 
   const save = useCallback(async (patch: Partial<Log>) => {
@@ -145,7 +161,9 @@ export default function SoccerPage() {
 
   const nextUp = useMemo(() => {
     const all = [...schedule.practices, ...schedule.games]
-      .filter((e) => e.date >= date)
+      // A cancelled session must never become the "next up" headline — that
+      // card is the one thing on this page that tells Daniel to get in the car.
+      .filter((e) => e.date >= date && !e.cancelled)
       .sort((a, b) => (a.date === b.date ? (a.start ?? '99:99').localeCompare(b.start ?? '99:99') : a.date.localeCompare(b.date)))
     return all[0] ?? null
   }, [schedule, date])
@@ -177,6 +195,37 @@ export default function SoccerPage() {
           <CalendarDays className="w-3.5 h-3.5" /> Planner
         </Link>
       </div>
+
+      {/* ── sync health ──
+          A calendar that has never synced is not the same as a calendar with
+          nothing on it, and the planner falls back to the old hardcoded
+          Mon/Tue/Thu pattern while this is true. Say so here, loudly, with
+          the actual error when there is one. */}
+      {(!schedule.synced || syncError) && (
+        <Card className="p-4 border-amber-500/30 bg-amber-500/[0.06] flex items-start gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold">
+              {syncError ? 'Calendar sync failed' : 'Calendar has never synced'}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+              {syncError
+                ? syncError
+                : 'Nothing has been pulled from PlayMetrics yet, so the planner is showing the old default weekly pattern rather than the real schedule — including sessions that may have been cancelled.'}
+              {(syncError ?? '').includes('SOCCER_ICS_URL') && (
+                <> Set <code className="px-1 rounded bg-muted font-mono">SOCCER_ICS_URL</code> to the team&apos;s PlayMetrics .ics link in the deployment environment, then redeploy.</>
+              )}
+            </p>
+            <button
+              onClick={syncNow}
+              disabled={syncing}
+              className="mt-2 text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
+            >
+              {syncing ? 'Syncing…' : 'Try sync now →'}
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* ── today's mantra ── */}
       <Card className="p-4 border-emerald-500/25 bg-emerald-500/[0.05] flex items-start gap-3">
@@ -431,16 +480,25 @@ export default function SoccerPage() {
               {schedule.practices.slice(0, 6).map((p) => (
                 <li key={p.id} className={cn(
                   'rounded-lg px-2.5 py-2 border',
-                  p.date === date ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : 'border-border/60'
+                  p.cancelled
+                    ? 'border-border/40 bg-muted/20 opacity-70'
+                    : p.date === date ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : 'border-border/60'
                 )}>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold">{dayLabel(p.date, date)}</span>
-                    <span className="ml-auto text-xs tabular-nums font-semibold">
+                    <span className={cn('text-xs font-bold', p.cancelled && 'line-through text-muted-foreground')}>
+                      {dayLabel(p.date, date)}
+                    </span>
+                    {p.cancelled && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400">
+                        Cancelled
+                      </span>
+                    )}
+                    <span className={cn('ml-auto text-xs tabular-nums font-semibold', p.cancelled && 'line-through text-muted-foreground')}>
                       {p.tbd || !p.start ? 'TBD' : fmt12(p.start)}
                     </span>
                   </div>
                   {p.venue && <p className="text-[11px] text-muted-foreground">{p.venue}</p>}
-                  {!p.tbd && p.arriveBy && p.leaveAt && (
+                  {!p.cancelled && !p.tbd && p.arriveBy && p.leaveAt && (
                     <p className="text-[10px] text-muted-foreground/70">
                       On the field {fmt12(p.arriveBy)} · leave home ~{fmt12(p.leaveAt)}
                     </p>

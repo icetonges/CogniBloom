@@ -37,6 +37,16 @@ jobs:
           echo "Response: $BODY"
           if [ "$HTTP_STATUS" != "200" ]; then
             echo "❌ Soccer sync failed with status $HTTP_STATUS"
+            case "$BODY" in
+              *SOCCER_ICS_URL*)
+                echo "::error::SOCCER_ICS_URL is not set on the deployment. Add the team's PlayMetrics .ics link in Vercel → cogni-bloom → Settings → Environment Variables (Production + Preview + Development), then redeploy — env vars only apply to new builds." ;;
+              *"does not exist"*|*migration*)
+                echo "::error::The SoccerEvent table is missing. Run 'pnpm db:migrate' (prisma migrate deploy) against the production database — never 'prisma migrate dev'." ;;
+              *Forbidden*)
+                echo "::error::CRON_SECRET in this repository's secrets does not match the deployment's CRON_SECRET env var." ;;
+              *)
+                echo "::error::Unexpected sync failure. See the response body above." ;;
+            esac
             exit 1
           fi
           echo "✅ Soccer calendar synced"

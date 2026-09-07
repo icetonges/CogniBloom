@@ -32,6 +32,37 @@ export interface Practice {
   minutes: number
 }
 
+/**
+ * PlayMetrics does NOT remove a cancelled session from the published feed.
+ * It keeps the VEVENT, sets `STATUS:CANCELLED`, and prefixes the SUMMARY with
+ * "CANCELED" — e.g.
+ *
+ *   UID:Practice_11876555
+ *   SUMMARY:CANCELED U13 Boys ECNL-RL - Practice
+ *   STATUS:CANCELLED
+ *
+ * That is exactly what happened to the 2026-09-07 practice, and why an
+ * "ingest the feed" fix on its own would still have shown it: the row syncs
+ * in perfectly and nothing downstream was looking at `status`.
+ *
+ * Both signals are checked because they are independent — a feed that sets
+ * only one of them still has to be read correctly. Note the spelling: the
+ * ICS property is CANCELLED (two Ls, RFC 5545) while PlayMetrics' summary
+ * text is the American CANCELED, so the pattern allows either.
+ */
+const CANCELLED_SUMMARY_RE = /^\s*cancell?ed\b/i
+
+export function isCancelledEvent(ev: { status?: string | null; summary?: string | null }): boolean {
+  if ((ev.status ?? '').trim().toUpperCase() === 'CANCELLED') return true
+  return CANCELLED_SUMMARY_RE.test(ev.summary ?? '')
+}
+
+/** The summary without PlayMetrics' "CANCELED " prefix, for display next to
+ *  an explicit cancelled badge (the word twice reads like a stutter). */
+export function stripCancelledPrefix(summary: string): string {
+  return summary.replace(/^\s*cancell?ed\s*[-–:]?\s*/i, '').trim() || summary.trim()
+}
+
 /** Coach's timing rule, stated at the meeting. */
 export const EARLY_PRACTICE_MIN = 15
 export const EARLY_MATCH_MIN = 45

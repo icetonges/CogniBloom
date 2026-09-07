@@ -29,8 +29,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'from/to must be YYYY-MM-DD' }, { status: 400 })
     }
 
-    const { practices, games, lastSyncedAt } = await scheduleBetween(from, to)
-    return NextResponse.json({ success: true, from, to, practices, games, lastSyncedAt })
+    const { practices, games, lastSyncedAt, synced } = await scheduleBetween(from, to)
+    // `synced` separates "no practice this week" from "we have never once
+    // talked to PlayMetrics" — an empty list means very different things in
+    // those two cases, and the UI has to be able to tell them apart.
+    return NextResponse.json({ success: true, from, to, practices, games, lastSyncedAt, synced })
   } catch (err) {
     console.error('[GET /api/soccer/schedule]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

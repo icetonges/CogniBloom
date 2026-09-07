@@ -3,7 +3,8 @@ import { db } from '@/lib/db'
 import { easternWallTimeToUTC, utcInstantToEasternTime } from '@/lib/timezone'
 import { parseIcs } from '@/lib/soccer-ics'
 import {
-  practiceOn, minus, plus, travelMinutesForVenue, EARLY_PRACTICE_MIN, EARLY_MATCH_MIN,
+  practiceOn, minus, plus, travelMinutesForVenue, isCancelledEvent, stripCancelledPrefix,
+  EARLY_PRACTICE_MIN, EARLY_MATCH_MIN,
 } from '@/lib/soccer'
 
 /**
@@ -14,6 +15,20 @@ import {
  */
 
 const ICS_URL_ENV = 'SOCCER_ICS_URL'
+
+/**
+ * Marks a planner row that came from the static pre-sync fallback in
+ * `lib/soccer.ts` rather than the real PlayMetrics feed.
+ *
+ * 2026-09-07: a practice that had been cancelled still showed on the planner
+ * as an ordinary commitment. The sync had never run once — `SOCCER_ICS_URL`
+ * was never set in Vercel, so every cron fire 502'd — which left
+ * `SoccerEvent` empty, which is exactly the condition the fallback exists
+ * for. The fallback wasn't wrong to fire; it was wrong to be silent. A guess
+ * now says it's a guess, all the way to the UI.
+ */
+export const UNSYNCED_TAG = 'unsynced'
+export const UNSYNCED_NOTE = "⚠ Unconfirmed — soccer calendar has never synced"
 
 function parseDateKeyParts(key: string): { y: number; m: number; d: number } {
   const [y, m, d] = key.split('-').map(Number)
@@ -56,9 +71,13 @@ export interface SyncResult {
  * into `SoccerEvent`, keyed by its ICS UID so re-running never duplicates.
  *
  * Future rows (startAt in the future) that used to be synced but no longer
- * appear in the feed are removed — PlayMetrics deletes and re-creates an
- * event outright when a practice is rescheduled or cancelled, it doesn't
- * mark the old one CANCELLED in place. Past rows are left alone even if
+ * appear in the feed are removed — PlayMetrics does sometimes drop and
+ * re-create an event under a new UID when it is rescheduled. It does NOT do
+ * that for a cancellation: a cancelled session stays in the feed with
+ * `STATUS:CANCELLED`, so it is stored here like any other row and filtered
+ * out on read by `isCancelledEvent` (see lib/soccer.ts). Keeping the row is
+ * deliberate — "practice cancelled" is information worth showing, and this
+ * app does not delete records. Past rows are left alone even if
  * they've aged out of the export; that history is worth keeping (and this
  * app has already lost data once to a moment of “it's fine to just clear
  * this” — see the note-loss incident write-up).
@@ -235,14 +254,22 @@ export async function soccerWindowFor(dateKey: string): Promise<SoccerWindow | n
   const dayEnd = dateKeyToUTC(addDaysToKey(dateKey, 1), '00:00')
 
   try {
-    const rows = await db.soccerEvent.findMany({
+    const all = await db.soccerEvent.findMany({
       where: { startAt: { gte: dayStart, lt: dayEnd }, kind: { in: ['practice', 'game'] } },
       orderBy: { startAt: 'asc' },
     })
+    // A cancelled session is not a commitment. Dropping it here means the
+    // planner's soccer band generates nothing for the day, and seed-day's
+    // stale-row reconciliation clears any rows a previous seed had created.
+    const rows = all.filter((r) => !isCancelledEvent(r))
     if (rows.length > 0) {
       const chosen = rows.find((r) => r.kind === 'game') ?? rows[0]!
       return windowFromRow(chosen, dateKey)
     }
+    // Distinguish "cancelled" from "never synced": if the only thing on this
+    // date is a cancellation, the calendar has plainly synced, so the static
+    // fallback must not step in and re-invent the practice that was called off.
+    if (all.length > 0) return null
     const everSynced = await db.soccerEvent.count()
     if (everSynced > 0) return null
     return fallbackWindowFor(dateKey)
@@ -284,59 +311,70 @@ export async function soccerBandItems(dateKey: string): Promise<SeedItem[]> {
 
   const label = w.kind === 'game' ? (w.opponent ? `Game vs ${w.opponent}` : 'Game') : 'BRYC practice'
   const tag = w.kind
+  const items: SeedItem[] = []
 
   if (w.tbd || !w.start || !w.arriveBy || !w.leaveAt) {
-    return [{
+    items.push({
       title: `⚽ ${label} — time TBD`,
       time: '07:00',
       details: [w.venue, w.uniform ? `Uniform: ${w.uniform}` : null, 'Check PlayMetrics for the start time']
         .filter(Boolean).join(' · '),
       tags: ['soccer', 'locked', tag],
-    }]
-  }
-
-  const items: SeedItem[] = [
-    {
-      title: 'Kit out + ball in the car',
-      time: minus(w.leaveAt, 15),
-      details: w.kind === 'game'
-        ? `Both kits, shin guards, water, the same ball${w.uniform ? ` · Uniform: ${w.uniform}` : ''}`
-        : 'Boots, shin guards, both kits, water, the same ball',
-      tags: ['soccer', 'locked', tag, 'prep'],
-    },
-    {
-      title: `Leave for ${w.kind === 'game' ? 'the game' : 'practice'}`,
-      time: w.leaveAt,
-      details: `${w.venue ?? 'Venue TBD'}`,
-      tags: ['soccer', 'locked', tag, 'transport'],
-    },
-    {
-      title: 'On the field — warm up',
-      time: w.arriveBy,
-      details: w.kind === 'game'
-        ? 'Coach’s rule: 45 minutes early'
-        : 'Coach’s rule: 15 minutes early, boots on, ball out',
-      tags: ['soccer', 'locked', tag],
-    },
-    {
-      title: `⚽ ${label}`,
-      time: w.start,
-      details: [w.venue, w.end ? `${w.start}–${w.end}` : null, 'Coach West']
-        .filter(Boolean).join(' · '),
-      tags: ['soccer', 'locked', tag],
-    },
-  ]
-
-  if (w.homeAt) {
-    items.push({
-      title: 'Home + dinner',
-      time: w.homeAt,
-      details: 'Eat, shower, then one study block',
-      tags: ['soccer', 'locked', tag, 'rest'],
     })
+  } else {
+    items.push(
+      {
+        title: 'Kit out + ball in the car',
+        time: minus(w.leaveAt, 15),
+        details: w.kind === 'game'
+          ? `Both kits, shin guards, water, the same ball${w.uniform ? ` · Uniform: ${w.uniform}` : ''}`
+          : 'Boots, shin guards, both kits, water, the same ball',
+        tags: ['soccer', 'locked', tag, 'prep'],
+      },
+      {
+        title: `Leave for ${w.kind === 'game' ? 'the game' : 'practice'}`,
+        time: w.leaveAt,
+        details: `${w.venue ?? 'Venue TBD'}`,
+        tags: ['soccer', 'locked', tag, 'transport'],
+      },
+      {
+        title: 'On the field — warm up',
+        time: w.arriveBy,
+        details: w.kind === 'game'
+          ? 'Coach’s rule: 45 minutes early'
+          : 'Coach’s rule: 15 minutes early, boots on, ball out',
+        tags: ['soccer', 'locked', tag],
+      },
+      {
+        title: `⚽ ${label}`,
+        time: w.start,
+        details: [w.venue, w.end ? `${w.start}–${w.end}` : null, 'Coach West']
+          .filter(Boolean).join(' · '),
+        tags: ['soccer', 'locked', tag],
+      },
+    )
+
+    if (w.homeAt) {
+      items.push({
+        title: 'Home + dinner',
+        time: w.homeAt,
+        details: 'Eat, shower, then one study block',
+        tags: ['soccer', 'locked', tag, 'rest'],
+      })
+    }
   }
 
-  return items
+  // Everything above is identical whether the window came from the synced
+  // calendar or the static weekly guess. The one thing that must differ is
+  // how confidently it's presented — so provisional rows carry the marker
+  // tag and say so in their own details text, rather than relying on some
+  // other part of the app to remember to check.
+  if (!w.isFallback) return items
+  return items.map((it) => ({
+    ...it,
+    details: [it.details, UNSYNCED_NOTE].filter(Boolean).join(' · '),
+    tags: [...it.tags, UNSYNCED_TAG],
+  }))
 }
 
 // ── the schedule for the dashboard / API ────────────────────────────────
@@ -355,6 +393,9 @@ export interface ScheduleEntry {
   uniform: string | null
   summary: string
   tbd: boolean
+  /** PlayMetrics keeps cancelled sessions in the feed; these are surfaced
+   *  (struck through) rather than hidden, so "it's off" is visible. */
+  cancelled: boolean
 }
 
 /**
@@ -369,6 +410,9 @@ export async function scheduleBetween(fromKey: string, toKey: string): Promise<{
   practices: ScheduleEntry[]
   games: ScheduleEntry[]
   lastSyncedAt: string | null
+  /** False when `SoccerEvent` is empty — nothing has ever synced, so an
+   *  empty list here means "we don't know", not "nothing is scheduled". */
+  synced: boolean
 }> {
   const from = dateKeyToUTC(fromKey, '00:00')
   const to = dateKeyToUTC(toKey, '23:59')
@@ -383,11 +427,13 @@ export async function scheduleBetween(fromKey: string, toKey: string): Promise<{
     const entries = rows.map((r): ScheduleEntry => {
       const kind: 'practice' | 'game' = r.kind === 'game' ? 'game' : 'practice'
       const dateKey = utcInstantToEasternTime(r.startAt).dateKey
+      const cancelled = isCancelledEvent(r)
+      const summary = cancelled ? stripCancelledPrefix(r.summary) : r.summary
       if (r.allDay) {
         return {
           id: r.id, externalId: r.externalId, kind, date: dateKey, start: null, end: null,
           arriveBy: null, leaveAt: null, venue: r.venue, opponent: r.opponent, uniform: r.uniform,
-          summary: r.summary, tbd: true,
+          summary, tbd: true, cancelled,
         }
       }
       const start = utcInstantToEasternTime(r.startAt).hhmm
@@ -397,7 +443,7 @@ export async function scheduleBetween(fromKey: string, toKey: string): Promise<{
       const leaveAt = minus(arriveBy, travelMinutesForVenue(r.venue))
       return {
         id: r.id, externalId: r.externalId, kind, date: dateKey, start, end, arriveBy, leaveAt,
-        venue: r.venue, opponent: r.opponent, uniform: r.uniform, summary: r.summary, tbd: false,
+        venue: r.venue, opponent: r.opponent, uniform: r.uniform, summary, tbd: false, cancelled,
       }
     })
 
@@ -405,9 +451,10 @@ export async function scheduleBetween(fromKey: string, toKey: string): Promise<{
       practices: entries.filter((e) => e.kind === 'practice'),
       games: entries.filter((e) => e.kind === 'game'),
       lastSyncedAt: latest?.lastSeenAt.toISOString() ?? null,
+      synced: latest !== null,
     }
   } catch (err) {
-    if (isMissingTable(err)) return { practices: [], games: [], lastSyncedAt: null }
+    if (isMissingTable(err)) return { practices: [], games: [], lastSyncedAt: null, synced: false }
     throw err
   }
 }

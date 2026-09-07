@@ -1,4 +1,5 @@
 import { parseIcs, classify } from '@/lib/soccer-ics'
+import { isCancelledEvent, stripCancelledPrefix } from '@/lib/soccer'
 
 // A trimmed real excerpt of the U13 Boys ECNL-RL PlayMetrics feed (captured
 // 2026-09-06), covering every shape the parser has to handle: a non-soccer
@@ -141,5 +142,60 @@ describe('parseIcs', () => {
     // Only "Start Time TBD" / "Uniform: TBD" lines remain after the first
     // line, and both are filtered as known fields — nothing left to be a venue.
     expect(e.venue).toBeNull()
+  })
+})
+
+
+// ── cancellations ────────────────────────────────────────────────────────
+// Regression cover for 2026-09-07: the 5:45 PM practice was called off, but
+// PlayMetrics kept the VEVENT in the feed rather than removing it, so the
+// planner went on showing it as a live commitment. The feed marks a
+// cancellation twice over — STATUS:CANCELLED and a "CANCELED" summary prefix
+// — and both have to be readable on their own.
+describe('isCancelledEvent', () => {
+  it('reads the real PlayMetrics shape (both signals set)', () => {
+    expect(isCancelledEvent({
+      status: 'CANCELLED',
+      summary: 'CANCELED U13 Boys ECNL-RL - Practice',
+    })).toBe(true)
+  })
+
+  it('accepts STATUS alone, in any case, with stray whitespace', () => {
+    expect(isCancelledEvent({ status: ' cancelled ', summary: 'U13 Boys ECNL-RL - Practice' })).toBe(true)
+  })
+
+  it('accepts the summary prefix alone, either spelling', () => {
+    expect(isCancelledEvent({ status: null, summary: 'CANCELED U13 - Practice' })).toBe(true)
+    expect(isCancelledEvent({ status: null, summary: 'Cancelled U13 - Practice' })).toBe(true)
+  })
+
+  it('leaves ordinary sessions alone', () => {
+    expect(isCancelledEvent({ status: 'CONFIRMED', summary: 'U13 Boys ECNL-RL - Practice' })).toBe(false)
+    expect(isCancelledEvent({ status: null, summary: 'U13 Boys ECNL-RL - Game' })).toBe(false)
+  })
+
+  it('does not fire on a word that merely starts the same way', () => {
+    expect(isCancelledEvent({ status: null, summary: 'Cancellation policy review' })).toBe(false)
+  })
+
+  it('tolerates missing fields', () => {
+    expect(isCancelledEvent({})).toBe(false)
+    expect(isCancelledEvent({ status: null, summary: null })).toBe(false)
+  })
+})
+
+describe('stripCancelledPrefix', () => {
+  it('removes the prefix for display next to a Cancelled badge', () => {
+    expect(stripCancelledPrefix('CANCELED U13 Boys ECNL-RL - Practice'))
+      .toBe('U13 Boys ECNL-RL - Practice')
+    expect(stripCancelledPrefix('Cancelled - U13 Practice')).toBe('U13 Practice')
+  })
+
+  it('leaves an uncancelled summary untouched', () => {
+    expect(stripCancelledPrefix('U13 Boys ECNL-RL - Game')).toBe('U13 Boys ECNL-RL - Game')
+  })
+
+  it('never returns an empty string', () => {
+    expect(stripCancelledPrefix('CANCELED')).toBe('CANCELED')
   })
 })

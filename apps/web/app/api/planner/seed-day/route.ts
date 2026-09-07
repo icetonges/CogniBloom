@@ -238,8 +238,12 @@ export async function POST(request: NextRequest) {
     const existingSoccer = existing.filter((e) => e.tags.includes(SOCCER_TAG) && !e.tags.includes('routine'))
     const soccerByTitle = new Map(existingSoccer.map((e) => [e.title, e]))
 
+    // Only pending rows. A ticked row is a record that the session happened,
+    // and a later feed change (a cancellation published after the fact, or
+    // PlayMetrics re-creating the event under a new UID) must not erase it —
+    // the same rule the routine band above follows.
     const staleSoccer = existingSoccer
-      .filter((e) => !soccer.some((s) => s.title === e.title))
+      .filter((e) => !soccer.some((s) => s.title === e.title) && e.status !== 'done')
       .map((e) => e.id)
     const soccerToCreate = soccer.filter((s) => !soccerByTitle.has(s.title))
     const soccerToFix = soccer
@@ -262,7 +266,7 @@ export async function POST(request: NextRequest) {
     const activityByTitle = new Map(existingActivity.map((e) => [e.title, e]))
 
     const staleActivity = existingActivity
-      .filter((e) => !activity.some((a) => a.title === e.title))
+      .filter((e) => !activity.some((a) => a.title === e.title) && e.status !== 'done')
       .map((e) => e.id)
     const activityToCreate = activity.filter((a) => !activityByTitle.has(a.title))
     const activityToFix = activity
