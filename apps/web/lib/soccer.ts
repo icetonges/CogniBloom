@@ -6,6 +6,15 @@
  * background. Nothing about his personality is asserted: there is no reliable
  * public parent-review material, and inventing a reputation would be worse
  * than leaving the gap visible.
+ *
+ * 2026-09-06: `PRACTICES` below used to be the schedule of record — a fixed
+ * Monday/Tuesday/Thursday list. It wasn't accurate; the real BRYC schedule
+ * moves week to week (see the PlayMetrics calendar). The schedule of record
+ * is now `SoccerEvent` in the database, synced from PlayMetrics's published
+ * .ics feed by `lib/soccer-calendar-db.ts` (POST /api/soccer/sync). This
+ * list survives only as the fallback used before the first sync ever runs,
+ * or if the database is briefly unreachable — the same resilience pattern
+ * `lib/school-db.ts` uses for the FCPS calendar.
  */
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
@@ -27,6 +36,10 @@ export interface Practice {
 export const EARLY_PRACTICE_MIN = 15
 export const EARLY_MATCH_MIN = 45
 
+/** Fallback only — see the file header. Kept in the shape it was
+ * originally announced (the pre-season default), used only when the
+ * synced calendar has nothing for a given date and has never synced at
+ * all. */
 export const PRACTICES: readonly Practice[] = [
   { weekday: 1, start: '17:45', arriveBy: '17:30', venue: 'Woodson HS — Aux Field', travelMinutes: 20, minutes: 90 },
   { weekday: 2, start: '19:00', arriveBy: '18:45', venue: 'GMU RAC Field',           travelMinutes: 25, minutes: 90 },
@@ -195,6 +208,21 @@ export const TOUCH_GOAL = 1000
 
 export function practiceOn(weekday: number): Practice | undefined {
   return PRACTICES.find((p) => p.weekday === weekday)
+}
+
+/**
+ * Rough door-to-door drive for a synced calendar event, guessed from the
+ * venue name text PlayMetrics gives us. Matches the travel times already
+ * used in the static `PRACTICES` fallback above. Falls back to the more
+ * common of the two (Woodson) for an unrecognized venue rather than
+ * guessing wildly — worth revisiting if the team starts using a third
+ * regular field.
+ */
+export function travelMinutesForVenue(venue: string | null): number {
+  const v = (venue ?? '').toLowerCase()
+  if (v.includes('gmu') || v.includes('george mason') || v.includes('mason')) return 25
+  if (v.includes('woodson')) return 20
+  return 20
 }
 
 /** "HH:mm" minus n minutes, clamped to the same day. */

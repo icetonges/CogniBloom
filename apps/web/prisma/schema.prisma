@@ -897,6 +897,70 @@ model SchoolCalendarDay {
   @@index([source])
 }
 
+// ============ SOCCER CALENDAR (PlayMetrics sync) ============
+
+/// One row per PlayMetrics calendar VEVENT (practice, game, or other team
+/// event) for the current soccer team. Populated by POST /api/soccer/sync,
+/// which fetches the team's published .ics feed and upserts by `externalId`
+/// (the ICS UID) so re-syncing never duplicates rows. This table is what
+/// replaced the old hardcoded Monday/Tuesday/Thursday practice list in
+/// lib/soccer.ts — that list is now only a fallback for before the first
+/// sync (or if this table is unreachable, same resilience pattern as
+/// SchoolCalendarDay / lib/school-db.ts).
+///
+/// Not user-scoped: single team, single household, like SchoolCalendarDay.
+model SoccerEvent {
+  id                    String      @id @default(cuid())
+
+  /// The ICS UID, e.g. "Practice_11877340" or "Game_4532823". Stable across
+  /// re-syncs even when PlayMetrics edits the event (time/venue change keeps
+  /// the same UID with a new SEQUENCE), so this is the upsert key.
+  externalId            String      @unique
+
+  /// 'practice' | 'game' | 'other' — derived from the UID prefix, falling
+  /// back to keyword-matching SUMMARY when the UID doesn't say.
+  kind                  String
+
+  summary               String
+  /// Raw ICS DESCRIPTION, unescaped. For games this is where opponent,
+  /// arrival time and uniform color actually live (PlayMetrics does not
+  /// give them their own fields).
+  description           String?     @db.Text
+  /// Raw ICS LOCATION (street address), when present and not "TBD".
+  location              String?
+  /// Parsed out of DESCRIPTION for games ("BRYC U-14 ECNL R at U13 Boys
+  /// ECNL-RL" style text) — best-effort, never blocks a sync on failure.
+  opponent              String?
+  /// Venue name parsed from DESCRIPTION/LOCATION ("CG Woodson HS Aux
+  /// Field") — distinct from the street address in `location`.
+  venue                 String?
+  /// Best-effort, games only — the text after "Uniform:" in DESCRIPTION.
+  uniform               String?
+
+  /// Eastern wall-clock start, stored as its UTC instant. Never null even
+  /// for a TBD-time tournament game — PlayMetrics emits a bare date for
+  /// those (see `allDay`), and we store Eastern midnight for it.
+  startAt               DateTime
+  endAt                 DateTime?
+  /// True when the ICS value carried no time-of-day (PlayMetrics emits this
+  /// for "Start Time TBD" tournament games) — the UI shows "TBD", not 12 AM.
+  allDay                Boolean     @default(false)
+
+  /// ICS STATUS, e.g. "CONFIRMED", "CANCELLED".
+  status                String?
+
+  /// 'playmetrics' today; room for a second source later without a migration.
+  source                String      @default("playmetrics")
+  lastSeenAt            DateTime    @default(now())
+
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([kind])
+  @@index([startAt])
+  @@index([kind, startAt])
+}
+
 // ============ ENGLISH 7 MODULE ============
 
 /// The FCPS English 7 reading list. Source of truth is lib/english/books.ts —

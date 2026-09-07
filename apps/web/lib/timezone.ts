@@ -105,3 +105,46 @@ export function easternDateBoundaries(): {
  *   DATE("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York')
  */
 export const EASTERN_DATE_SQL = `AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York'`
+
+/**
+ * Convert an Eastern wall-clock date + "HH:mm" time into the UTC instant it
+ * represents, handling EDT/EST automatically.
+ *
+ * Reuses the noon-anchor trick from `_easternMidnightUTC`: get that
+ * Eastern day's midnight expressed as a UTC instant, then add the
+ * time-of-day on top. The Eastern UTC offset is constant across the day
+ * except during the two DST-transition nights, which never matter here —
+ * nothing in this app schedules anything between 1 and 3 AM.
+ */
+export function easternWallTimeToUTC(y: number, m: number, d: number, hhmm: string): Date {
+  const [hh = '0', mm = '0'] = hhmm.split(':')
+  const midnight = _easternMidnightUTC(y, m, d)
+  return new Date(midnight.getTime() + (Number(hh) * 60 + Number(mm)) * 60_000)
+}
+
+/**
+ * The Eastern calendar date "YYYY-MM-DD" for a given UTC instant — the
+ * inverse direction of `easternWallTimeToUTC`. Used to bucket a synced
+ * calendar event's UTC `startAt` back into the Eastern day it belongs to.
+ */
+export function toEasternDateKey(date: Date): string {
+  const str = toEasternDateString(date) // "MM/DD/YYYY"
+  const [m, d, y] = str.split('/')
+  return `${y}-${m}-${d}`
+}
+
+/**
+ * Inverse of `easternWallTimeToUTC`: given a UTC instant, return the Eastern
+ * calendar date it falls on and the Eastern wall-clock "HH:mm" within that
+ * day. Used to display a synced calendar event's stored UTC `startAt` back
+ * in the terms it was entered in.
+ */
+export function utcInstantToEasternTime(date: Date): { dateKey: string; hhmm: string } {
+  const dateKey = toEasternDateKey(date)
+  const midnightUTC = easternMidnight(date)
+  const minutes = Math.round((date.getTime() - midnightUTC.getTime()) / 60_000)
+  const clamped = ((minutes % 1440) + 1440) % 1440
+  const hh = Math.floor(clamped / 60)
+  const mm = clamped % 60
+  return { dateKey, hhmm: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` }
+}

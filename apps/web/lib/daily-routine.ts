@@ -9,13 +9,26 @@
  *   FI03AM  06:40  Wakefield Chapel Rd & Bromley Ct (N)
  *   FI03PM  14:35  same stop
  *
- * and around the three BRYC sessions, which push the evening later on Monday,
- * Tuesday and Thursday. The shape he asked to keep is preserved on every
- * profile: morning stretch → Duolingo → music, afternoon play time, two study
- * sessions, the daily investment, and the reflection that closes the day.
+ * and around whatever BRYC practice actually falls on a given evening. The
+ * shape he asked to keep is preserved on every profile: morning stretch →
+ * Duolingo → music, afternoon play time, two study sessions, the daily
+ * investment, and the reflection that closes the day.
+ *
+ * 2026-09-06: practice used to be assumed fixed to Monday/Tuesday/Thursday
+ * (`lib/soccer.ts`'s old PRACTICES table). The real BRYC schedule moves
+ * around week to week — some weeks it's Mon+Thu, others Mon+Tue, sometimes a
+ * Wednesday or even a Sunday evening — so this file no longer looks up a
+ * weekday at all. The caller (`lib/soccer-calendar-db.ts`, reading the
+ * PlayMetrics-synced calendar) tells `profileFor`/`routineFor` what's
+ * actually happening *that specific date* via `PracticeTiming`. The kit/
+ * leave/arrive/practice/home rows themselves are no longer built here either
+ * — they're a separate, always-reconciled "soccer band" (see
+ * `soccerBandItems` in lib/soccer-calendar-db.ts) so a calendar correction
+ * reaches an already-seeded day immediately, the same way the school class
+ * schedule already does, rather than waiting on a ROUTINE_VERSION bump.
  */
 
-import { PRACTICES, minus, plus, type Practice } from '@/lib/soccer'
+import { minus, plus } from '@/lib/soccer'
 
 /**
  * Bump this whenever the profiles change shape.
@@ -30,7 +43,7 @@ import { PRACTICES, minus, plus, type Practice } from '@/lib/soccer'
  * that are still pending. A row already ticked done is a record of work that
  * actually happened and is never deleted.
  */
-export const ROUTINE_VERSION = 2
+export const ROUTINE_VERSION = 3
 export const ROUTINE_VERSION_TAG = `routine-v${ROUTINE_VERSION}`
 
 export interface RoutineItem {
@@ -46,9 +59,9 @@ export interface RoutineItem {
 }
 
 export type DayProfile =
-  | 'school-practice-early'   // Mon, Thu — 5:45 pm at Woodson
-  | 'school-practice-late'    // Tue — 7:00 pm at GMU
-  | 'school-plain'            // Wed, Fri
+  | 'school-practice-early'   // school day, practice leaves before ~6 PM
+  | 'school-practice-late'    // school day, practice leaves ~6 PM or later
+  | 'school-plain'            // school day, no practice
   | 'open'                    // weekend, holiday, teacher workday
 
 export const BUS = {
@@ -60,13 +73,38 @@ export const BUS = {
   leaveHome: '06:32',
 } as const
 
-/** Which profile a given date takes. */
-export function profileFor(date: Date, isSchoolDay: boolean): DayProfile {
+/**
+ * The only two facts the personal routine needs about this evening's
+ * practice: when he has to leave the house, and when he's back. Everything
+ * else (venue, kit, the practice block itself) lives in the soccer band.
+ * Supplied by `lib/soccer-calendar-db.ts` from the synced calendar (or the
+ * static fallback, before the first sync).
+ */
+export interface PracticeTiming {
+  leaveAt: string
+  homeAt: string
+}
+
+function timeToMinutes(t: string): number {
+  const [h = '0', m = '0'] = t.split(':')
+  return Number(h) * 60 + Number(m)
+}
+
+/**
+ * Which profile a given date takes.
+ *
+ * `practice` is whatever's actually on the synced calendar for *this*
+ * date — no longer an assumption from the day of the week. "Late" shape
+ * means both study sessions fit before leaving for practice; the 6 PM
+ * cutoff is empirically where BRYC's own practice times split (5:45 PM
+ * Woodson practices vs. 7:00 PM Woodson/GMU ones).
+ */
+export function profileFor(isSchoolDay: boolean, practice: PracticeTiming | null): DayProfile {
   if (!isSchoolDay) return 'open'
-  const wd = date.getUTCDay()
-  if (wd === 1 || wd === 4) return 'school-practice-early'
-  if (wd === 2) return 'school-practice-late'
-  return 'school-plain'
+  if (!practice) return 'school-plain'
+  return timeToMinutes(practice.leaveAt) >= timeToMinutes('18:00')
+    ? 'school-practice-late'
+    : 'school-practice-early'
 }
 
 // ── the blocks every profile shares ─────────────────────────────────────────
@@ -109,8 +147,8 @@ function comeHome(): RoutineItem[] {
  *
  * `tight` drops the mind map — on a practice night there is no room for it and
  * pretending otherwise just makes the plan a lie. `investment: false` is for
- * the Tuesday shape, where the $5 decision happens before he leaves for GMU
- * because practice does not finish until 8:30.
+ * the "late" shape, where the $5 decision happens before he leaves for
+ * practice because practice doesn't finish until well past 8.
  */
 function closeOut(start: string, opts: { tight?: boolean; investment?: boolean } = {}): RoutineItem[] {
   const withInvestment = opts.investment !== false
@@ -130,58 +168,53 @@ function closeOut(start: string, opts: { tight?: boolean; investment?: boolean }
   return items
 }
 
-/** The soccer block for a practice day, worked backwards from the arrival time. */
-function practiceBlock(p: Practice): RoutineItem[] {
-  const leave = minus(p.arriveBy, p.travelMinutes)
-  const end = plus(p.start, p.minutes)
-  return [
-    { title: 'Kit out + ball in the car', time: minus(leave, 15), details: 'Boots, shin guards, both kits, water, the same ball', tag: 'soccer', extra: ['prep'] },
-    { title: 'Leave for practice',        time: leave,            details: `${p.venue} · ~${p.travelMinutes} min`, tag: 'soccer', extra: ['transport'] },
-    { title: 'On the field — warm up',    time: p.arriveBy,       details: 'Coach’s rule: 15 minutes early, boots on, ball out', tag: 'soccer' },
-    { title: 'BRYC practice',             time: p.start,          details: `${p.venue} · ${p.minutes} min · Coach West`, tag: 'soccer', extra: ['locked'] },
-    { title: 'Home + dinner',             time: plus(end, p.travelMinutes), details: 'Eat, shower, then one study block', tag: 'rest' },
-  ]
-}
-
 // ── the profiles ────────────────────────────────────────────────────────────
 
-export function routineFor(profile: DayProfile): RoutineItem[] {
+/**
+ * Fallback timings used only as a defensive default — `profileFor` never
+ * actually returns a practice profile without a `PracticeTiming`, but a
+ * literal default here is safer than trusting that invariant everywhere a
+ * caller might drift.
+ */
+const DEFAULT_EARLY: PracticeTiming = { leaveAt: '17:10', homeAt: '19:35' }
+const DEFAULT_LATE: PracticeTiming = { leaveAt: '18:20', homeAt: '20:55' }
+
+export function routineFor(profile: DayProfile, practice: PracticeTiming | null = null): RoutineItem[] {
   switch (profile) {
-    // Monday, Thursday — on the field at 5:30, so the afternoon is short and
-    // Study Session 2 lands after dinner.
+    // Practice that leaves before ~6 PM: the afternoon is short and Study
+    // Session 2 lands after dinner, once everyone's home.
     case 'school-practice-early': {
-      const p = PRACTICES.find((x) => x.weekday === 1)!
+      const { leaveAt, homeAt } = practice ?? DEFAULT_EARLY
       return sorted([
         ...schoolMorning(),
         ...comeHome(),
         { title: 'Study Session 1', time: '15:30', details: '40 min — homework first', tag: 'study' },
-        { title: '1000 touches',    time: '16:15', details: 'Before you leave, not instead of practice', tag: 'soccer' },
-        ...practiceBlock(p),
-        { title: 'Study Session 2', time: '20:10', details: '30 min — reading counts', tag: 'study' },
-        ...closeOut('20:50', { tight: true }),
+        { title: '1000 touches',    time: minus(leaveAt, 55), details: 'Before you leave, not instead of practice', tag: 'soccer' },
+        { title: 'Study Session 2', time: plus(homeAt, 35), details: '30 min — reading counts', tag: 'study' },
+        ...closeOut(plus(homeAt, 75), { tight: true }),
       ])
     }
 
-    // Tuesday — 7:00 pm at GMU. Both study sessions fit before you leave.
+    // Practice that leaves ~6 PM or later: both study sessions fit before
+    // he leaves the house.
     case 'school-practice-late': {
-      const p = PRACTICES.find((x) => x.weekday === 2)!
+      const { homeAt } = practice ?? DEFAULT_LATE
       return sorted([
         ...schoolMorning(),
         ...comeHome(),
         { title: 'Study Session 1', time: '15:30', details: '40 min — homework first', tag: 'study' },
         { title: '1000 touches',    time: '16:15', details: 'Both feet · the same ball you take to practice', tag: 'soccer' },
         { title: 'Study Session 2', time: '16:55', details: '40 min', tag: 'study' },
-        // The $5 decision moves ahead of practice on Tuesday: the GMU session
-        // does not finish until 8:30 and he is up at 5:55.
+        // The $5 decision moves ahead of practice: a practice this late
+        // doesn't finish until well past 8 and he's up at 5:55.
         { title: '$5 daily investment', time: '17:35', details: '15 min · one decision, written down', tag: 'investment' },
-        { title: 'Early dinner',    time: '17:52', details: 'Light — you train at 7', tag: 'rest' },
-        ...practiceBlock(p),
-        ...closeOut('21:10', { tight: true, investment: false }),
+        { title: 'Early dinner',    time: '17:52', details: 'Light — practice tonight', tag: 'rest' },
+        ...closeOut(plus(homeAt, 15), { tight: true, investment: false }),
       ])
     }
 
-    // Wednesday, Friday — no practice, so this is where the long study block
-    // and the extra touches live.
+    // No practice tonight — this is where the long study block and the
+    // extra touches live.
     case 'school-plain':
       return sorted([
         ...schoolMorning(),
