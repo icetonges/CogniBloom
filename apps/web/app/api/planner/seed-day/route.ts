@@ -202,7 +202,15 @@ export async function POST(request: NextRequest) {
     // rows whose time or room drifted from the schedule are corrected. A day
     // Frost is closed produces nothing at all.
     const school = schoolItems(day)
-    const existingSchool = existing.filter((e) => e.tags.includes(SCHOOL_TAG))
+    // Exclude rows also tagged 'routine': a routine item can carry a topical
+    // tag string that collides with a band's reserved marker (e.g. the
+    // '1000 touches' / 'Juggling test' routine rows are topically tagged
+    // 'soccer', same string as SOCCER_TAG) without actually belonging to
+    // that band. Without this guard such a row gets deleted here as
+    // "stale" while routineToFix, below, tries to update that same row a
+    // few lines later in the same transaction -- which throws (the row is
+    // already gone) and 500s the whole request.
+    const existingSchool = existing.filter((e) => e.tags.includes(SCHOOL_TAG) && !e.tags.includes('routine'))
     const schoolByTitle = new Map(existingSchool.map((e) => [e.title, e]))
 
     // A day that is closed (or was reclassified as closed) must not keep class
@@ -227,7 +235,7 @@ export async function POST(request: NextRequest) {
     // since a game vs. practice distinction can change the tag set on an
     // already-seeded row (a TBD tournament game gets its real time later).
     const soccer = soccerItems(soccerBand)
-    const existingSoccer = existing.filter((e) => e.tags.includes(SOCCER_TAG))
+    const existingSoccer = existing.filter((e) => e.tags.includes(SOCCER_TAG) && !e.tags.includes('routine'))
     const soccerByTitle = new Map(existingSoccer.map((e) => [e.title, e]))
 
     const staleSoccer = existingSoccer
@@ -250,7 +258,7 @@ export async function POST(request: NextRequest) {
     // adding a new activity (or an end date passing) reaches already-seeded
     // future days without anyone needing to touch the database by hand.
     const activity = activityItems(dateKey)
-    const existingActivity = existing.filter((e) => e.tags.includes(ACTIVITY_TAG))
+    const existingActivity = existing.filter((e) => e.tags.includes(ACTIVITY_TAG) && !e.tags.includes('routine'))
     const activityByTitle = new Map(existingActivity.map((e) => [e.title, e]))
 
     const staleActivity = existingActivity
