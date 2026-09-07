@@ -10,7 +10,7 @@ import {
   Plus, X, Check, Trash2, Tag as TagIcon, Clock, Target, Flag,
   AlignLeft, Pen, Repeat, ListChecks, Sparkles,
   Droplets, Moon, Utensils, Brain, TrendingUp, Flame, ChevronUp, ChevronDown,
-  GraduationCap, MapPin, Lock, Footprints, Trophy, AlertTriangle,
+  GraduationCap, MapPin, Lock, Footprints, AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
@@ -711,8 +711,11 @@ function DayView({
   const real = items.filter((e) => !isRoutine(e) && !isSchool(e) && !isReserved(e) && !isCommitment(e))
   const timed = real.filter((e) => e.startTime)  // school + commitment rows live in their own bands
   const tasks = [...routine, ...real, ...schoolItems, ...commitmentItems]
-  // Sort habits chronologically by startTime; fall back to sortOrder for untimed items.
-  const habitList = [...routine].sort((a, b) => {
+  // One list. Habits and today's fixed calendar commitments (soccer,
+  // lib/activities) live together here, in time order — this section is the
+  // daily activity planner, not a habits-only widget, so splitting the day's
+  // real commitments into a second card just made them easier to miss.
+  const habitList = [...routine, ...commitmentItems].sort((a, b) => {
     if (a.startTime && b.startTime) return a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0
     if (a.startTime) return -1
     if (b.startTime) return 1
@@ -788,8 +791,21 @@ function DayView({
         <button onClick={onRestoreRoutine} className="text-xs text-primary hover:underline inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Load defaults</button>
       </div>
       <Card className="p-3 space-y-2">
+        {habitList.some(isUnsynced) && (
+          <p className="flex items-start gap-1.5 text-[11px] text-amber-500/90 pb-1">
+            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+            <span>
+              Soccer times below are the old default pattern — the calendar has never synced.{' '}
+              <a href="/dashboard/soccer" className="underline hover:no-underline">Sync</a>
+            </span>
+          </p>
+        )}
         {habitList.map((e, i) => {
           const optional = isOptional(e)
+          // Calendar-owned rows: same row, same tick box, but the title, time
+          // and delete controls are inert because seed-day rewrites them from
+          // the calendar on the next load.
+          const locked = isCommitment(e)
           return (
           <div key={e.id} className={cn('flex items-start gap-2 group rounded-lg hover:bg-muted/30 px-1 -mx-1 py-0.5', optional && 'border border-dashed border-muted-foreground/30 opacity-75 hover:opacity-100')}>
             {/* reorder */}
@@ -800,28 +816,46 @@ function DayView({
             <button onClick={() => toggle(e)} className={cn('mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0', e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary')}>
               {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
             </button>
-            <span className="text-base shrink-0 mt-0.5">{routineEmoji(e.title)}</span>
+            <span className="text-base shrink-0 mt-0.5">{locked ? commitmentEmoji(e) : routineEmoji(e.title)}</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
+                {locked ? (
+                  <span className={cn('flex-1 min-w-0 truncate text-sm font-medium', e.status === 'done' && 'line-through text-muted-foreground')}>
+                    {e.title.replace(/^⚽\s*/, '')}
+                  </span>
+                ) : (
+                  <EditLine value={e.title} onCommit={(t) => commitTitle(e, t)} className={cn('flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none', e.status === 'done' && 'line-through text-muted-foreground')} />
+                )}
                 {optional && <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">Optional</span>}
               </div>
-              <EditLine value={e.details ?? ''} onCommit={(t) => patchEntry(e.id, { details: t })} placeholder="duration / note — e.g. 15 min lesson" className="w-full bg-transparent text-[11px] text-muted-foreground focus:outline-none placeholder:text-muted-foreground/40" />
+              {locked ? (
+                e.details ? <div className="text-[11px] text-muted-foreground truncate">{e.details}</div> : null
+              ) : (
+                <EditLine value={e.details ?? ''} onCommit={(t) => patchEntry(e.id, { details: t })} placeholder="duration / note — e.g. 15 min lesson" className="w-full bg-transparent text-[11px] text-muted-foreground focus:outline-none placeholder:text-muted-foreground/40" />
+              )}
             </div>
             <input
               type="time"
               value={e.startTime ?? ''}
               onChange={(ev) => patchEntry(e.id, { startTime: ev.target.value })}
-              title="Time"
-              className="text-[11px] text-muted-foreground bg-transparent border border-border/60 rounded px-1 py-0.5 shrink-0 mt-0.5 w-[5.5rem] focus:outline-none focus:ring-1 focus:ring-primary/40"
+              disabled={locked}
+              title={locked ? 'Set by the calendar' : 'Time'}
+              className={cn(
+                'text-[11px] text-muted-foreground bg-transparent border border-border/60 rounded px-1 py-0.5 shrink-0 mt-0.5 w-[5.5rem] focus:outline-none focus:ring-1 focus:ring-primary/40',
+                locked && 'border-transparent opacity-70'
+              )}
             />
-            <button
-              onClick={() => toggleOptional(e)}
-              title={optional ? 'Marked optional — click to make required' : 'Mark as optional'}
-              className={cn('shrink-0 mt-0.5 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border transition-colors',
-                optional ? 'border-primary/50 text-primary bg-primary/10' : 'border-muted-foreground/30 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-primary hover:border-primary/50')}
-            >?</button>
-            <button onClick={() => removeEntry(e.id)} title="Remove" className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><X className="w-3.5 h-3.5" /></button>
+            {!locked && (
+              <button
+                onClick={() => toggleOptional(e)}
+                title={optional ? 'Marked optional — click to make required' : 'Mark as optional'}
+                className={cn('shrink-0 mt-0.5 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border transition-colors',
+                  optional ? 'border-primary/50 text-primary bg-primary/10' : 'border-muted-foreground/30 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-primary hover:border-primary/50')}
+              >?</button>
+            )}
+            {locked
+              ? <Lock className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0 mt-1" aria-label="From the synced calendar" />
+              : <button onClick={() => removeEntry(e.id)} title="Remove" className="text-muted-foreground/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><X className="w-3.5 h-3.5" /></button>}
           </div>
           )
         })}
@@ -832,66 +866,6 @@ function DayView({
       </Card>
     </section>
   )
-
-  // Today's fixed outside commitments. Rendered like the school band —
-  // checkable, locked, time on the left — because none of these times are
-  // Daniel's to move. Rows still flagged UNSYNCED_TAG are shown dimmed under
-  // a warning rather than hidden: knowing the app is guessing is more useful
-  // than a blank card.
-  const commitments = commitmentItems.length > 0 ? (
-    <section key="commit">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className={cn(sectionTitle, 'mb-0')}><Trophy className="w-3.5 h-3.5" /> Commitments</h3>
-        <a href="/dashboard/soccer" className="text-xs text-primary hover:underline">Soccer →</a>
-      </div>
-      <Card className="p-3 space-y-1">
-        {commitmentItems.some(isUnsynced) && (
-          <div className="flex items-start gap-2 rounded-md border border-dashed border-amber-500/40 bg-amber-500/[0.06] px-2 py-1.5 mb-1">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-amber-500">Unconfirmed.</span>{' '}
-              The PlayMetrics calendar has never synced, so this is the old default weekly
-              pattern rather than the real schedule — a cancelled session would still show here.{' '}
-              <a href="/dashboard/soccer" className="text-primary hover:underline">Sync now →</a>
-            </p>
-          </div>
-        )}
-        {commitmentItems.map((e) => {
-          const provisional = isUnsynced(e)
-          return (
-            <div
-              key={e.id}
-              className={cn(
-                'flex items-start gap-2 rounded-lg px-1 -mx-1 py-0.5 hover:bg-muted/30',
-                provisional && 'opacity-70'
-              )}
-            >
-              <button
-                onClick={() => toggle(e)}
-                className={cn(
-                  'mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0',
-                  e.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary'
-                )}
-              >
-                {e.status === 'done' && <Check className="w-3 h-3 text-white" />}
-              </button>
-              <span className="w-14 shrink-0 text-[11px] text-muted-foreground tabular-nums mt-0.5">
-                {e.startTime ? fmt12(e.startTime) : ''}
-              </span>
-              <span className="text-base shrink-0 leading-none mt-0.5">{commitmentEmoji(e)}</span>
-              <div className="flex-1 min-w-0">
-                <div className={cn('text-sm font-medium truncate', e.status === 'done' && 'line-through text-muted-foreground')}>
-                  {e.title.replace(/^⚽\s*/, '')}
-                </div>
-                {e.details && <div className="text-[11px] text-muted-foreground truncate">{e.details}</div>}
-              </div>
-              <Lock className="w-3 h-3 text-muted-foreground/30 shrink-0 mt-1" aria-label="From a synced calendar" />
-            </div>
-          )
-        })}
-      </Card>
-    </section>
-  ) : null
 
   const closureBanner = !school.isSchoolDay && school.type !== 'weekend' && school.type !== 'summer' ? (
     <section key="closed">
@@ -1093,7 +1067,6 @@ function DayView({
         </div>
         {/* RIGHT — the things that get ticked. */}
         <div className="space-y-5">
-          {commitments}
           {habits}
           {meals}
         </div>

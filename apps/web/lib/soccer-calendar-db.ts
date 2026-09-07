@@ -28,7 +28,6 @@ const ICS_URL_ENV = 'SOCCER_ICS_URL'
  * now says it's a guess, all the way to the UI.
  */
 export const UNSYNCED_TAG = 'unsynced'
-export const UNSYNCED_NOTE = "⚠ Unconfirmed — soccer calendar has never synced"
 
 function parseDateKeyParts(key: string): { y: number; m: number; d: number } {
   const [y, m, d] = key.split('-').map(Number)
@@ -369,12 +368,10 @@ export async function soccerBandItems(dateKey: string): Promise<SeedItem[]> {
   // how confidently it's presented — so provisional rows carry the marker
   // tag and say so in their own details text, rather than relying on some
   // other part of the app to remember to check.
+  // Tag only. The warning belongs in one place in the UI, not repeated in
+  // the details line of every single row.
   if (!w.isFallback) return items
-  return items.map((it) => ({
-    ...it,
-    details: [it.details, UNSYNCED_NOTE].filter(Boolean).join(' · '),
-    tags: [...it.tags, UNSYNCED_TAG],
-  }))
+  return items.map((it) => ({ ...it, tags: [...it.tags, UNSYNCED_TAG] }))
 }
 
 // ── the schedule for the dashboard / API ────────────────────────────────
