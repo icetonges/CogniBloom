@@ -25,15 +25,30 @@ interface Props {
 /** Live focus timer for the editor top bar, with an optional 20-minute focus block. */
 export function WritingTimer({ stats, onStartBlock, onCancelBlock }: Props) {
   const [open, setOpen] = useState(false)
+  // Fixed position under the chip, so a clipping parent (the top bar) can't cut it off.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
+    const place = () => {
+      const r = boxRef.current?.getBoundingClientRect()
+      if (!r) return
+      const width = Math.min(320, window.innerWidth - 32)
+      setPos({ top: r.bottom + 8, left: Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) })
+    }
+    place()
     const onDown = (e: PointerEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('pointerdown', onDown)
-    return () => document.removeEventListener('pointerdown', onDown)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
   }, [open])
 
   if (!stats) return null
@@ -59,7 +74,7 @@ export function WritingTimer({ stats, onStartBlock, onCancelBlock }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full tabular-nums transition-colors"
+        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full tabular-nums transition-colors whitespace-nowrap"
         style={block
           ? { background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', color: '#6ee7b7' }
           : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
@@ -83,7 +98,7 @@ export function WritingTimer({ stats, onStartBlock, onCancelBlock }: Props) {
         <button
           type="button"
           onClick={() => onStartBlock(DEFAULT_BLOCK_MS)}
-          className="hidden sm:flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
           style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
           title="Start a 20-minute focus block"
         >
@@ -91,10 +106,10 @@ export function WritingTimer({ stats, onStartBlock, onCancelBlock }: Props) {
         </button>
       )}
 
-      {open && (
+      {open && pos && (
         <div
-          className="absolute left-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl p-3 text-xs shadow-xl"
-          style={{ background: 'rgba(10,18,34,0.97)', border: '1px solid rgba(255,255,255,0.1)' }}
+          className="fixed z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl p-3 text-xs shadow-xl"
+          style={{ top: pos.top, left: pos.left, background: 'rgba(10,18,34,0.97)', border: '1px solid rgba(255,255,255,0.1)' }}
         >
           <div className="flex items-baseline justify-between mb-2">
             <span className="font-bold text-foreground">This session</span>

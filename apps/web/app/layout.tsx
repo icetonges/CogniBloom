@@ -1,13 +1,20 @@
 import type { Metadata } from 'next'
-import { Source_Serif_4 } from 'next/font/google'
+import { Inter, Source_Serif_4 } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { AuthSessionProvider } from '@/components/providers/AuthSessionProvider'
 import './globals.css'
 
-// Fallback for Anthropic Serif, which is proprietary and cannot be bundled
-// (see the @font-face block in globals.css). Source Serif 4 is a variable
-// open serif with a close feel and excellent screen legibility, so the app
-// looks right whether or not the licensed files are installed.
+// Claude's pairing: a sans for the interface (buttons, labels, navigation)
+// and a serif for reading (notes, AI answers, page titles). Anthropic Sans and
+// Anthropic Serif are proprietary and cannot be bundled (see the @font-face
+// slots in globals.css), so these open fonts stand in until the licensed
+// files are installed: Inter for the interface, Source Serif 4 for reading.
+const sans = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+})
+
 const serif = Source_Serif_4({
   subsets: ['latin'],
   variable: '--font-serif',
@@ -50,7 +57,7 @@ export const viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={serif.variable}>
+    <html lang="en" suppressHydrationWarning className={`${sans.variable} ${serif.variable}`}>
       <head>
         <meta charSet="utf-8" />
       </head>

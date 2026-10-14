@@ -669,7 +669,7 @@ export function NewNoteClient() {
     <div className="-mx-4 md:-mx-8 -mt-6 flex flex-col">
       {/* ── Top bar (sticks to the top of the page scroller) ── */}
       <div
-        className="sticky top-0 z-30 flex items-center gap-3 px-5 py-3 flex-shrink-0 backdrop-blur"
+        className="sticky top-0 z-30 flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-2 px-5 py-3 flex-shrink-0 backdrop-blur"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(6,12,24,0.85)' }}
       >
         <button
@@ -677,31 +677,34 @@ export function NewNoteClient() {
           className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
           style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Notes
+          <ArrowLeft className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Notes</span>
         </button>
 
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        {/* Left side clips instead of sliding under the buttons when space runs out.
+            Below lg it drops to its own row under the buttons. */}
+        <div className="order-last basis-full lg:order-none lg:basis-auto flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
           <span className="text-base font-black tracking-tight shrink-0">
             <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               New Note
             </span>
           </span>
+          <WritingTimer stats={writing.stats} onStartBlock={writing.startBlock} onCancelBlock={writing.cancelBlock} />
+          <div className="flex items-center gap-2 min-w-0">
           {wordCount > 0 && (
-            <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-full shrink-0"
+            <span className="hidden xl:inline-flex text-[10px] text-muted-foreground px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap"
               style={{ background: 'rgba(255,255,255,0.05)' }}>
               {wordCount}w · {charCount}c
             </span>
           )}
-          <WritingTimer stats={writing.stats} onStartBlock={writing.startBlock} onCancelBlock={writing.cancelBlock} />
           {draftSavedAt && (
-            <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
+            <span className="hidden 2xl:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <Clock className="h-2.5 w-2.5 shrink-0" />
               {draftRestored ? 'Draft restored' : 'Draft saved'}
             </span>
           )}
           {saveStatus !== 'idle' && (
-            <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
+            <span className="hidden lg:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
               style={{
                 background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
                 color: saveStatus === 'error' ? '#f87171' : saveStatus === 'saved' ? '#34d399' : undefined,
@@ -718,9 +721,10 @@ export function NewNoteClient() {
                   : 'Save failed'}
             </span>
           )}
+          </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           {/* Daily Reflection template */}
           <button
             type="button"
@@ -730,7 +734,7 @@ export function NewNoteClient() {
             title="Load Daily Reflection template"
           >
             <BookMarked className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Daily Reflection</span>
+            <span className="hidden xl:inline">Daily Reflection</span>
           </button>
           {/* Delete / discard */}
           <button
@@ -741,7 +745,7 @@ export function NewNoteClient() {
             title={noteId ? 'Delete note' : 'Discard draft'}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Delete</span>
+            <span className="hidden xl:inline">Delete</span>
           </button>
           {/* Import — icon-only on mobile */}
           <button
@@ -759,7 +763,7 @@ export function NewNoteClient() {
             title={showImport ? 'Close import' : 'Import file'}
           >
             {showImport ? <X className="h-3.5 w-3.5" /> : <FilePlus className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{showImport ? 'Close' : 'Import'}</span>
+            <span className="hidden xl:inline">{showImport ? 'Close' : 'Import'}</span>
           </button>
           {/* Save — icon-only on mobile */}
           <button

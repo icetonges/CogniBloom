@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Typography: Claude's pairing ─────────────────────────────────────────
+   Interface (buttons, labels, navigation, forms): Anthropic Sans.
+   Reading (note text, the editor, AI answers, page titles): Anthropic Serif.
+   Both are proprietary. Drop the licensed .woff2 files into
+   `apps/web/public/fonts/` with the names below and the app switches with
+   no code change. Until then the browser falls through to Inter and
+   Source Serif 4 (loaded in app/layout.tsx).
+   ──────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Anthropic Sans';
+  src: url('/fonts/AnthropicSans-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Anthropic Sans';
+  src: url('/fonts/AnthropicSans-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Anthropic Sans';
+  src: url('/fonts/AnthropicSans-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Anthropic Sans';
+  src: url('/fonts/AnthropicSans-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── Anthropic Serif ──────────────────────────────────────────────────────
    Anthropic Serif is a proprietary typeface — it is not on Google Fonts and
    cannot be bundled here. These rules are a drop-in slot: put the licensed
@@ -222,7 +259,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Anthropic Serif', var(--font-serif), Georgia, 'Times New Roman', serif;
+    font-family: 'Anthropic Sans', var(--font-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     font-feature-settings: 'rlig' 1, 'calt' 1;
     line-height: 1.65;
   }
@@ -230,8 +267,21 @@
   h1, h2, h3, h4, h5, h6 {
     line-height: 1.25;
     font-weight: 700;
-    font-family: 'Anthropic Serif', var(--font-serif), Georgia, 'Times New Roman', serif;
     letter-spacing: -0.015em;
+  }
+
+  /* Page titles and everything you read are serif, like Claude's responses.
+     Smaller UI headings (h3-h6 outside reading areas) stay sans. */
+  h1, h2, .cb-title-input,
+  .prose, .tiptap, .ProseMirror,
+  .prose :is(h1, h2, h3, h4, h5, h6),
+  .tiptap :is(h1, h2, h3, h4, h5, h6) {
+    font-family: 'Anthropic Serif', var(--font-serif), Georgia, 'Times New Roman', serif;
+  }
+
+  /* Code stays monospace inside reading areas. */
+  .prose :is(code, pre, kbd, samp), .tiptap :is(code, pre) {
+    font-family: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace;
   }
 
   /* Boost small text sizes for readability (especially for teen users).

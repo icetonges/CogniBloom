@@ -10,12 +10,14 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // One serif stack for the whole app. 'Anthropic Serif' is used when the
-        // licensed files are present in public/fonts/ (see globals.css);
-        // otherwise this falls through to Source Serif 4 from next/font.
-        sans: ['Anthropic Serif', 'var(--font-serif)', 'Georgia', ...defaultTheme.fontFamily.serif],
-        display: ['Anthropic Serif', 'var(--font-serif)', 'Georgia', ...defaultTheme.fontFamily.serif],
+        // Claude's pairing: sans for the interface, serif for reading.
+        // 'Anthropic Sans' / 'Anthropic Serif' are used when the licensed files
+        // are present in public/fonts/ (see globals.css); otherwise these fall
+        // through to Inter and Source Serif 4 from next/font.
+        sans: ['Anthropic Sans', 'var(--font-sans)', ...defaultTheme.fontFamily.sans],
+        display: ['Anthropic Sans', 'var(--font-sans)', ...defaultTheme.fontFamily.sans],
         serif: ['Anthropic Serif', 'var(--font-serif)', 'Georgia', ...defaultTheme.fontFamily.serif],
+        mono: ['ui-monospace', 'SFMono-Regular', 'JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
       },
       colors: {
         border: 'hsl(var(--border))',
