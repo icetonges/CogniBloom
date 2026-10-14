@@ -28,3 +28,13 @@ export const ALL_SUMMARY_RECIPIENTS = [
   APP_USER.email,
   ...PARENT_EMAILS,
 ].filter(Boolean)
+
+// Parent sign-ins on the shared household account. The daily kickoff card
+// shows to them as a preview of what Daniel sees, labelled as such.
+export const PARENT_SIGNIN_EMAILS = ['icetonges@gmail.com']
+
+export function isParentEmail(email: string | null | undefined): boolean {
+  if (!email) return false
+  const e = email.toLowerCase()
+  return PARENT_SIGNIN_EMAILS.includes(e) || PARENT_EMAILS.map((p) => p.toLowerCase()).includes(e)
+}

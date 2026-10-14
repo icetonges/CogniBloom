@@ -14,6 +14,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SubjectGroupList } from '@/components/layout/SubjectGroupList'
+import { DailyKickoff } from '@/components/layout/DailyKickoff'
 
 const navItems = [
   { href: '/dashboard/planner',         icon: CalendarDays,  label: 'Planner',              color: 'text-cyan-400'   },
@@ -415,6 +416,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               collapsed && 'md:pl-14'
             )}
           >
+            <DailyKickoff />
             {children}
           </div>
         </main>
