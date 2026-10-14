@@ -10,6 +10,13 @@ const MAX_MS = 24 * 60 * 60 * 1000
 const ms = z.number().int().min(0).max(MAX_MS)
 const count = z.number().int().min(0).max(10_000_000)
 
+const timelineEntry = z.tuple([
+  z.number().int().min(0).max(MAX_MS / 1000),
+  z.number().int().min(0).max(MAX_MS / 1000),
+  z.enum(['w', 't', 'r', 'b', 'a']),
+])
+
+// Unknown keys (live-only fields like `block`, `pendingAway`) are stripped.
 const sessionSchema = z.object({
   id: z.string().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/),
   kind: z.enum(['create', 'edit']),
@@ -30,6 +37,18 @@ const sessionSchema = z.object({
   hiddenCount: count,
   wordsStart: count,
   wordsEnd: count,
+  // v2 focus model; optional so a page still running the v1 bundle keeps working.
+  writeMs: ms.optional(),
+  thinkMs: ms.optional(),
+  referenceMs: ms.optional(),
+  breakMs: ms.optional(),
+  focusMs: ms.optional(),
+  breakCount: count.optional(),
+  blocksStarted: count.optional(),
+  blocksCompleted: count.optional(),
+  selfRating: z.number().int().min(1).max(5).nullable().optional(),
+  distractions: z.array(z.string().max(40)).max(8).optional(),
+  timeline: z.array(timelineEntry).max(400).optional(),
 })
 
 const SESSION_SELECT = {
@@ -52,6 +71,17 @@ const SESSION_SELECT = {
   hiddenCount: true,
   wordsStart: true,
   wordsEnd: true,
+  writeMs: true,
+  thinkMs: true,
+  referenceMs: true,
+  breakMs: true,
+  focusMs: true,
+  breakCount: true,
+  blocksStarted: true,
+  blocksCompleted: true,
+  selfRating: true,
+  distractions: true,
+  timeline: true,
 } as const
 
 // GET /api/notes/[noteId]/writing-sessions — every session plus totals
@@ -70,23 +100,24 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       select: SESSION_SELECT,
     })
 
-    const totals = sessions.reduce(
-      (t, s) => {
-        t.openMs += s.openMs
-        t.activeMs += s.activeMs
-        t.idleMs += s.idleMs
-        t.awayMs += s.awayMs
-        t.typingSpanMs += s.typingSpanMs
-        t.inputEvents += s.inputEvents
-        t.wordsAdded += Math.max(0, s.wordsEnd - s.wordsStart)
-        return t
-      },
-      { sessions: sessions.length, openMs: 0, activeMs: 0, idleMs: 0, awayMs: 0, typingSpanMs: 0, inputEvents: 0, wordsAdded: 0 },
-    )
-    const firstInputAt = sessions.find((s) => s.firstInputAt)?.firstInputAt ?? null
-    const lastInputAt = [...sessions].reverse().find((s) => s.lastInputAt)?.lastInputAt ?? null
+    const totals = {
+      sessions: sessions.length,
+      openMs: 0, focusMs: 0, writeMs: 0, thinkMs: 0, referenceMs: 0, breakMs: 0,
+      wordsAdded: 0, blocksCompleted: 0,
+    }
+    for (const s of sessions) {
+      totals.openMs += s.openMs
+      // v1 rows have no focus split; fall back to their active time.
+      totals.focusMs += s.focusMs || s.activeMs
+      totals.writeMs += s.writeMs
+      totals.thinkMs += s.thinkMs
+      totals.referenceMs += s.referenceMs
+      totals.breakMs += s.focusMs ? s.breakMs : s.idleMs + s.awayMs
+      totals.wordsAdded += Math.max(0, s.wordsEnd - s.wordsStart)
+      totals.blocksCompleted += s.blocksCompleted
+    }
 
-    return NextResponse.json({ success: true, data: { sessions, totals: { ...totals, firstInputAt, lastInputAt } } })
+    return NextResponse.json({ success: true, data: { sessions, totals } })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -123,6 +154,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       endedAt: new Date(body.endedAt),
       firstInputAt: body.firstInputAt ? new Date(body.firstInputAt) : null,
       lastInputAt: body.lastInputAt ? new Date(body.lastInputAt) : null,
+      selfRating: body.selfRating ?? null,
+      distractions: body.distractions ?? [],
+      timeline: body.timeline ?? undefined,
     }
 
     await db.noteWritingSession.upsert({

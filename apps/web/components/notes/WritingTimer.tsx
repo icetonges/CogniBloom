@@ -1,21 +1,29 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Timer } from 'lucide-react'
+import { Timer, Target, X } from 'lucide-react'
 import {
   formatDuration,
   focusPercent,
-  wordsPerActiveMinute,
+  wordsPerFocusMinute,
+  DEFAULT_BLOCK_MS,
   type WritingSessionStats,
 } from '@/lib/writing-session'
+import { FocusTimeline, FocusLegend } from '@/components/notes/FocusTimeline'
 
 function clock(ms: number | null): string {
   if (ms === null) return '—'
-  return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+  return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-/** Live session timer: a chip showing active time, with a breakdown on click. */
-export function WritingTimer({ stats }: { stats: WritingSessionStats | null }) {
+interface Props {
+  stats: WritingSessionStats | null
+  onStartBlock: (durationMs?: number) => void
+  onCancelBlock: () => void
+}
+
+/** Live focus timer for the editor top bar, with an optional 20-minute focus block. */
+export function WritingTimer({ stats, onStartBlock, onCancelBlock }: Props) {
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
@@ -30,56 +38,107 @@ export function WritingTimer({ stats }: { stats: WritingSessionStats | null }) {
 
   if (!stats) return null
   const focus = focusPercent(stats)
-  const wpm = wordsPerActiveMinute(stats)
+  const pace = wordsPerFocusMinute(stats)
   const added = stats.wordsEnd - stats.wordsStart
+  const block = stats.block
 
   const rows: [string, string, string?][] = [
+    ['Focus', formatDuration(stats.focusMs), 'writing + thinking + reference'],
+    ['  Writing', formatDuration(stats.writeMs)],
+    ['  Thinking', formatDuration(stats.thinkMs), 'on the page, reading or planning'],
+    ['  Reference', formatDuration(stats.referenceMs), 'looking things up'],
+    ['Breaks', formatDuration(stats.breakMs), stats.breakCount ? `${stats.breakCount} break${stats.breakCount === 1 ? '' : 's'}` : undefined],
     ['Page open', formatDuration(stats.openMs), `since ${clock(stats.startedAt)}`],
-    ['Active', formatDuration(stats.activeMs), 'typing, clicking, scrolling'],
-    ['Idle on page', formatDuration(stats.idleMs), 'page in front, no input'],
-    ['Away', formatDuration(stats.awayMs), `left the page ${stats.hiddenCount}×`],
-    ['First → last word', formatDuration(stats.typingSpanMs), `${clock(stats.firstInputAt)} → ${clock(stats.lastInputAt)}`],
-    ['Pauses > 1 min', String(stats.pauseCount), stats.longestPauseMs ? `longest ${formatDuration(stats.longestPauseMs)}` : undefined],
-    ['Words added', `${added >= 0 ? '+' : ''}${added}`, wpm !== null ? `${wpm} words / active min` : undefined],
-    ['Keystrokes', String(stats.inputEvents)],
+    ['First → last word', formatDuration(stats.typingSpanMs), stats.firstInputAt ? `${clock(stats.firstInputAt)} → ${clock(stats.lastInputAt)}` : undefined],
+    ['Words added', `${added >= 0 ? '+' : ''}${added}`, pace !== null ? `${pace} words per focus minute` : undefined],
+    ['Focus blocks', String(stats.blocksCompleted), stats.blocksStarted > stats.blocksCompleted + (block ? 1 : 0) ? 'some stopped early' : undefined],
   ]
 
   return (
-    <div ref={boxRef} className="relative shrink-0">
+    <div ref={boxRef} className="relative flex items-center gap-1 shrink-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full tabular-nums hover:text-foreground transition-colors"
-        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
-        title="Time on this note (click for details)"
+        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full tabular-nums transition-colors"
+        style={block
+          ? { background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', color: '#6ee7b7' }
+          : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+        title="Focus time (click for details)"
       >
-        <Timer className="h-2.5 w-2.5 shrink-0" />
-        {formatDuration(stats.activeMs)}
-        <span className="hidden sm:inline text-muted-foreground/60">/ {formatDuration(stats.openMs)}</span>
+        {block ? <Target className="h-2.5 w-2.5 shrink-0" /> : <Timer className="h-2.5 w-2.5 shrink-0" />}
+        {block ? `${formatDuration(block.remainingMs)} left` : `${formatDuration(stats.focusMs)} focus`}
       </button>
+
+      {block ? (
+        <button
+          type="button"
+          onClick={onCancelBlock}
+          className="text-[10px] p-1 rounded-full text-muted-foreground hover:text-foreground"
+          title="Stop focus block"
+          aria-label="Stop focus block"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onStartBlock(DEFAULT_BLOCK_MS)}
+          className="hidden sm:flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+          title="Start a 20-minute focus block"
+        >
+          <Target className="h-2.5 w-2.5" /> Focus 20
+        </button>
+      )}
 
       {open && (
         <div
-          className="absolute left-0 top-full mt-2 z-50 w-72 rounded-xl p-3 text-xs shadow-xl"
+          className="absolute left-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl p-3 text-xs shadow-xl"
           style={{ background: 'rgba(10,18,34,0.97)', border: '1px solid rgba(255,255,255,0.1)' }}
         >
           <div className="flex items-baseline justify-between mb-2">
             <span className="font-bold text-foreground">This session</span>
-            {focus !== null && <span className="text-muted-foreground">{focus}% focused</span>}
+            {focus !== null && <span className="text-muted-foreground">{focus}% of the time focused</span>}
           </div>
-          <dl className="space-y-1.5">
+
+          {block && (
+            <div className="mb-2 rounded-lg px-2 py-1.5" style={{ background: 'rgba(52,211,153,0.08)' }}>
+              <span className="text-emerald-300 font-semibold">Focus block running</span>
+              <span className="text-muted-foreground"> · {formatDuration(block.focusMs)} focused so far · {formatDuration(block.remainingMs)} left</span>
+            </div>
+          )}
+
+          <div className="mb-2 space-y-1">
+            <FocusTimeline timeline={stats.timeline} />
+            <FocusLegend />
+          </div>
+
+          <dl className="space-y-1">
             {rows.map(([label, value, hint]) => (
               <div key={label} className="flex items-baseline gap-2">
-                <dt className="text-muted-foreground w-28 shrink-0">{label}</dt>
+                <dt className={`w-28 shrink-0 text-muted-foreground ${label.startsWith('  ') ? 'pl-3' : ''}`}>{label.trim()}</dt>
                 <dd className="flex-1 min-w-0">
                   <span className="font-semibold text-foreground tabular-nums">{value}</span>
-                  {hint && <span className="block text-[10px] text-muted-foreground/70 truncate">{hint}</span>}
+                  {hint && <span className="ml-1.5 text-[10px] text-muted-foreground/70">{hint}</span>}
                 </dd>
               </div>
             ))}
           </dl>
-          <p className="mt-2 pt-2 text-[10px] text-muted-foreground/60" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            Saved with the note. A gap over 1 minute with no input counts as idle.
+
+          {!block && (
+            <button
+              type="button"
+              onClick={() => { onStartBlock(DEFAULT_BLOCK_MS); setOpen(false) }}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 font-semibold text-emerald-300"
+              style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)' }}
+            >
+              <Target className="h-3.5 w-3.5" /> Start a 20-minute focus block
+            </button>
+          )}
+
+          <p className="mt-2 pt-2 text-[10px] leading-relaxed text-muted-foreground/60" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            Quiet time on the page counts as thinking for up to 4 minutes (6 in a focus block).
+            Leaving to look something up counts as reference when you say so on return.
           </p>
         </div>
       )}

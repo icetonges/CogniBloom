@@ -13,6 +13,9 @@ import { ModelCompare } from '@/components/chat/ModelCompare'
 import type { Note } from '@/hooks/useNotes'
 import { useWritingSession } from '@/hooks/useWritingSession'
 import { WritingTimer } from '@/components/notes/WritingTimer'
+import { FocusToasts } from '@/components/notes/FocusToasts'
+import { FocusCheckIn, CHECK_IN_MIN_FOCUS_MS } from '@/components/notes/FocusCheckIn'
+import type { WritingSessionStats } from '@/lib/writing-session'
 
 const SUBJECT_PRESETS = [
   // Competition math
@@ -576,6 +579,8 @@ export function NewNoteClient() {
   // Time tracking for this sitting: open / active / idle / first-to-last word.
   const templateKind = isReflection ? (/investment/i.test(tags) ? 'investment' : 'reflection') : null
   const writing = useWritingSession({ enabled: true, noteId, kind: 'create', template: templateKind, words: wordCount })
+  // Shown after a successful save, before leaving the page.
+  const [checkIn, setCheckIn] = useState<{ stats: WritingSessionStats; noteId: string; slug: string } | null>(null)
 
   const tagList = tags.split(',').map((t) => t.trim()).filter(Boolean)
 
@@ -628,6 +633,11 @@ export function NewNoteClient() {
         fetch(`/api/notes/${data.id}/analyze`, { method: 'POST' }).catch(() => {})
       }
 
+      const snap = writing.snapshotNow()
+      if (snap && snap.focusMs >= CHECK_IN_MIN_FOCUS_MS) {
+        setCheckIn({ stats: snap, noteId: data.id, slug: data.slug ?? '' })
+        return
+      }
       router.push(`/dashboard/notes/${data.slug}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
@@ -682,7 +692,7 @@ export function NewNoteClient() {
               {wordCount}w · {charCount}c
             </span>
           )}
-          <WritingTimer stats={writing.stats} />
+          <WritingTimer stats={writing.stats} onStartBlock={writing.startBlock} onCancelBlock={writing.cancelBlock} />
           {draftSavedAt && (
             <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1083,6 +1093,25 @@ export function NewNoteClient() {
           </div>
         </div>
       </div>
+    )}
+
+    {!checkIn && (
+      <FocusToasts
+        stats={writing.stats}
+        completedBlock={writing.completedBlock}
+        onResolveAway={writing.resolveAway}
+        onDismissBlock={writing.dismissCompletedBlock}
+      />
+    )}
+    {checkIn && (
+      <FocusCheckIn
+        stats={checkIn.stats}
+        onSubmit={(c) => {
+          writing.submitCheckIn(c, checkIn.noteId)
+          router.push(`/dashboard/notes/${checkIn.slug}`)
+        }}
+        onSkip={() => router.push(`/dashboard/notes/${checkIn.slug}`)}
+      />
     )}
     </>
   )

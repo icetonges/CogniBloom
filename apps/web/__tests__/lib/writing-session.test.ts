@@ -2,9 +2,12 @@ import {
   createWritingTracker,
   formatDuration,
   formatDurationShort,
-  wordsPerActiveMinute,
+  wordsPerFocusMinute,
   focusPercent,
   countWords,
+  THINK_LIMIT_MS,
+  BLOCK_THINK_LIMIT_MS,
+  REFERENCE_CAP_MS,
 } from '@/lib/writing-session'
 
 const S = 1000
@@ -14,106 +17,201 @@ function tracker(extra: Partial<Parameters<typeof createWritingTracker>[0]> = {}
   return createWritingTracker({ id: 't', kind: 'create', startedAt: 0, ...extra })
 }
 
-describe('writing-session tracker', () => {
-  it('counts open time with no input as idle', () => {
+/** Type one input every `every` ms from `from` to `to` inclusive. */
+function type(t: ReturnType<typeof tracker>, from: number, to: number, every = 2 * S) {
+  for (let ms = from; ms <= to; ms += every) t.input(ms)
+}
+
+describe('time buckets', () => {
+  it('counts a quiet page as thinking up to the limit, then break', () => {
     const t = tracker()
-    const s = t.snapshot(5 * MIN)
-    expect(s.openMs).toBe(5 * MIN)
-    expect(s.foregroundMs).toBe(5 * MIN)
-    expect(s.activeMs).toBe(0)
-    expect(s.idleMs).toBe(5 * MIN)
-    expect(s.firstInputAt).toBeNull()
-    expect(s.typingSpanMs).toBe(0)
+    const s = t.snapshot(10 * MIN)
+    expect(s.thinkMs).toBe(THINK_LIMIT_MS)
+    expect(s.breakMs).toBe(10 * MIN - THINK_LIMIT_MS)
+    expect(s.focusMs).toBe(THINK_LIMIT_MS)
+    expect(s.pauseCount).toBe(1)
+    expect(s.longestPauseMs).toBe(10 * MIN)
   })
 
-  it('credits continuous typing plus a short tail', () => {
+  it('counts steady typing as writing', () => {
     const t = tracker()
-    for (let ms = 10 * S; ms <= 70 * S; ms += 2 * S) t.input(ms)
-    const s = t.snapshot(10 * MIN)
-    // 60s of typing + 5s grace
-    expect(s.activeMs).toBe(65 * S)
-    expect(s.firstInputAt).toBe(10 * S)
-    expect(s.lastInputAt).toBe(70 * S)
+    type(t, 0, 60 * S)
+    const s = t.snapshot(60 * S)
+    expect(s.writeMs).toBe(60 * S)
+    expect(s.thinkMs).toBe(0)
     expect(s.typingSpanMs).toBe(60 * S)
     expect(s.inputEvents).toBe(31)
-    expect(s.idleMs).toBe(10 * MIN - 65 * S)
   })
 
-  it('splits bursts on gaps longer than the idle threshold and records pauses', () => {
+  it('treats a 2-minute pause between sentences as thinking, not idle', () => {
     const t = tracker()
-    t.input(0)
-    t.input(30 * S)      // same burst
-    t.input(5 * MIN)     // 4.5 min gap → new burst, pause
-    t.input(5 * MIN + 10 * S)
-    const s = t.snapshot(6 * MIN)
-    // burst 1: 30s + 5s grace; burst 2: 10s + 5s grace
-    expect(s.activeMs).toBe(50 * S)
-    expect(s.pauseCount).toBe(1)
-    expect(s.longestPauseMs).toBe(4.5 * MIN)
-    expect(s.typingSpanMs).toBe(5 * MIN + 10 * S)
+    type(t, 0, 30 * S)
+    type(t, 2.5 * MIN, 3 * MIN)
+    const s = t.snapshot(3 * MIN)
+    expect(s.writeMs).toBe(60 * S)
+    expect(s.thinkMs).toBe(2 * MIN)
+    expect(s.breakMs).toBe(0)
+    expect(s.focusMs).toBe(3 * MIN)
   })
 
-  it('does not count time in another tab, and stops the burst there', () => {
+  it('counts scrolling and reading the page as thinking', () => {
+    const t = tracker()
+    for (let ms = 0; ms <= 10 * MIN; ms += MIN) t.activity(ms)
+    const s = t.snapshot(10 * MIN)
+    expect(s.thinkMs).toBe(10 * MIN)
+    expect(s.breakMs).toBe(0)
+  })
+
+  it('a click right before typing still counts as writing', () => {
     const t = tracker()
     t.input(0)
-    t.input(20 * S)
-    t.setForeground(false, 22 * S)       // grace capped at 2s
-    t.setForeground(true, 10 * MIN + 22 * S)
-    const s = t.snapshot(11 * MIN)
+    t.activity(5 * S)  // click to move the cursor
+    t.input(8 * S)
+    const s = t.snapshot(8 * S)
+    expect(s.writeMs).toBe(8 * S)
+  })
+})
+
+describe('trips away', () => {
+  it('a quick look (< 30s) counts as reference automatically', () => {
+    const t = tracker()
+    t.input(0)
+    t.setForeground(false, 10 * S)
+    t.setForeground(true, 30 * S)
+    const s = t.snapshot(30 * S)
+    expect(s.referenceMs).toBe(20 * S)
+    expect(s.pendingAway).toBeNull()
     expect(s.hiddenCount).toBe(1)
-    expect(s.awayMs).toBe(10 * MIN)
-    expect(s.foregroundMs).toBe(MIN)
-    expect(s.activeMs).toBe(22 * S)
-    expect(s.idleMs).toBe(MIN - 22 * S)
+  })
+
+  it('a longer trip is pending until answered, and counts as break meanwhile', () => {
+    const t = tracker()
+    t.setForeground(false, MIN)
+    t.setForeground(true, 6 * MIN)
+    let s = t.snapshot(6 * MIN)
+    expect(s.pendingAway).toEqual({ startedAt: MIN, durationMs: 5 * MIN })
+    expect(s.breakMs).toBe(5 * MIN)
+    expect(s.referenceMs).toBe(0)
+
+    t.resolveAway('reference')
+    s = t.snapshot(6 * MIN)
+    expect(s.pendingAway).toBeNull()
+    expect(s.referenceMs).toBe(5 * MIN)
+    expect(s.breakMs).toBe(0)
+    expect(s.focusMs).toBe(6 * MIN)
+  })
+
+  it('caps reference time per trip', () => {
+    const t = tracker()
+    t.setForeground(false, 0)
+    t.setForeground(true, 50 * MIN)
+    t.resolveAway('reference')
+    const s = t.snapshot(50 * MIN)
+    expect(s.referenceMs).toBe(REFERENCE_CAP_MS)
+    expect(s.breakMs).toBe(50 * MIN - REFERENCE_CAP_MS)
+  })
+
+  it('a trip called a break is a break', () => {
+    const t = tracker()
+    t.setForeground(false, 0)
+    t.setForeground(true, 3 * MIN)
+    t.resolveAway('break')
+    const s = t.snapshot(3 * MIN)
+    expect(s.breakMs).toBe(3 * MIN)
+    expect(s.breakCount).toBe(1)
   })
 
   it('treats an event while backgrounded as coming back', () => {
     const t = tracker()
     t.setForeground(false, MIN)
     t.activity(3 * MIN)
-    const s = t.snapshot(4 * MIN)
+    const s = t.snapshot(3 * MIN)
     expect(s.awayMs).toBe(2 * MIN)
-    expect(s.foregroundMs).toBe(2 * MIN)
-  })
-
-  it('counts non-typing activity as active but not as typing', () => {
-    const t = tracker()
-    t.activity(0)
-    t.activity(40 * S)
-    const s = t.snapshot(2 * MIN)
-    expect(s.activeMs).toBe(45 * S)
-    expect(s.inputEvents).toBe(0)
-    expect(s.firstInputAt).toBeNull()
-  })
-
-  it('reports live grace for an open burst without over-crediting', () => {
-    const t = tracker()
-    t.input(0)
-    expect(t.snapshot(2 * S).activeMs).toBe(2 * S)
-    expect(t.snapshot(30 * S).activeMs).toBe(5 * S)
-  })
-
-  it('tracks words and template', () => {
-    const t = tracker({ wordsStart: 0 })
-    t.setWords(12)          // template loaded before typing: baseline moves
-    t.input(1 * S)
-    t.setWords(212)
-    t.setTemplate('reflection')
-    const s = t.snapshot(MIN)
-    expect(s.wordsStart).toBe(12)
-    expect(s.wordsEnd).toBe(212)
-    expect(s.template).toBe('reflection')
+    expect(s.foregroundMs).toBe(MIN)
   })
 
   it('starts in background when told to', () => {
     const t = tracker({ foreground: false })
     const s = t.snapshot(MIN)
-    expect(s.foregroundMs).toBe(0)
     expect(s.awayMs).toBe(MIN)
+    expect(s.foregroundMs).toBe(0)
+  })
+
+  it('every millisecond lands in exactly one bucket', () => {
+    const t = tracker()
+    type(t, 0, 40 * S)
+    t.setForeground(false, 50 * S)
+    t.setForeground(true, 4 * MIN)
+    t.resolveAway('reference')
+    type(t, 5 * MIN, 6 * MIN)
+    t.setForeground(false, 7 * MIN)
+    const s = t.snapshot(20 * MIN)
+    expect(s.writeMs + s.thinkMs + s.referenceMs + s.breakMs).toBe(s.openMs)
+    const tl = s.timeline.reduce((n, [, d]) => n + d, 0)
+    expect(tl).toBe(20 * 60)
   })
 })
 
-describe('writing-session helpers', () => {
+describe('focus blocks', () => {
+  it('relaxes the think limit inside a block', () => {
+    const t = tracker()
+    t.startBlock(0)
+    const s = t.snapshot(10 * MIN)
+    expect(s.thinkMs).toBe(BLOCK_THINK_LIMIT_MS)
+    expect(s.block?.remainingMs).toBe(10 * MIN)
+    expect(s.block?.focusMs).toBe(BLOCK_THINK_LIMIT_MS)
+  })
+
+  it('completes a block when its time runs out', () => {
+    const t = tracker()
+    t.startBlock(0, 20 * MIN)
+    type(t, 0, 20 * MIN, 10 * S)
+    const s = t.snapshot(21 * MIN)
+    expect(s.blocksStarted).toBe(1)
+    expect(s.blocksCompleted).toBe(1)
+    expect(s.block).toBeNull()
+  })
+
+  it('a cancelled block does not complete', () => {
+    const t = tracker()
+    t.startBlock(0, 20 * MIN)
+    t.cancelBlock(5 * MIN)
+    const s = t.snapshot(30 * MIN)
+    expect(s.blocksStarted).toBe(1)
+    expect(s.blocksCompleted).toBe(0)
+  })
+
+  it('ignores a second start while a block runs', () => {
+    const t = tracker()
+    t.startBlock(0)
+    t.startBlock(MIN)
+    expect(t.snapshot(2 * MIN).blocksStarted).toBe(1)
+  })
+})
+
+describe('words, template, check-in', () => {
+  it('does not count template text as written', () => {
+    const t = tracker({ wordsStart: 0 })
+    t.setWords(120)   // template loaded before typing
+    t.input(S)
+    t.setWords(320)
+    t.setTemplate('reflection')
+    const s = t.snapshot(MIN)
+    expect(s.wordsStart).toBe(120)
+    expect(s.wordsEnd).toBe(320)
+    expect(s.template).toBe('reflection')
+  })
+
+  it('clamps the self-rating and stores distractions', () => {
+    const t = tracker()
+    t.setCheckIn({ selfRating: 9, distractions: ['Phone'] })
+    const s = t.snapshot(MIN)
+    expect(s.selfRating).toBe(5)
+    expect(s.distractions).toEqual(['Phone'])
+  })
+})
+
+describe('helpers', () => {
   it('formats durations', () => {
     expect(formatDuration(42 * S)).toBe('0:42')
     expect(formatDuration(12 * MIN + 5 * S)).toBe('12:05')
@@ -124,15 +222,15 @@ describe('writing-session helpers', () => {
     expect(formatDurationShort(120 * MIN)).toBe('2h')
   })
 
-  it('computes WPM only with enough data', () => {
-    expect(wordsPerActiveMinute({ wordsStart: 0, wordsEnd: 100, activeMs: 5 * MIN })).toBe(20)
-    expect(wordsPerActiveMinute({ wordsStart: 0, wordsEnd: 5, activeMs: 10 * S })).toBeNull()
-    expect(wordsPerActiveMinute({ wordsStart: 50, wordsEnd: 40, activeMs: 5 * MIN })).toBeNull()
+  it('computes pace only with enough data', () => {
+    expect(wordsPerFocusMinute({ wordsStart: 0, wordsEnd: 100, focusMs: 5 * MIN })).toBe(20)
+    expect(wordsPerFocusMinute({ wordsStart: 0, wordsEnd: 5, focusMs: 10 * S })).toBeNull()
+    expect(wordsPerFocusMinute({ wordsStart: 50, wordsEnd: 40, focusMs: 5 * MIN })).toBeNull()
   })
 
   it('computes focus percent', () => {
-    expect(focusPercent({ activeMs: 3 * MIN, foregroundMs: 4 * MIN })).toBe(75)
-    expect(focusPercent({ activeMs: 0, foregroundMs: 1 * S })).toBeNull()
+    expect(focusPercent({ focusMs: 3 * MIN, openMs: 4 * MIN })).toBe(75)
+    expect(focusPercent({ focusMs: 0, openMs: S })).toBeNull()
   })
 
   it('counts words in HTML', () => {

@@ -1080,7 +1080,8 @@ model SkillMastery {
 }
 
 // One sitting with a note: the new-note page from open to save, or one pass
-// through edit mode. Written by the client as cumulative snapshots keyed by a
+// through edit mode. In the v2 columns, activeMs = write + think and
+// idleMs = on-page break time. Written by the client as cumulative snapshots keyed by a
 // client-generated id (see lib/writing-session.ts). No userId on purpose: it
 // cascades from Note, so account merges in auth.ts move it with the note.
 model NoteWritingSession {
@@ -1110,6 +1111,20 @@ model NoteWritingSession {
 
   wordsStart      Int       @default(0)
   wordsEnd        Int       @default(0)
+
+  // Focus model (2026-10-14 v2): every ms of the sitting is one of these.
+  // focus = write + think + reference; break includes unconfirmed away time.
+  writeMs         Int       @default(0)
+  thinkMs         Int       @default(0)
+  referenceMs     Int       @default(0)
+  breakMs         Int       @default(0)
+  focusMs         Int       @default(0)
+  breakCount      Int       @default(0)
+  blocksStarted   Int       @default(0)
+  blocksCompleted Int       @default(0)
+  selfRating      Int?                  // 1-5 check-in on save, null if skipped
+  distractions    String[]  @default([])
+  timeline        Json?                 // [offsetSec, durSec, 'w'|'t'|'r'|'b'|'a'][]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

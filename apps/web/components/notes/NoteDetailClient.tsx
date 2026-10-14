@@ -16,7 +16,9 @@ import type { Note } from '@/hooks/useNotes'
 import { useWritingSession } from '@/hooks/useWritingSession'
 import { WritingTimer } from '@/components/notes/WritingTimer'
 import { NoteWritingStats } from '@/components/notes/NoteWritingStats'
-import { countWords } from '@/lib/writing-session'
+import { FocusToasts } from '@/components/notes/FocusToasts'
+import { FocusCheckIn, CHECK_IN_MIN_FOCUS_MS } from '@/components/notes/FocusCheckIn'
+import { countWords, type WritingSessionStats } from '@/lib/writing-session'
 
 interface NoteDetailClientProps {
   slug: string
@@ -86,6 +88,8 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
     template: noteTags.includes('investment') ? 'investment' : noteTags.includes('reflection') ? 'reflection' : null,
     words: countWords(editContent),
   })
+  // Shown after an explicit save in edit mode; leaving edit mode waits for it.
+  const [checkIn, setCheckIn] = useState<WritingSessionStats | null>(null)
 
   // Sanitized content for display
   const [safeHtml, setSafeHtml] = useState('')
@@ -189,7 +193,9 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
       if (!res.ok) throw new Error('Save failed')
       const { data } = await res.json() as { data: Note }
       setNote(data)
-      setMode('view')
+      const snap = writing.snapshotNow()
+      if (snap && snap.focusMs >= CHECK_IN_MIN_FOCUS_MS) setCheckIn(snap)
+      else setMode('view')
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -362,7 +368,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
           </button>
         ) : (
           <>
-            <WritingTimer stats={writing.stats} />
+            <WritingTimer stats={writing.stats} onStartBlock={writing.startBlock} onCancelBlock={writing.cancelBlock} />
             {autoStatus !== 'idle' && (
               <span className="hidden sm:flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg text-muted-foreground"
                 style={{
@@ -693,6 +699,22 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {mode === 'edit' && !checkIn && (
+        <FocusToasts
+          stats={writing.stats}
+          completedBlock={writing.completedBlock}
+          onResolveAway={writing.resolveAway}
+          onDismissBlock={writing.dismissCompletedBlock}
+        />
+      )}
+      {checkIn && (
+        <FocusCheckIn
+          stats={checkIn}
+          onSubmit={(c) => { writing.submitCheckIn(c); setCheckIn(null); setMode('view') }}
+          onSkip={() => { setCheckIn(null); setMode('view') }}
+        />
       )}
     </div>
   )

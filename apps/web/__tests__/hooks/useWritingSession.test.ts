@@ -39,7 +39,9 @@ describe('useWritingSession', () => {
     const s = result.current.stats!
     expect(s.inputEvents).toBe(10)
     expect(s.typingSpanMs).toBe(9000)
-    expect(s.activeMs).toBe(10_000) // 9s of typing + 1s of the 5s tail so far
+    // Short quiet stretches next to typing (<= 20s) count as writing too.
+    expect(s.writeMs).toBe(11_000)
+    expect(s.focusMs).toBe(11_000)
 
     act(() => { result.current.flush() })
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -89,6 +91,45 @@ describe('useWritingSession', () => {
     rerender({ on: false })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(result.current.stats).toBeNull()
+  })
+
+  it('asks about a long trip away and records the answer', () => {
+    const { result } = renderHook(() =>
+      useWritingSession({ enabled: true, noteId: 'n', kind: 'edit', words: 0 }),
+    )
+    const hasFocus = document.hasFocus as jest.Mock
+    act(() => { hasFocus.mockReturnValue(false); window.dispatchEvent(new Event('blur')) })
+    act(() => { jest.advanceTimersByTime(3 * 60_000) })
+    act(() => { hasFocus.mockReturnValue(true); window.dispatchEvent(new Event('focus')) })
+    expect(result.current.stats!.pendingAway?.durationMs).toBe(3 * 60_000)
+    act(() => { result.current.resolveAway('reference') })
+    expect(result.current.stats!.pendingAway).toBeNull()
+    expect(result.current.stats!.referenceMs).toBe(3 * 60_000)
+  })
+
+  it('announces a completed focus block', () => {
+    const { result } = renderHook(() =>
+      useWritingSession({ enabled: true, noteId: 'n', kind: 'edit', words: 0 }),
+    )
+    act(() => { result.current.startBlock(60_000) })
+    expect(result.current.stats!.block?.remainingMs).toBe(60_000)
+    act(() => { jest.advanceTimersByTime(61_000) })
+    expect(result.current.completedBlock).toEqual({ durationMs: 60_000, focusMs: 59_000 })
+    expect(result.current.stats!.blocksCompleted).toBe(1)
+    // The block counts as worth saving even without typing.
+    expect(fetchMock).toHaveBeenCalled()
+  })
+
+  it('sends the check-in with the snapshot', () => {
+    const { result } = renderHook(() =>
+      useWritingSession({ enabled: true, noteId: 'n', kind: 'edit', words: 0 }),
+    )
+    act(() => { result.current.submitCheckIn({ selfRating: 4, distractions: ['Phone'] }) })
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.selfRating).toBe(4)
+    expect(body.distractions).toEqual(['Phone'])
+    expect(body.block).toBeUndefined()
+    expect(body.pendingAway).toBeUndefined()
   })
 
   it('skips sessions with no activity at all', () => {
