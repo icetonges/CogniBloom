@@ -230,6 +230,11 @@ model Note {
   publishedAt          DateTime?
   writerJson           String?     @db.Text   // JSON of WriterOutput — reused on republish if AI fails
 
+  // Daily Reflection summary, generated when section 14 (Progress Summary) is
+  // finished. JSON of StoredSummary in lib/reflection-summary.ts.
+  reflectionSummary    Json?
+  reflectionSummaryAt  DateTime?
+
   // pgvector embedding (768 dims — Google text-embedding-004)
   embedding            Unsupported("vector(768)")?
 

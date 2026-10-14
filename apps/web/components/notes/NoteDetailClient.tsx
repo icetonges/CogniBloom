@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Edit2, Sparkles, Download, Trash2,
   Loader2, BookOpen, Calendar, Tag,
-  Save, X, Bot, Brain, Check,
+  Save, X, Bot, Brain, Check, ClipboardList,
 } from 'lucide-react'
 import { formatNoteTitle, formatTimelineHeading, getDateGroupKey } from '@/lib/note-format'
 import { NoteAnalysis } from '@/components/notes/NoteAnalysis'
@@ -19,6 +19,9 @@ import { NoteWritingStats } from '@/components/notes/NoteWritingStats'
 import { FocusToasts } from '@/components/notes/FocusToasts'
 import { FocusCheckIn, shouldCheckIn } from '@/components/notes/FocusCheckIn'
 import { ReflectionTutor } from '@/components/notes/ReflectionTutor'
+import { ReflectionSummaryCard, ReflectionSummaryPopup } from '@/components/notes/ReflectionSummary'
+import { useReflectionSummary } from '@/hooks/useReflectionSummary'
+import { PROGRESS_HEADING } from '@/lib/reflection-summary'
 import type { TutorAsk } from '@/lib/tiptap/reflection-tutor-extension'
 import { countWords, type WritingSessionStats } from '@/lib/writing-session'
 
@@ -26,7 +29,7 @@ interface NoteDetailClientProps {
   slug: string
 }
 
-type SidebarTab = 'chat' | 'analysis'
+type SidebarTab = 'chat' | 'analysis' | 'summary'
 
 export function NoteDetailClient({ slug }: NoteDetailClientProps) {
   const router = useRouter()
@@ -92,6 +95,39 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
   })
   // Reflection tutor: opened from sections 7 and 9 of the Daily Reflection template.
   const [tutorAsk, setTutorAsk] = useState<TutorAsk | null>(null)
+  // Reflection summary: made automatically when section 14 is finished in edit mode.
+  const reflectionSummary = useReflectionSummary({
+    noteId: note?.id ?? null,
+    html: mode === 'edit' ? editContent : note?.content ?? '',
+    auto: mode === 'edit',
+    getFocusMs: () => writing.snapshotNow()?.focusMs ?? null,
+  })
+  const isReflectionNote = (note?.content ?? '').includes(PROGRESS_HEADING) || !!reflectionSummary.summary
+  // Open on the summary for reflection notes, unless he already picked a tab.
+  const pickedTabRef = useRef(false)
+  useEffect(() => {
+    if (!pickedTabRef.current && reflectionSummary.summary) setSidebarTab('summary')
+  }, [reflectionSummary.summary])
+  // A fresh summary always brings the right side to it.
+  useEffect(() => {
+    if (reflectionSummary.popup) { setSidebarTab('summary'); setShowSidebar(true) }
+  }, [reflectionSummary.popup])
+  const sidebarTabs = [
+    ...(isReflectionNote ? [{ id: 'summary' as const, label: 'Summary', icon: ClipboardList }] : []),
+    { id: 'analysis' as const, label: 'Analysis', icon: Brain },
+    { id: 'chat' as const, label: 'AI Chat', icon: Bot },
+  ]
+  const summaryCard = (
+    <ReflectionSummaryCard
+      summary={reflectionSummary.summary}
+      status={reflectionSummary.status}
+      error={reflectionSummary.error}
+      complete={reflectionSummary.complete}
+      outdated={reflectionSummary.outdated}
+      autoRefresh={reflectionSummary.autoRefresh}
+      onRefresh={() => reflectionSummary.generate()}
+    />
+  )
   // Shown after an explicit save in edit mode; leaving edit mode waits for it.
   const [checkIn, setCheckIn] = useState<WritingSessionStats | null>(null)
 
@@ -583,13 +619,10 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
               className="flex flex-shrink-0"
               style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
             >
-              {([
-                { id: 'analysis' as const, label: 'Analysis', icon: Brain },
-                { id: 'chat' as const, label: 'AI Chat', icon: Bot },
-              ] as const).map(({ id, label, icon: Icon }) => (
+              {sidebarTabs.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
-                  onClick={() => setSidebarTab(id)}
+                  onClick={() => { pickedTabRef.current = true; setSidebarTab(id) }}
                   className={cn(
                     'flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-all',
                     sidebarTab === id ? 'text-primary border-b-2' : 'text-muted-foreground hover:text-foreground'
@@ -606,7 +639,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
 
             {/* Sidebar content */}
             <div className="p-4">
-              {sidebarTab === 'chat' ? (
+              {sidebarTab === 'summary' ? summaryCard : sidebarTab === 'chat' ? (
                 <NoteAIAssist noteId={note.id} noteTitle={displayTitle} />
               ) : (
                 <NoteAnalysis
@@ -632,13 +665,10 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
           className="flex border-t"
           style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}
         >
-          {([
-            { id: 'analysis' as const, label: 'Analysis', icon: Brain },
-            { id: 'chat' as const, label: 'AI Chat', icon: Bot },
-          ] as const).map(({ id, label, icon: Icon }) => (
+          {sidebarTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => { setSidebarTab(id); setShowSidebar(true) }}
+              onClick={() => { pickedTabRef.current = true; setSidebarTab(id); setShowSidebar(true) }}
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-all',
                 sidebarTab === id && showSidebar ? 'text-primary' : 'text-muted-foreground'
@@ -651,7 +681,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
         </div>
         {showSidebar && (
           <div className="p-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-            {sidebarTab === 'chat' ? (
+            {sidebarTab === 'summary' ? summaryCard : sidebarTab === 'chat' ? (
               <NoteAIAssist noteId={note.id} noteTitle={displayTitle} />
             ) : (
               <NoteAnalysis
@@ -706,6 +736,13 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
         </div>
       )}
 
+      {reflectionSummary.popup && !checkIn && (
+        <ReflectionSummaryPopup
+          summary={reflectionSummary.popup}
+          onClose={reflectionSummary.closePopup}
+          onOpenFull={() => { reflectionSummary.closePopup(); setSidebarTab('summary'); setShowSidebar(true) }}
+        />
+      )}
       {mode === 'edit' && (
         <ReflectionTutor ask={tutorAsk} getNoteContext={() => ({ title: editTitle, subject: editSubject, html: editContent })} />
       )}

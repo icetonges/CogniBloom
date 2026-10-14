@@ -16,6 +16,8 @@ import { WritingTimer } from '@/components/notes/WritingTimer'
 import { FocusToasts } from '@/components/notes/FocusToasts'
 import { FocusCheckIn, shouldCheckIn } from '@/components/notes/FocusCheckIn'
 import { ReflectionTutor } from '@/components/notes/ReflectionTutor'
+import { ReflectionSummaryCard, ReflectionSummaryPopup, ReflectionSummaryDrawer } from '@/components/notes/ReflectionSummary'
+import { useReflectionSummary } from '@/hooks/useReflectionSummary'
 import type { TutorAsk } from '@/lib/tiptap/reflection-tutor-extension'
 import type { WritingSessionStats } from '@/lib/writing-session'
 
@@ -151,17 +153,17 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
 <h2>13. Self-Check Quiz (3 Questions)</h2>
 <blockquote>Write 3 questions from today. Cover the answers and test yourself tomorrow. <em>e.g. Q: "Area formula for a trapezoid?" A: "(b1+b2)×h÷2"</em></blockquote>
 <ol>
-  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
-  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
-  <li><strong>Q:</strong> <br><strong>A:</strong> </li>
+  <li><strong>Q:</strong>&nbsp;<br><strong>A:</strong>&nbsp;</li>
+  <li><strong>Q:</strong>&nbsp;<br><strong>A:</strong>&nbsp;</li>
+  <li><strong>Q:</strong>&nbsp;<br><strong>A:</strong>&nbsp;</li>
 </ol>
 
 <h2>14. Progress Summary</h2>
 <blockquote>A few sentences as if telling a teacher or parent. <em>e.g. "Today [Name] worked on AMC 8 geometry for 45 min. Struggled with shaded-area problems but improved after drawing diagrams. Tomorrow: review problems 7–10."</em></blockquote>
 <ul>
-  <li><strong>What I worked on (and for how long):</strong> </li>
-  <li><strong>What was tricky &amp; how I improved:</strong> </li>
-  <li><strong>Plan for tomorrow:</strong> </li>
+  <li><strong>What I worked on (and for how long):</strong>&nbsp;</li>
+  <li><strong>What was tricky &amp; how I improved:</strong>&nbsp;</li>
+  <li><strong>Plan for tomorrow:</strong>&nbsp;</li>
 </ul>
 <p></p>
 `.trim()
@@ -583,6 +585,11 @@ export function NewNoteClient() {
   const writing = useWritingSession({ enabled: true, noteId, kind: 'create', template: templateKind, words: wordCount })
   // Reflection tutor: opened from sections 7 and 9 of the Daily Reflection template.
   const [tutorAsk, setTutorAsk] = useState<TutorAsk | null>(null)
+  // Reflection summary: made automatically once section 14 is finished.
+  const reflectionSummary = useReflectionSummary({
+    noteId, html: content, auto: true, getFocusMs: () => writing.snapshotNow()?.focusMs ?? null,
+  })
+  const [summaryOpen, setSummaryOpen] = useState(false)
   // Shown after a successful save, before leaving the page.
   const [checkIn, setCheckIn] = useState<{ stats: WritingSessionStats; noteId: string; slug: string } | null>(null)
 
@@ -1105,6 +1112,29 @@ export function NewNoteClient() {
     )}
 
     <ReflectionTutor ask={tutorAsk} getNoteContext={() => ({ title, subject, html: content })} />
+    <ReflectionSummaryDrawer
+      open={summaryOpen}
+      onOpen={() => setSummaryOpen(true)}
+      onClose={() => setSummaryOpen(false)}
+      hasSummary={!!reflectionSummary.summary || reflectionSummary.status === 'loading'}
+    >
+      <ReflectionSummaryCard
+        summary={reflectionSummary.summary}
+        status={reflectionSummary.status}
+        error={reflectionSummary.error}
+        complete={reflectionSummary.complete}
+        outdated={reflectionSummary.outdated}
+        autoRefresh={reflectionSummary.autoRefresh}
+        onRefresh={() => reflectionSummary.generate()}
+      />
+    </ReflectionSummaryDrawer>
+    {reflectionSummary.popup && !checkIn && (
+      <ReflectionSummaryPopup
+        summary={reflectionSummary.popup}
+        onClose={reflectionSummary.closePopup}
+        onOpenFull={() => { reflectionSummary.closePopup(); setSummaryOpen(true) }}
+      />
+    )}
     {!checkIn && (
       <FocusToasts
         stats={writing.stats}
