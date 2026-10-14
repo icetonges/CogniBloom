@@ -13,6 +13,10 @@ import { NoteAIAssist } from '@/components/notes/NoteAIAssist'
 import { RichEditor } from '@/components/notes/RichEditor'
 import { cn } from '@/lib/utils'
 import type { Note } from '@/hooks/useNotes'
+import { useWritingSession } from '@/hooks/useWritingSession'
+import { WritingTimer } from '@/components/notes/WritingTimer'
+import { NoteWritingStats } from '@/components/notes/NoteWritingStats'
+import { countWords } from '@/lib/writing-session'
 
 interface NoteDetailClientProps {
   slug: string
@@ -72,6 +76,16 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
   const [editContent, setEditContent] = useState('')
   const [editSubject, setEditSubject] = useState('')
   const [editTags, setEditTags] = useState('')
+
+  // One writing session per pass through edit mode; leaving edit sends the final snapshot.
+  const noteTags = note?.tags ?? []
+  const writing = useWritingSession({
+    enabled: mode === 'edit' && !!note,
+    noteId: note?.id ?? null,
+    kind: 'edit',
+    template: noteTags.includes('investment') ? 'investment' : noteTags.includes('reflection') ? 'reflection' : null,
+    words: countWords(editContent),
+  })
 
   // Sanitized content for display
   const [safeHtml, setSafeHtml] = useState('')
@@ -348,6 +362,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
           </button>
         ) : (
           <>
+            <WritingTimer stats={writing.stats} />
             {autoStatus !== 'idle' && (
               <span className="hidden sm:flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg text-muted-foreground"
                 style={{
@@ -435,6 +450,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
               <span className="text-muted-foreground/40">·</span>
               <span>Updated {new Date(note.updatedAt).toLocaleDateString()}</span>
             </div>
+            {mode === 'view' && <NoteWritingStats noteId={note.id} refreshKey={note.updatedAt} />}
 
             {mode === 'view' ? (
               <h1 className="text-2xl md:text-3xl font-black tracking-tight leading-tight">

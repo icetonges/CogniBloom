@@ -237,6 +237,7 @@ model Note {
   reviews              NoteReview[]
   flashcards           Flashcard[]
   recallState          NoteRecallState?
+  writingSessions      NoteWritingSession[]
 
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
@@ -1076,4 +1077,43 @@ model SkillMastery {
 
   @@unique([userId, skillId])
   @@index([userId, level])
+}
+
+// One sitting with a note: the new-note page from open to save, or one pass
+// through edit mode. Written by the client as cumulative snapshots keyed by a
+// client-generated id (see lib/writing-session.ts). No userId on purpose: it
+// cascades from Note, so account merges in auth.ts move it with the note.
+model NoteWritingSession {
+  id              String    @id
+  noteId          String
+  note            Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  kind            String    // "create" | "edit"
+  template        String?   // "reflection" | "investment" | null
+
+  startedAt       DateTime
+  endedAt         DateTime
+
+  openMs          Int       @default(0)
+  foregroundMs    Int       @default(0)
+  awayMs          Int       @default(0)
+  activeMs        Int       @default(0)
+  idleMs          Int       @default(0)
+
+  firstInputAt    DateTime?
+  lastInputAt     DateTime?
+  typingSpanMs    Int       @default(0)
+  inputEvents     Int       @default(0)
+  pauseCount      Int       @default(0)
+  longestPauseMs  Int       @default(0)
+  hiddenCount     Int       @default(0)
+
+  wordsStart      Int       @default(0)
+  wordsEnd        Int       @default(0)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([noteId, startedAt])
+  @@index([startedAt])
 }

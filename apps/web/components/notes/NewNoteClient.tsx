@@ -11,6 +11,8 @@ import { DocumentImport } from '@/components/notes/DocumentImport'
 import { cn, localISODate } from '@/lib/utils'
 import { ModelCompare } from '@/components/chat/ModelCompare'
 import type { Note } from '@/hooks/useNotes'
+import { useWritingSession } from '@/hooks/useWritingSession'
+import { WritingTimer } from '@/components/notes/WritingTimer'
 
 const SUBJECT_PRESETS = [
   // Competition math
@@ -571,6 +573,10 @@ export function NewNoteClient() {
   const wordCount = content.replace(/<[^>]+>/g, '').trim().split(/\s+/).filter(Boolean).length
   const charCount = content.replace(/<[^>]+>/g, '').length
 
+  // Time tracking for this sitting: open / active / idle / first-to-last word.
+  const templateKind = isReflection ? (/investment/i.test(tags) ? 'investment' : 'reflection') : null
+  const writing = useWritingSession({ enabled: true, noteId, kind: 'create', template: templateKind, words: wordCount })
+
   const tagList = tags.split(',').map((t) => t.trim()).filter(Boolean)
 
   const handleImport = (html: string, suggestedTitle?: string, mode: 'append' | 'replace' = 'append') => {
@@ -616,6 +622,7 @@ export function NewNoteClient() {
       const { data } = await res.json() as { data: Note }
 
       clearDraft()
+      writing.flush(data.id)
 
       if (andAnalyze && data.id) {
         fetch(`/api/notes/${data.id}/analyze`, { method: 'POST' }).catch(() => {})
@@ -675,6 +682,7 @@ export function NewNoteClient() {
               {wordCount}w · {charCount}c
             </span>
           )}
+          <WritingTimer stats={writing.stats} />
           {draftSavedAt && (
             <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground px-2 py-0.5 rounded-full truncate"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
