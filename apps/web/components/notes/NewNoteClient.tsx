@@ -15,6 +15,8 @@ import { useWritingSession } from '@/hooks/useWritingSession'
 import { WritingTimer } from '@/components/notes/WritingTimer'
 import { FocusToasts } from '@/components/notes/FocusToasts'
 import { FocusCheckIn, shouldCheckIn } from '@/components/notes/FocusCheckIn'
+import { ReflectionTutor } from '@/components/notes/ReflectionTutor'
+import type { TutorAsk } from '@/lib/tiptap/reflection-tutor-extension'
 import type { WritingSessionStats } from '@/lib/writing-session'
 
 const SUBJECT_PRESETS = [
@@ -105,7 +107,7 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
 </ul>
 
 <h2>7. Concepts I Still Don't Fully Understand</h2>
-<blockquote>Be specific — "fractions" is too vague; "dividing a fraction by a fraction" is useful. <em>e.g. "Why does Python's 'is' sometimes equal True for strings and sometimes not?"</em></blockquote>
+<blockquote>Be specific — "fractions" is too vague; "dividing a fraction by a fraction" is useful. <em>e.g. "Why does Python's 'is' sometimes equal True for strings and sometimes not?"</em> 🎓 Press Enter after an entry and your tutor will help you figure it out.</blockquote>
 <ul>
   <li></li>
   <li></li>
@@ -119,7 +121,7 @@ function buildReflectionTemplate(): { title: string; subject: string; tags: stri
 </ul>
 
 <h2>9. Questions I Want to Ask Later</h2>
-<blockquote>Save for a parent, teacher, or future research session. <em>e.g. "Look up: difference between mean, median, and mode — when to use each?"</em></blockquote>
+<blockquote>Save for a parent, teacher, or future research session. <em>e.g. "Look up: difference between mean, median, and mode — when to use each?"</em> 🎓 Press Enter after an entry and your tutor will help you work toward an answer.</blockquote>
 <ul>
   <li></li>
   <li></li>
@@ -579,6 +581,8 @@ export function NewNoteClient() {
   // Time tracking for this sitting: open / active / idle / first-to-last word.
   const templateKind = isReflection ? (/investment/i.test(tags) ? 'investment' : 'reflection') : null
   const writing = useWritingSession({ enabled: true, noteId, kind: 'create', template: templateKind, words: wordCount })
+  // Reflection tutor: opened from sections 7 and 9 of the Daily Reflection template.
+  const [tutorAsk, setTutorAsk] = useState<TutorAsk | null>(null)
   // Shown after a successful save, before leaving the page.
   const [checkIn, setCheckIn] = useState<{ stats: WritingSessionStats; noteId: string; slug: string } | null>(null)
 
@@ -979,6 +983,7 @@ export function NewNoteClient() {
             content={content}
             onChange={setContent}
             disabled={isSaving}
+            onTutorAsk={setTutorAsk}
           />
 
           {/* Editor Tips — below the editor */}
@@ -1099,6 +1104,7 @@ export function NewNoteClient() {
       </div>
     )}
 
+    <ReflectionTutor ask={tutorAsk} getNoteContext={() => ({ title, subject, html: content })} />
     {!checkIn && (
       <FocusToasts
         stats={writing.stats}

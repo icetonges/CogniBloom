@@ -18,6 +18,8 @@ import { WritingTimer } from '@/components/notes/WritingTimer'
 import { NoteWritingStats } from '@/components/notes/NoteWritingStats'
 import { FocusToasts } from '@/components/notes/FocusToasts'
 import { FocusCheckIn, shouldCheckIn } from '@/components/notes/FocusCheckIn'
+import { ReflectionTutor } from '@/components/notes/ReflectionTutor'
+import type { TutorAsk } from '@/lib/tiptap/reflection-tutor-extension'
 import { countWords, type WritingSessionStats } from '@/lib/writing-session'
 
 interface NoteDetailClientProps {
@@ -88,6 +90,8 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
     template: noteTags.includes('investment') ? 'investment' : noteTags.includes('reflection') ? 'reflection' : null,
     words: countWords(editContent),
   })
+  // Reflection tutor: opened from sections 7 and 9 of the Daily Reflection template.
+  const [tutorAsk, setTutorAsk] = useState<TutorAsk | null>(null)
   // Shown after an explicit save in edit mode; leaving edit mode waits for it.
   const [checkIn, setCheckIn] = useState<WritingSessionStats | null>(null)
 
@@ -541,6 +545,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
                   disabled={isSaving}
                   noteId={note.id}
                   fullPage
+                  onTutorAsk={setTutorAsk}
                 />
                 {saveError && (
                   <div
@@ -701,6 +706,9 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
         </div>
       )}
 
+      {mode === 'edit' && (
+        <ReflectionTutor ask={tutorAsk} getNoteContext={() => ({ title: editTitle, subject: editSubject, html: editContent })} />
+      )}
       {mode === 'edit' && !checkIn && (
         <FocusToasts
           stats={writing.stats}

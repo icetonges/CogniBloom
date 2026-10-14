@@ -28,6 +28,7 @@ import {
 import { cn } from '@/lib/utils'
 import { MathExtension, MathInlineExtension } from '@/lib/tiptap/math-extension'
 import { ReflectionAutoGrow } from '@/lib/tiptap/reflection-autogrow-extension'
+import { ReflectionTutorTrigger, type TutorAsk } from '@/lib/tiptap/reflection-tutor-extension'
 import { MathDialog } from '@/components/notes/MathDialog'
 import { SymbolPicker } from '@/components/notes/SymbolPicker'
 import { HandwritingPad, type HandwritingResult } from '@/components/notes/HandwritingPad'
@@ -51,6 +52,8 @@ interface RichEditorProps {
   noteId?: string
   /** When true, expands the editor to fill available height (full-page mode) */
   fullPage?: boolean
+  /** Called when the student finishes an entry in reflection sections 7 or 9 with Enter. */
+  onTutorAsk?: (ask: TutorAsk) => void
 }
 
 interface MathEditState {
@@ -95,7 +98,10 @@ function Divider() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
-  ({ content, onChange, disabled, placeholder, fullPage }, ref) => {
+  ({ content, onChange, disabled, placeholder, fullPage, onTutorAsk }, ref) => {
+    // The editor is created once; route the tutor callback through a ref so it stays current.
+    const tutorAskRef = useRef(onTutorAsk)
+    tutorAskRef.current = onTutorAsk
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isInsertingImage, setIsInsertingImage] = useState(false)
     const [mathState, setMathState] = useState<MathEditState>({ open: false, latex: '', display: true })
@@ -116,6 +122,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(
         MathExtension,
         MathInlineExtension,
         ReflectionAutoGrow,
+        ReflectionTutorTrigger.configure({ onAsk: (ask) => tutorAskRef.current?.(ask) }),
       ],
       content: content || '',
       editable: !disabled,
