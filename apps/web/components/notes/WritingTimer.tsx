@@ -56,13 +56,17 @@ export function WritingTimer({ stats, onStartBlock, onCancelBlock }: Props) {
   const pace = wordsPerFocusMinute(stats)
   const added = stats.wordsEnd - stats.wordsStart
   const block = stats.block
+  const confirmedBreaks = stats.timeline.filter(([, , k]) => k === 'b').length
 
   const rows: [string, string, string?][] = [
     ['Focus', formatDuration(stats.focusMs), 'writing + thinking + reference'],
     ['  Writing', formatDuration(stats.writeMs)],
     ['  Thinking', formatDuration(stats.thinkMs), 'on the page, reading or planning'],
     ['  Reference', formatDuration(stats.referenceMs), 'looking things up'],
-    ['Breaks', formatDuration(stats.breakMs), stats.breakCount ? `${stats.breakCount} break${stats.breakCount === 1 ? '' : 's'}` : undefined],
+    ['Breaks', formatDuration(stats.breakMs - stats.unansweredMs), confirmedBreaks ? `${confirmedBreaks} break${confirmedBreaks === 1 ? '' : 's'}` : undefined],
+    ...(stats.unansweredMs > 0
+      ? [['Away, not answered', formatDuration(stats.unansweredMs), `${stats.unansweredAways.length} trip${stats.unansweredAways.length === 1 ? '' : 's'}, counts as break until answered`] as [string, string, string]]
+      : []),
     ['Page open', formatDuration(stats.openMs), `since ${clock(stats.startedAt)}`],
     ['First → last word', formatDuration(stats.typingSpanMs), stats.firstInputAt ? `${clock(stats.firstInputAt)} → ${clock(stats.lastInputAt)}` : undefined],
     ['Words added', `${added >= 0 ? '+' : ''}${added}`, pace !== null ? `${pace} words per focus minute` : undefined],
@@ -125,7 +129,7 @@ export function WritingTimer({ stats, onStartBlock, onCancelBlock }: Props) {
 
           <div className="mb-2 space-y-1">
             <FocusTimeline timeline={stats.timeline} />
-            <FocusLegend />
+            <FocusLegend codes={stats.unansweredMs > 0 ? ['w', 't', 'r', 'b', 'a'] : undefined} />
           </div>
 
           <dl className="space-y-1">

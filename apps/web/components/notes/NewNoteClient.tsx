@@ -14,7 +14,7 @@ import type { Note } from '@/hooks/useNotes'
 import { useWritingSession } from '@/hooks/useWritingSession'
 import { WritingTimer } from '@/components/notes/WritingTimer'
 import { FocusToasts } from '@/components/notes/FocusToasts'
-import { FocusCheckIn, CHECK_IN_MIN_FOCUS_MS } from '@/components/notes/FocusCheckIn'
+import { FocusCheckIn, shouldCheckIn } from '@/components/notes/FocusCheckIn'
 import type { WritingSessionStats } from '@/lib/writing-session'
 
 const SUBJECT_PRESETS = [
@@ -634,7 +634,7 @@ export function NewNoteClient() {
       }
 
       const snap = writing.snapshotNow()
-      if (snap && snap.focusMs >= CHECK_IN_MIN_FOCUS_MS) {
+      if (snap && shouldCheckIn(snap)) {
         setCheckIn({ stats: snap, noteId: data.id, slug: data.slug ?? '' })
         return
       }

@@ -130,6 +130,22 @@ describe('useWritingSession', () => {
     expect(body.distractions).toEqual(['Phone'])
     expect(body.block).toBeUndefined()
     expect(body.pendingAway).toBeUndefined()
+    expect(body.unansweredAways).toBeUndefined()
+  })
+
+  it('applies away answers from the check-in before sending', () => {
+    const { result } = renderHook(() =>
+      useWritingSession({ enabled: true, noteId: 'n', kind: 'edit', words: 0 }),
+    )
+    const hasFocus = document.hasFocus as jest.Mock
+    act(() => { hasFocus.mockReturnValue(false); window.dispatchEvent(new Event('blur')) })
+    act(() => { jest.advanceTimersByTime(5 * 60_000) })
+    act(() => { hasFocus.mockReturnValue(true); window.dispatchEvent(new Event('focus')) })
+    const trip = result.current.stats!.unansweredAways[0]
+    act(() => { result.current.submitCheckIn({ selfRating: 3, distractions: [], awayAnswers: [{ startedAt: trip.startedAt, label: 'reference' }] }) })
+    const body = JSON.parse(fetchMock.mock.calls.at(-1)[1].body)
+    expect(body.referenceMs).toBe(5 * 60_000)
+    expect(body.timeline.some((e: [number, number, string]) => e[2] === 'a')).toBe(false)
   })
 
   it('skips sessions with no activity at all', () => {

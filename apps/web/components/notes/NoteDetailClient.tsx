@@ -17,7 +17,7 @@ import { useWritingSession } from '@/hooks/useWritingSession'
 import { WritingTimer } from '@/components/notes/WritingTimer'
 import { NoteWritingStats } from '@/components/notes/NoteWritingStats'
 import { FocusToasts } from '@/components/notes/FocusToasts'
-import { FocusCheckIn, CHECK_IN_MIN_FOCUS_MS } from '@/components/notes/FocusCheckIn'
+import { FocusCheckIn, shouldCheckIn } from '@/components/notes/FocusCheckIn'
 import { countWords, type WritingSessionStats } from '@/lib/writing-session'
 
 interface NoteDetailClientProps {
@@ -194,7 +194,7 @@ export function NoteDetailClient({ slug }: NoteDetailClientProps) {
       const { data } = await res.json() as { data: Note }
       setNote(data)
       const snap = writing.snapshotNow()
-      if (snap && snap.focusMs >= CHECK_IN_MIN_FOCUS_MS) setCheckIn(snap)
+      if (snap && shouldCheckIn(snap)) setCheckIn(snap)
       else setMode('view')
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed')

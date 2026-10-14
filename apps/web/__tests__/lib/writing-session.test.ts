@@ -8,6 +8,8 @@ import {
   THINK_LIMIT_MS,
   BLOCK_THINK_LIMIT_MS,
   REFERENCE_CAP_MS,
+  timelineSeconds,
+  timelineCount,
 } from '@/lib/writing-session'
 
 const S = 1000
@@ -99,6 +101,44 @@ describe('trips away', () => {
     expect(s.referenceMs).toBe(5 * MIN)
     expect(s.breakMs).toBe(0)
     expect(s.focusMs).toBe(6 * MIN)
+  })
+
+  it('lists every unanswered trip and resolves a specific one', () => {
+    const t = tracker()
+    t.setForeground(false, MIN)
+    t.setForeground(true, 11 * MIN)       // trip 1: 10 min
+    t.setForeground(false, 12 * MIN)
+    t.setForeground(true, 15 * MIN)       // trip 2: 3 min
+    let s = t.snapshot(15 * MIN)
+    expect(s.unansweredAways).toEqual([
+      { startedAt: MIN, durationMs: 10 * MIN },
+      { startedAt: 12 * MIN, durationMs: 3 * MIN },
+    ])
+    expect(s.pendingAway).toEqual({ startedAt: 12 * MIN, durationMs: 3 * MIN })
+    expect(s.unansweredMs).toBe(13 * MIN)
+
+    // Answer the older one first: the newer one stays pending.
+    t.resolveAway('reference', MIN)
+    s = t.snapshot(15 * MIN)
+    expect(s.unansweredAways).toEqual([{ startedAt: 12 * MIN, durationMs: 3 * MIN }])
+    expect(s.referenceMs).toBe(10 * MIN)
+    expect(s.unansweredMs).toBe(3 * MIN)
+    expect(s.breakMs).toBe(3 * MIN)       // unanswered still counts as break
+
+    t.resolveAway('break', 12 * MIN)
+    s = t.snapshot(15 * MIN)
+    expect(s.unansweredAways).toEqual([])
+    expect(s.unansweredMs).toBe(0)
+    expect(s.breakMs).toBe(3 * MIN)
+  })
+
+  it('keeps unanswered time visible in the stored timeline', () => {
+    const t = tracker()
+    t.setForeground(false, MIN)
+    t.setForeground(true, 5 * MIN)
+    const s = t.snapshot(5 * MIN)
+    expect(timelineSeconds(s.timeline, 'a')).toBe(4 * 60)
+    expect(timelineCount(s.timeline, 'a')).toBe(1)
   })
 
   it('caps reference time per trip', () => {

@@ -49,7 +49,7 @@ function isForeground(): boolean {
 }
 
 function toPayload(s: WritingSessionStats) {
-  const { block: _block, pendingAway: _pending, ...rest } = s
+  const { block: _block, pendingAway: _pending, unansweredAways: _trips, unansweredMs: _u, ...rest } = s
   return {
     ...rest,
     startedAt: new Date(s.startedAt).toISOString(),
@@ -186,8 +186,8 @@ export function useWritingSession({ enabled, noteId, kind, template = null, word
   // The note row appears after the first auto-save; send what we have so far.
   useEffect(() => { if (noteId && dirtyRef.current) flush() }, [noteId, flush])
 
-  const resolveAway = useCallback((label: AwayLabel) => {
-    trackerRef.current?.resolveAway(label)
+  const resolveAway = useCallback((label: AwayLabel, startedAt?: number) => {
+    trackerRef.current?.resolveAway(label, startedAt)
     dirtyRef.current = true
     refresh()
   }, [refresh])
@@ -208,6 +208,7 @@ export function useWritingSession({ enabled, noteId, kind, template = null, word
 
   /** Record the save-time check-in and send it right away. */
   const submitCheckIn = useCallback((checkIn: CheckIn, overrideNoteId?: string | null) => {
+    for (const a of checkIn.awayAnswers ?? []) trackerRef.current?.resolveAway(a.label, a.startedAt)
     trackerRef.current?.setCheckIn(checkIn)
     dirtyRef.current = true
     flush(overrideNoteId)

@@ -43,7 +43,11 @@ export const DISTRACTIONS = ['Phone', 'Someone talked to me', 'Got stuck', 'Tire
 export interface CheckIn {
   selfRating: number | null
   distractions: string[]
+  /** Answers for trips away the student hadn't labelled yet. */
+  awayAnswers?: { startedAt: number; label: AwayLabel }[]
 }
+
+export interface AwayTrip { startedAt: number; durationMs: number }
 
 export interface BlockState {
   startedAt: number
@@ -66,7 +70,9 @@ export interface WritingSessionStats {
   writeMs: number
   thinkMs: number
   referenceMs: number
-  breakMs: number          // includes unconfirmed away time
+  breakMs: number          // includes unanswered away time (stored that way)
+  /** Away time nobody has answered for yet. Part of breakMs. */
+  unansweredMs: number
   focusMs: number
   breakCount: number
 
@@ -89,8 +95,10 @@ export interface WritingSessionStats {
   blocksCompleted: number
   block: BlockState | null // the running block, live only
 
-  /** The latest trip away that still needs an answer. Live only. */
-  pendingAway: { startedAt: number; durationMs: number } | null
+  /** The most recent trip away that still needs an answer. Live only. */
+  pendingAway: AwayTrip | null
+  /** Every trip away that still needs an answer, oldest first. Live only. */
+  unansweredAways: AwayTrip[]
 
   selfRating: number | null
   distractions: string[]
@@ -113,8 +121,8 @@ export interface WritingTracker {
   input(t: number): void
   /** Tab visibility / window focus changed. */
   setForeground(foreground: boolean, t: number): void
-  /** Label the most recent unanswered trip away. */
-  resolveAway(label: AwayLabel): void
+  /** Label a trip away: the one that started at `startedAt`, or the most recent unanswered one. */
+  resolveAway(label: AwayLabel, startedAt?: number): void
   startBlock(t: number, durationMs?: number): void
   cancelBlock(t: number): void
   /** Current word count. Before the first input it also moves the baseline. */
@@ -242,7 +250,8 @@ export function createWritingTracker(opts: WritingTrackerOptions): WritingTracke
     const ivs = merge([...pageIvs, ...aways.flatMap((a) => awayIntervals(a, now))])
     const sum = (k: TimeKind) => ivs.reduce((n, iv) => (iv.k === k ? n + iv.e - iv.s : n), 0)
     const writeMs = sum('write'), thinkMs = sum('think'), referenceMs = sum('reference')
-    const breakMs = sum('break') + sum('away')
+    const unansweredMs = sum('away')
+    const breakMs = sum('break') + unansweredMs
     const openMs = Math.max(0, now - startedAt)
 
     let awayMs = 0
@@ -276,10 +285,10 @@ export function createWritingTracker(opts: WritingTrackerOptions): WritingTracke
       }
     }
 
-    const last = aways[aways.length - 1]
-    const pendingAway = last && last.e !== null && last.label === null
-      ? { startedAt: last.s, durationMs: last.e - last.s }
-      : null
+    const unansweredAways: AwayTrip[] = aways
+      .filter((a) => a.e !== null && a.label === null)
+      .map((a) => ({ startedAt: a.s, durationMs: (a.e as number) - a.s }))
+    const pendingAway = unansweredAways.length ? unansweredAways[unansweredAways.length - 1] : null
 
     const timeline: TimelineEntry[] = ivs
       .map((iv): TimelineEntry => [
@@ -302,6 +311,7 @@ export function createWritingTracker(opts: WritingTrackerOptions): WritingTracke
       thinkMs,
       referenceMs,
       breakMs,
+      unansweredMs,
       focusMs: writeMs + thinkMs + referenceMs,
       breakCount: ivs.filter((iv) => iv.k === 'break' || iv.k === 'away').length,
       activeMs: writeMs + thinkMs,
@@ -319,6 +329,7 @@ export function createWritingTracker(opts: WritingTrackerOptions): WritingTracke
       blocksCompleted,
       block,
       pendingAway,
+      unansweredAways,
       selfRating: checkIn.selfRating,
       distractions: checkIn.distractions,
       timeline,
@@ -334,10 +345,11 @@ export function createWritingTracker(opts: WritingTrackerOptions): WritingTracke
       signal(t, true)
     },
     setForeground,
-    resolveAway: (label) => {
+    resolveAway: (label, at) => {
       for (let i = aways.length - 1; i >= 0; i--) {
         const a = aways[i]
-        if (a.e !== null && a.label === null) { a.label = label; return }
+        if (a.e === null || a.label !== null) continue
+        if (at === undefined || a.s === at) { a.label = label; return }
       }
     },
     startBlock: (t, durationMs = DEFAULT_BLOCK_MS) => {
@@ -406,10 +418,22 @@ export function newSessionId(): string {
 }
 
 export const KIND_LABEL: Record<TimelineCode, string> = {
-  w: 'Writing', t: 'Thinking', r: 'Reference', b: 'Break', a: 'Away',
+  w: 'Writing', t: 'Thinking', r: 'Reference', b: 'Break', a: 'Away, not answered',
 }
 
 /** Colors for the timeline strip; one per kind, readable on the dark UI. */
 export const KIND_COLOR: Record<TimelineCode, string> = {
   w: '#34d399', t: '#60a5fa', r: '#a78bfa', b: 'rgba(255,255,255,0.14)', a: 'rgba(251,191,36,0.45)',
+}
+
+/** Total seconds of a timeline kind, e.g. unanswered away time ('a') in a stored session. */
+export function timelineSeconds(timeline: TimelineEntry[] | null | undefined, code: TimelineCode): number {
+  if (!timeline) return 0
+  return timeline.reduce((n, [, d, k]) => (k === code ? n + d : n), 0)
+}
+
+/** Number of separate stretches of a timeline kind. */
+export function timelineCount(timeline: TimelineEntry[] | null | undefined, code: TimelineCode): number {
+  if (!timeline) return 0
+  return timeline.filter(([, , k]) => k === code).length
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Timer, ChevronDown } from 'lucide-react'
-import { formatDurationShort, type TimelineEntry } from '@/lib/writing-session'
+import { formatDurationShort, timelineSeconds, timelineCount, type TimelineEntry } from '@/lib/writing-session'
 import { FocusTimeline, FocusLegend } from '@/components/notes/FocusTimeline'
 
 interface SessionRow {
@@ -70,6 +70,8 @@ export function NoteWritingStats({ noteId, refreshKey }: { noteId: string; refre
 
   if (!data || data.totals.sessions === 0) return null
   const { totals, sessions } = data
+  // Unanswered away time lives in each session's timeline ('a'), inside breakMs.
+  const unansweredTotalMs = sessions.reduce((n, s) => n + timelineSeconds(s.timeline, 'a') * 1000, 0)
 
   return (
     <div className="mt-3 text-xs text-muted-foreground">
@@ -83,18 +85,22 @@ export function NoteWritingStats({ noteId, refreshKey }: { noteId: string; refre
         <Dot /><span>{formatDurationShort(totals.openMs)} open</span>
         {totals.wordsAdded > 0 && (<><Dot /><span>+{totals.wordsAdded} words</span></>)}
         {totals.blocksCompleted > 0 && (<><Dot /><span>{totals.blocksCompleted} focus block{totals.blocksCompleted === 1 ? '' : 's'}</span></>)}
+        {unansweredTotalMs >= 60_000 && (<><Dot /><span className="text-amber-300/90">{formatDurationShort(unansweredTotalMs)} away, not answered</span></>)}
         <Dot /><span>{totals.sessions} session{totals.sessions === 1 ? '' : 's'}</span>
         <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div className="mt-2 space-y-2">
-          <FocusLegend />
+          <FocusLegend codes={unansweredTotalMs > 0 ? ['w', 't', 'r', 'b', 'a'] : undefined} />
           {sessions.map((s) => {
             // v1 rows (before the focus split) only have active/idle/away.
             const v1 = !s.focusMs && !s.writeMs && !s.thinkMs && !s.referenceMs
             const focus = v1 ? s.activeMs : s.focusMs
-            const breaks = v1 ? s.idleMs + s.awayMs : s.breakMs
+            const unansweredMs = timelineSeconds(s.timeline, 'a') * 1000
+            const unansweredN = timelineCount(s.timeline, 'a')
+            const breaks = (v1 ? s.idleMs + s.awayMs : s.breakMs) - unansweredMs
+            const breakN = s.timeline ? timelineCount(s.timeline, 'b') : s.breakCount
             const words = s.wordsEnd - s.wordsStart
             return (
               <div key={s.id} className="rounded-xl p-2.5" style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
@@ -109,7 +115,12 @@ export function NoteWritingStats({ noteId, refreshKey }: { noteId: string; refre
                   {!v1 && <span>Writing {formatDurationShort(s.writeMs)}</span>}
                   {!v1 && <span>Thinking {formatDurationShort(s.thinkMs)}</span>}
                   {!v1 && s.referenceMs > 0 && <span>Reference {formatDurationShort(s.referenceMs)}</span>}
-                  <span>Breaks {formatDurationShort(breaks)}{s.breakCount ? ` (${s.breakCount})` : ''}</span>
+                  <span>Breaks {formatDurationShort(Math.max(0, breaks))}{breakN ? ` (${breakN})` : ''}</span>
+                  {unansweredMs > 0 && (
+                    <span className="text-amber-300/90" title="Left the page and never said whether it was reference or a break. Counted as break time.">
+                      Away, not answered {formatDurationShort(unansweredMs)}{unansweredN > 1 ? ` (${unansweredN})` : ''}
+                    </span>
+                  )}
                   {s.firstInputAt && <span>Words {time(s.firstInputAt)} → {time(s.lastInputAt)}</span>}
                   <span>{words >= 0 ? '+' : ''}{words} words</span>
                   {s.blocksCompleted > 0 && <span className="text-emerald-300">{s.blocksCompleted} block{s.blocksCompleted === 1 ? '' : 's'}</span>}

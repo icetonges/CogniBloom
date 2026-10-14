@@ -42,7 +42,7 @@ describe('focus UI', () => {
     render(<FocusToasts stats={sampleStats().snapshot(7 * MIN)} completedBlock={null} onResolveAway={onResolve} onDismissBlock={jest.fn()} />)
     expect(screen.getByText(/You were away/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('Yes, reference'))
-    expect(onResolve).toHaveBeenCalledWith('reference')
+    expect(onResolve).toHaveBeenCalledWith('reference', 4 * MIN)
   })
 
   it('check-in requires a rating, then reveals the measured focus', () => {
@@ -57,7 +57,40 @@ describe('focus UI', () => {
     expect(screen.getByText(/The timer counted/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('Phone'))
     fireEvent.click(done)
-    expect(onSubmit).toHaveBeenCalledWith({ selfRating: 4, distractions: ['Phone'] })
+    expect(onSubmit).toHaveBeenCalledWith({ selfRating: 4, distractions: ['Phone'], awayAnswers: [] })
+  })
+
+  it('check-in asks about every unanswered trip and updates the focus number', () => {
+    const onSubmit = jest.fn()
+    const t = createWritingTracker({ id: 'abc12345', kind: 'create', startedAt: 0 })
+    for (let ms = 0; ms <= 3 * MIN; ms += 5000) t.input(ms)
+    t.setForeground(false, 4 * MIN); t.setForeground(true, 26 * MIN)   // 22 min away
+    t.setForeground(false, 27 * MIN); t.setForeground(true, 30 * MIN)  // 3 min away
+    render(<FocusCheckIn stats={t.snapshot(31 * MIN)} onSubmit={onSubmit} onSkip={jest.fn()} />)
+    expect(screen.getByText(/You left the page 2 times/)).toBeInTheDocument()
+    const before = screen.getByText(/focus$/).parentElement!.textContent
+    fireEvent.click(screen.getAllByRole('button', { name: /Reference/ })[0])
+    const after = screen.getByText(/focus$/).parentElement!.textContent
+    expect(before).toBe('6m focus')
+    expect(after).toBe('26m focus') // + 20 min, the reference cap for the 22-min trip
+    fireEvent.click(screen.getAllByRole('button', { name: /^Break$/ })[1])
+    fireEvent.click(screen.getByText('Skip'))
+    expect(onSubmit).toHaveBeenCalledWith({
+      selfRating: null,
+      distractions: [],
+      awayAnswers: [{ startedAt: 4 * MIN, label: 'reference' }, { startedAt: 27 * MIN, label: 'break' }],
+    })
+  })
+
+  it('welcome-back prompt counts the earlier trips still to answer', () => {
+    const t = createWritingTracker({ id: 'abc12345', kind: 'create', startedAt: 0 })
+    t.setForeground(false, MIN); t.setForeground(true, 5 * MIN)
+    t.setForeground(false, 6 * MIN); t.setForeground(true, 9 * MIN)
+    const onResolve = jest.fn()
+    render(<FocusToasts stats={t.snapshot(9 * MIN)} completedBlock={null} onResolveAway={onResolve} onDismissBlock={jest.fn()} />)
+    expect(screen.getByText(/1 earlier trip away still to answer/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Took a break'))
+    expect(onResolve).toHaveBeenCalledWith('break', 6 * MIN)
   })
 
   it('"Nothing" clears the other distractions', () => {
@@ -67,6 +100,6 @@ describe('focus UI', () => {
     fireEvent.click(screen.getByText('Phone'))
     fireEvent.click(screen.getByText('Nothing'))
     fireEvent.click(screen.getByText('Done').closest('button')!)
-    expect(onSubmit).toHaveBeenCalledWith({ selfRating: 3, distractions: ['Nothing'] })
+    expect(onSubmit).toHaveBeenCalledWith({ selfRating: 3, distractions: ['Nothing'], awayAnswers: [] })
   })
 })

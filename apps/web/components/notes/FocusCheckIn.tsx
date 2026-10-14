@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Flame, TrendingUp } from 'lucide-react'
+import { Loader2, Flame, TrendingUp, BookOpen, Coffee } from 'lucide-react'
 import {
   DISTRACTIONS,
+  REFERENCE_CAP_MS,
   focusPercent,
   formatDurationShort,
   wordsPerFocusMinute,
+  type AwayLabel,
   type CheckIn,
+  type TimelineEntry,
   type WritingSessionStats,
 } from '@/lib/writing-session'
 import type { WritingSummary } from '@/lib/writing-session-summary'
@@ -15,6 +18,31 @@ import { FocusTimeline, FocusLegend } from '@/components/notes/FocusTimeline'
 
 /** Only ask when there was real work to reflect on. */
 export const CHECK_IN_MIN_FOCUS_MS = 2 * 60_000
+
+/** Ask after real work, or whenever trips away still need an answer. */
+export function shouldCheckIn(s: WritingSessionStats): boolean {
+  if (s.focusMs >= CHECK_IN_MIN_FOCUS_MS) return true
+  return s.unansweredAways.length > 0 && s.openMs >= CHECK_IN_MIN_FOCUS_MS
+}
+
+const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+
+/** Recolor the answered trips in the timeline so the bar matches the answers. */
+function applyAnswers(timeline: TimelineEntry[], sessionStart: number, answers: Map<number, AwayLabel>): TimelineEntry[] {
+  if (!answers.size) return timeline
+  const byOffset = new Map<number, AwayLabel>()
+  answers.forEach((label, startedAt) => byOffset.set(Math.round((startedAt - sessionStart) / 1000), label))
+  const capSec = REFERENCE_CAP_MS / 1000
+  const out: TimelineEntry[] = []
+  for (const e of timeline) {
+    const label = e[2] === 'a' ? byOffset.get(e[0]) : undefined
+    if (!label) { out.push(e); continue }
+    if (label === 'break') { out.push([e[0], e[1], 'b']); continue }
+    out.push([e[0], Math.min(e[1], capSec), 'r'])
+    if (e[1] > capSec) out.push([e[0] + capSec, e[1] - capSec, 'b'])
+  }
+  return out
+}
 
 const RATINGS: [number, string][] = [
   [1, 'Hardly'], [2, 'A little'], [3, 'Mostly'], [4, 'Very'], [5, 'Fully'],
@@ -36,6 +64,8 @@ export function FocusCheckIn({ stats, busy, onSubmit, onSkip }: Props) {
   const [rating, setRating] = useState<number | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [summary, setSummary] = useState<WritingSummary | null>(null)
+  const [answers, setAnswers] = useState<Map<number, AwayLabel>>(new Map())
+  const trips = stats.unansweredAways
 
   useEffect(() => {
     let cancelled = false
@@ -47,8 +77,20 @@ export function FocusCheckIn({ stats, busy, onSubmit, onSkip }: Props) {
     return () => { cancelled = true }
   }, [])
 
-  const measured = focusPercent(stats)
-  const pace = wordsPerFocusMinute(stats)
+  // Reflect away answers in the numbers right away.
+  let referenceGain = 0
+  answers.forEach((label, startedAt) => {
+    const trip = trips.find((t) => t.startedAt === startedAt)
+    if (trip && label === 'reference') referenceGain += Math.min(trip.durationMs, REFERENCE_CAP_MS)
+  })
+  const focusMs = stats.focusMs + referenceGain
+  const view = { ...stats, focusMs }
+  const timeline = applyAnswers(stats.timeline, stats.startedAt, answers)
+  const measured = focusPercent(view)
+  const pace = wordsPerFocusMinute(view)
+  const answer = (startedAt: number, label: AwayLabel) =>
+    setAnswers((cur) => { const next = new Map(cur); next.set(startedAt, label); return next })
+  const awayAnswers = Array.from(answers, ([startedAt, label]) => ({ startedAt, label }))
   const added = Math.max(0, stats.wordsEnd - stats.wordsStart)
 
   const toggle = (d: string) => {
@@ -79,14 +121,14 @@ export function FocusCheckIn({ stats, busy, onSubmit, onSkip }: Props) {
 
         <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span><b className="text-foreground text-base">{formatDurationShort(stats.focusMs)}</b> <span className="text-muted-foreground">focus</span></span>
+            <span><b className="text-foreground text-base">{formatDurationShort(focusMs)}</b> <span className="text-muted-foreground">focus</span></span>
             {added > 0 && <span className="text-muted-foreground">+{added} words</span>}
             {pace !== null && <span className="text-muted-foreground">{pace} words / focus min</span>}
             {stats.blocksCompleted > 0 && <span className="text-emerald-300">{stats.blocksCompleted} block{stats.blocksCompleted === 1 ? '' : 's'} done</span>}
           </div>
           <div className="mt-2 space-y-1">
-            <FocusTimeline timeline={stats.timeline} />
-            <FocusLegend />
+            <FocusTimeline timeline={timeline} />
+            <FocusLegend codes={timeline.some((e) => e[2] === 'a') ? ['w', 't', 'r', 'b', 'a'] : undefined} />
           </div>
           {paceLine && (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -101,6 +143,49 @@ export function FocusCheckIn({ stats, busy, onSubmit, onSkip }: Props) {
             </p>
           )}
         </div>
+
+        {trips.length > 0 && (
+          <div className="mt-4">
+            <p className="font-semibold text-foreground">
+              You left the page {trips.length === 1 ? 'once' : `${trips.length} times`} without saying why.
+            </p>
+            <p className="text-xs text-muted-foreground">Looking something up counts as focus. Unanswered trips count as breaks.</p>
+            <ul className="mt-2 space-y-1.5">
+              {trips.map((t) => {
+                const a = answers.get(t.startedAt)
+                return (
+                  <li key={t.startedAt} className="flex items-center gap-2">
+                    <span className="flex-1 text-xs">
+                      Away <b className="text-foreground">{formatDurationShort(t.durationMs)}</b> at {clock(t.startedAt)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => answer(t.startedAt, 'reference')}
+                      aria-pressed={a === 'reference'}
+                      className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs"
+                      style={a === 'reference'
+                        ? { background: 'rgba(167,139,250,0.25)', border: '1px solid rgba(167,139,250,0.6)', color: 'white' }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                    >
+                      <BookOpen className="h-3 w-3" /> Reference
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => answer(t.startedAt, 'break')}
+                      aria-pressed={a === 'break'}
+                      className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs"
+                      style={a === 'break'
+                        ? { background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)', color: 'white' }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                    >
+                      <Coffee className="h-3 w-3" /> Break
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
 
         <p className="mt-4 font-semibold text-foreground">How focused did you feel?</p>
         <div className="mt-2 grid grid-cols-5 gap-1.5">
@@ -148,7 +233,7 @@ export function FocusCheckIn({ stats, busy, onSubmit, onSkip }: Props) {
         <div className="mt-5 flex gap-2">
           <button
             type="button"
-            onClick={onSkip}
+            onClick={() => (awayAnswers.length ? onSubmit({ selfRating: null, distractions: [], awayAnswers }) : onSkip())}
             disabled={busy}
             className="flex-1 rounded-xl py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
@@ -157,7 +242,7 @@ export function FocusCheckIn({ stats, busy, onSubmit, onSkip }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => onSubmit({ selfRating: rating, distractions: picked })}
+            onClick={() => onSubmit({ selfRating: rating, distractions: picked, awayAnswers })}
             disabled={busy || rating === null}
             className="flex flex-[2] items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold text-white disabled:opacity-40"
             style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.9), rgba(139,92,246,0.9))' }}
