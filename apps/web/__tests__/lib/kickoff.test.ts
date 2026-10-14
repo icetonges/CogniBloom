@@ -1,5 +1,5 @@
 import {
-  JOKES, SPARKS, pickOfTheDay, dayNumber, greetingFor, nudgeFor, buildKickoff, summarizePlanner,
+  JOKES, SPARKS, PICKS_PER_DAY, pickOfTheDay, greetingFor, nudgeFor, buildKickoff, summarizePlanner,
 } from '@/lib/kickoff'
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
@@ -10,25 +10,30 @@ describe('daily pick', () => {
     expect(pickOfTheDay('2026-10-14')).not.toEqual(pickOfTheDay('2026-10-15'))
   })
 
-  it('alternates jokes and sparks', () => {
-    const kinds = ['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17'].map((d) => pickOfTheDay(d).kind)
-    expect(new Set(kinds)).toEqual(new Set(['joke', 'spark']))
-    expect(kinds[0]).not.toBe(kinds[1])
+  it('goes joke, spark, joke, and stops at three', () => {
+    const d = '2026-10-14'
+    expect([0, 1, 2].map((i) => pickOfTheDay(d, i).kind)).toEqual(['joke', 'spark', 'joke'])
+    expect(PICKS_PER_DAY).toBe(3)
+    const a = pickOfTheDay(d, 0), c = pickOfTheDay(d, 2)
+    expect(a.kind === 'joke' && c.kind === 'joke' && a.setup !== c.setup).toBe(true)
+    expect(pickOfTheDay(d, 7)).toEqual(c) // past the last step stays on it
   })
 
-  it('cycles through every joke and spark before repeating', () => {
+  it('cycles through every joke and spark across days before repeating', () => {
     // Strides must be coprime with the list lengths for a full cycle.
     expect(gcd(7, JOKES.length)).toBe(1)
     expect(gcd(5, SPARKS.length)).toBe(1)
-    const start = dayNumber('2026-10-14')
     const jokes = new Set<string>(), sparks = new Set<string>()
-    for (let i = 0; i < 2 * Math.max(JOKES.length, SPARKS.length); i++) {
-      const p = pickOfTheDay('2026-10-14', i)
-      if (p.kind === 'joke') jokes.add(p.setup); else sparks.add(p.text)
+    const start = Date.UTC(2026, 9, 14)
+    for (let day = 0; day < Math.max(JOKES.length, SPARKS.length); day++) {
+      const key = new Date(start + day * 86_400_000).toISOString().slice(0, 10)
+      for (let i = 0; i < 3; i++) {
+        const p = pickOfTheDay(key, i)
+        if (p.kind === 'joke') jokes.add(p.setup); else sparks.add(p.text)
+      }
     }
     expect(jokes.size).toBe(JOKES.length)
     expect(sparks.size).toBe(SPARKS.length)
-    expect(start).toBeGreaterThan(0)
   })
 
   it('keeps the copy short and free of em dashes', () => {

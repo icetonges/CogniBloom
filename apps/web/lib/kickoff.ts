@@ -90,21 +90,23 @@ export function dayNumber(dateKey: string): number {
   return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000)
 }
 
+/** Picks per day: joke, then spark, then joke. Kept small so it stays a moment, not a feed. */
+export const PICKS_PER_DAY = 3
+const SEQUENCE: Pick['kind'][] = ['joke', 'spark', 'joke']
+
 /**
- * Today's joke or spark: jokes on even days, sparks on odd days. Strides
- * through each list so consecutive days don't feel related, and every item
- * comes around before any repeats (both strides are coprime with the list
- * lengths, asserted in tests). `offset` gives the "another one" button the
- * next pick in the same sequence.
+ * The day's `step`-th pick (0, 1 or 2): joke, spark, joke. Two jokes and one
+ * spark a day, striding through each list so consecutive days don't feel
+ * related; every item comes around before any repeats (strides are coprime
+ * with the list lengths, asserted in tests). Steps past the last wrap to it.
  */
-export function pickOfTheDay(dateKey: string, offset = 0): Pick {
-  const n = dayNumber(dateKey) + offset
-  const half = Math.floor(n / 2)
-  if (n % 2 === 0) {
-    const j = JOKES[mod(half * 7, JOKES.length)]
-    return { kind: 'joke', ...j }
-  }
-  return { kind: 'spark', text: SPARKS[mod(half * 5, SPARKS.length)] }
+export function pickOfTheDay(dateKey: string, step = 0): Pick {
+  const day = dayNumber(dateKey)
+  const i = Math.min(Math.max(0, step), PICKS_PER_DAY - 1)
+  if (SEQUENCE[i] === 'spark') return { kind: 'spark', text: SPARKS[mod(day * 5, SPARKS.length)] }
+  const nth = i === 0 ? 0 : 1 // which of today's two jokes
+  const j = JOKES[mod((day * 2 + nth) * 7, JOKES.length)]
+  return { kind: 'joke', ...j }
 }
 
 const mod = (a: number, n: number) => ((a % n) + n) % n
@@ -175,14 +177,14 @@ export function nudgeFor(p: PlannerToday, t: LocalTime): string {
   return base
 }
 
-export function buildKickoff(opts: { name: string; dateKey: string; time: LocalTime; planner: PlannerToday; offset?: number }): Kickoff {
+export function buildKickoff(opts: { name: string; dateKey: string; time: LocalTime; planner: PlannerToday }): Kickoff {
   const { planner } = opts
   const allDone = planner.total > 0 && planner.done >= planner.total
   return {
     greeting: greetingFor(opts.name, opts.time),
     nudge: nudgeFor(planner, opts.time),
     needsUpdate: !planner.updatedToday && !allDone,
-    pick: pickOfTheDay(opts.dateKey, opts.offset ?? 0),
+    pick: pickOfTheDay(opts.dateKey, 0),
   }
 }
 
