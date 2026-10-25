@@ -11,10 +11,24 @@ const SESSION_CAP = 30 // max notes surfaced in one daily review session
 // GET /api/review — the daily review queue + retention stats.
 //   Returns notes that are due for active recall (never reviewed, or whose
 //   SM-2 nextReviewAt has passed), oldest-first, plus aggregate stats.
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const userId = DANIEL_USER_ID
     const now = new Date()
+
+    // ?countOnly=1 — sidebar badge. One COUNT query, no note bodies.
+    if (request.nextUrl.searchParams.get('countOnly') === '1') {
+      const dueCount = await db.note.count({
+        where: {
+          userId,
+          OR: [
+            { recallState: { is: null } },
+            { recallState: { is: { nextReviewAt: { lte: now } } } },
+          ],
+        },
+      })
+      return NextResponse.json({ success: true, stats: { dueCount } })
+    }
 
     const notes = await db.note.findMany({
       where: { userId },
@@ -23,7 +37,6 @@ export async function GET(_request: NextRequest) {
         title: true,
         subject: true,
         tags: true,
-        content: true,
         createdAt: true,
         recallState: {
           select: {
@@ -44,16 +57,11 @@ export async function GET(_request: NextRequest) {
       .filter((n) => !n.recallState || n.recallState.nextReviewAt <= now)
       .map((n) => {
         const s = n.recallState
-        // Plain-text preview for the "prompt" (active recall cue) without
-        // revealing the full answer.
-        const plain = n.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
         return {
           noteId: n.id,
           title: n.title,
           subject: n.subject,
           tags: n.tags,
-          content: n.content,
-          preview: plain.slice(0, 160),
           isNew: !s,
           interval: s?.interval ?? 0,
           repetitions: s?.repetitions ?? 0,
@@ -97,9 +105,24 @@ export async function GET(_request: NextRequest) {
       upcoming.push({ date: dayStart.toISOString(), count })
     }
 
+    // Fetch note bodies only for the notes in this session, not the whole table.
+    const session = due.slice(0, SESSION_CAP)
+    const bodies = await db.note.findMany({
+      where: { id: { in: session.map((d) => d.noteId) } },
+      select: { id: true, content: true },
+    })
+    const contentById = new Map<string, string>(bodies.map((b) => [b.id, b.content]))
+    const data = session.map((d) => {
+      const content = contentById.get(d.noteId) ?? ''
+      // Plain-text preview for the "prompt" (active recall cue) without
+      // revealing the full answer.
+      const plain = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      return { ...d, content, preview: plain.slice(0, 160) }
+    })
+
     return NextResponse.json({
       success: true,
-      data: due.slice(0, SESSION_CAP),
+      data,
       stats: {
         totalNotes: notes.length,
         scheduled: states.length,

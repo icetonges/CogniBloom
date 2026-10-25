@@ -15,6 +15,14 @@ export async function GET(request: NextRequest) {
     if (dueOnly) where['nextReviewAt'] = { lte: new Date() }
     if (noteId) where['noteId'] = noteId
 
+    // ?countOnly=1 — sidebar badge. Skip the card list entirely.
+    if (searchParams.get('countOnly') === '1') {
+      const dueCount = await db.flashcard.count({
+        where: { userId, nextReviewAt: { lte: new Date() } },
+      })
+      return NextResponse.json({ success: true, dueCount })
+    }
+
     const cards = await db.flashcard.findMany({
       where,
       orderBy: dueOnly ? { nextReviewAt: 'asc' } : { createdAt: 'desc' },

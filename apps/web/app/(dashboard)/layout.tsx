@@ -311,21 +311,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => window.removeEventListener('keydown', onKey)
   }, [toggleCollapsed])
 
-  // Flashcard + note-review due counts — refreshed every 2 min
+  // Flashcard + note-review due counts. Count-only endpoints, refreshed every
+  // 10 min while the tab is visible, and once when the tab comes back.
+  // (A 2-min poll of the full /api/review payload exhausted Neon's transfer quota.)
   useEffect(() => {
     const load = () => {
-      fetch('/api/flashcards?due=true')
+      if (document.hidden) return
+      fetch('/api/flashcards?countOnly=1')
         .then((r) => r.json())
         .then(({ dueCount }) => { if (typeof dueCount === 'number') setFlashcardsDue(dueCount) })
         .catch(() => {})
-      fetch('/api/review')
+      fetch('/api/review?countOnly=1')
         .then((r) => r.json())
         .then((res) => { if (res?.stats && typeof res.stats.dueCount === 'number') setReviewDue(res.stats.dueCount) })
         .catch(() => {})
     }
     load()
-    const t = setInterval(load, 120_000)
-    return () => clearInterval(t)
+    const t = setInterval(load, 600_000)
+    const onVisible = () => { if (!document.hidden) load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   // Level / XP / streak for sidebar widget
